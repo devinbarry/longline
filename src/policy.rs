@@ -199,11 +199,7 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
             reason: "Unrecognized command structure".to_string(),
         },
         Statement::SimpleCommand(cmd) => {
-            // Check allowlists first
-            if is_command_allowlisted(config, cmd) {
-                return PolicyResult::allow();
-            }
-
+            // Check rules first -- rules always take priority
             let mut worst = PolicyResult::allow();
             for rule in &config.rules {
                 // Skip rules above the configured safety level
@@ -221,12 +217,24 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
                     }
                 }
             }
-            worst
+
+            // If a rule matched, return the rule result
+            if worst.rule_id.is_some() {
+                return worst;
+            }
+
+            // No rule matched -- check allowlist as fallback
+            if is_command_allowlisted(config, cmd) {
+                return PolicyResult::allow();
+            }
+
+            // Not allowlisted, no rule -- return allow (default_decision
+            // handled by caller in evaluate())
+            PolicyResult::allow()
         }
         _ => PolicyResult::allow(),
     }
 }
-
 /// Check if a leaf node is allowlisted.
 fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
@@ -647,5 +655,59 @@ rules:
         assert!(config.rules.len() > 30, "Should have many rules, got {}", config.rules.len());
         assert_eq!(config.version, 1);
         assert_eq!(config.default_decision, Decision::Ask);
+    }
+
+    #[test]
+    fn test_rules_override_allowlist() {
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - cat
+    - head
+    - tail
+rules:
+  - id: cat-env-file
+    level: critical
+    match:
+      command:
+        any_of: [cat, head, tail]
+      args:
+        any_of: [".env", ".env.local"]
+    decision: deny
+    reason: "Reading sensitive environment file"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("cat .env").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny, "Rules should override allowlist");
+        assert_eq!(result.rule_id.as_deref(), Some("cat-env-file"));
+    }
+
+    #[test]
+    fn test_allowlist_still_works_when_no_rule_matches() {
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - cat
+rules:
+  - id: cat-env-file
+    level: critical
+    match:
+      command: cat
+      args:
+        any_of: [".env"]
+    decision: deny
+    reason: "Reading sensitive environment file"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("cat README.md").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow, "Allowlist should work when no rule matches");
     }
 }
