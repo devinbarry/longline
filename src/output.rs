@@ -162,6 +162,63 @@ pub fn print_rules_grouped_by_decision(rules: &[&policy::Rule], verbose: bool) {
     }
 }
 
+/// Build the check results table.
+pub fn check_table(rows: &[(Decision, String, String)]) -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("DECISION").add_attribute(Attribute::Bold),
+            Cell::new("RULE").add_attribute(Attribute::Bold),
+            Cell::new("COMMAND").add_attribute(Attribute::Bold),
+        ]);
+
+    for (decision, rule_label, cmd) in rows {
+        table.add_row(vec![
+            decision_cell(*decision),
+            Cell::new(rule_label),
+            Cell::new(cmd),
+        ]);
+    }
+
+    table
+}
+
+/// Build a table showing all allowlisted commands.
+pub fn allowlist_table(commands: &[String]) -> Table {
+    let mut table = Table::new();
+    table
+        .load_preset(UTF8_FULL)
+        .apply_modifier(UTF8_ROUND_CORNERS)
+        .set_content_arrangement(ContentArrangement::Dynamic)
+        .set_header(vec![
+            Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold),
+        ]);
+
+    for cmd in commands {
+        table.add_row(vec![Cell::new(cmd).fg(Color::Green)]);
+    }
+
+    table
+}
+
+/// Print allowlist summary (compact, for non-allow-filter views).
+pub fn print_allowlist_summary(commands: &[String]) {
+    if commands.is_empty() {
+        println!("Allowlist: (none)");
+        return;
+    }
+    let display: Vec<&str> = commands.iter().take(10).map(|s| s.as_str()).collect();
+    let suffix = if commands.len() > 10 {
+        format!(", ... ({} total)", commands.len())
+    } else {
+        String::new()
+    };
+    println!("Allowlist: {}{}", display.join(", "), suffix);
+}
+
 /// Print rules grouped by safety level (Critical, High, Strict) with bold section headers.
 pub fn print_rules_grouped_by_level(rules: &[&policy::Rule], verbose: bool) {
     for level_val in &[

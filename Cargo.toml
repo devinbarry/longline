@@ -14,4 +14,4 @@ clap = { version = "4", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
 glob-match = "0.2"
 comfy-table = "7"
-yansi = "1"
+yansi = { version = "1", features = ["detect-tty", "detect-env"] }
