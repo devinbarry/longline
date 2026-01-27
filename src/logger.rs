@@ -13,6 +13,10 @@ pub struct LogEntry {
     pub cwd: String,
     pub command: String,
     pub decision: Decision,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_decision: Option<Decision>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub overridden: bool,
     pub matched_rules: Vec<String>,
     pub reason: Option<String>,
     pub parse_ok: bool,
@@ -89,6 +93,8 @@ pub fn make_entry(
         cwd: cwd.to_string(),
         command: truncated_command,
         decision,
+        original_decision: None,
+        overridden: false,
         matched_rules,
         reason,
         parse_ok,
