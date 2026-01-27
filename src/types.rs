@@ -34,11 +34,11 @@ pub enum Decision {
 
 impl std::fmt::Display for Decision {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Decision::Allow => write!(f, "allow"),
-            Decision::Ask => write!(f, "ask"),
-            Decision::Deny => write!(f, "deny"),
-        }
+        f.pad(match self {
+            Decision::Allow => "allow",
+            Decision::Ask => "ask",
+            Decision::Deny => "deny",
+        })
     }
 }
 
