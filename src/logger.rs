@@ -66,6 +66,7 @@ pub fn log_decision_to(entry: &LogEntry, path: &PathBuf) {
 }
 
 /// Create a log entry from evaluation results.
+#[allow(clippy::too_many_arguments)]
 pub fn make_entry(
     tool: &str,
     cwd: &str,

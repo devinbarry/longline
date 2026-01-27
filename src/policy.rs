@@ -8,6 +8,7 @@ use crate::types::{Decision, PolicyResult};
 /// Top-level rules configuration loaded from YAML.
 #[derive(Debug, Deserialize)]
 pub struct RulesConfig {
+    #[allow(dead_code)]
     pub version: u32,
     #[serde(default = "default_decision")]
     pub default_decision: Decision,
@@ -35,6 +36,7 @@ pub struct Allowlists {
     #[serde(default)]
     pub commands: Vec<String>,
     #[serde(default)]
+    #[allow(dead_code)]
     pub paths: Vec<String>,
 }
 
