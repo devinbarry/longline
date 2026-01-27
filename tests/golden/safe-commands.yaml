@@ -1,0 +1,85 @@
+tests:
+  - id: ls-safe
+    command: "ls -la /tmp"
+    expected:
+      decision: allow
+  - id: echo-safe
+    command: "echo hello world"
+    expected:
+      decision: allow
+  - id: pwd-safe
+    command: "pwd"
+    expected:
+      decision: allow
+  - id: whoami-safe
+    command: "whoami"
+    expected:
+      decision: allow
+  - id: cat-readme-safe
+    command: "cat README.md"
+    expected:
+      decision: allow
+  - id: grep-safe
+    command: "grep -r 'function' src/"
+    expected:
+      decision: allow
+  - id: find-safe
+    command: "find . -name '*.rs'"
+    expected:
+      decision: allow
+  - id: cargo-build-safe
+    command: "cargo build"
+    expected:
+      decision: allow
+  - id: cargo-test-safe
+    command: "cargo test"
+    expected:
+      decision: allow
+  - id: npm-install-safe
+    command: "npm install"
+    expected:
+      decision: allow
+  - id: npm-test-safe
+    command: "npm test"
+    expected:
+      decision: allow
+  - id: python-safe
+    command: "python3 script.py"
+    expected:
+      decision: allow
+  - id: make-safe
+    command: "make build"
+    expected:
+      decision: allow
+  - id: mkdir-safe
+    command: "mkdir -p /tmp/build"
+    expected:
+      decision: allow
+  - id: touch-safe
+    command: "touch newfile.txt"
+    expected:
+      decision: allow
+  - id: cp-safe
+    command: "cp src/main.rs src/main.rs.bak"
+    expected:
+      decision: allow
+  - id: mv-safe
+    command: "mv old.txt new.txt"
+    expected:
+      decision: allow
+  - id: date-safe
+    command: "date"
+    expected:
+      decision: allow
+  - id: sort-safe
+    command: "sort file.txt"
+    expected:
+      decision: allow
+  - id: jq-safe
+    command: "jq '.name' package.json"
+    expected:
+      decision: allow
+  - id: tar-safe
+    command: "tar -czf archive.tar.gz src/"
+    expected:
+      decision: allow
