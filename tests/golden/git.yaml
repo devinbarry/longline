@@ -1,0 +1,62 @@
+tests:
+  - id: git-status-safe
+    command: "git status"
+    expected:
+      decision: allow
+  - id: git-diff-safe
+    command: "git diff"
+    expected:
+      decision: allow
+  - id: git-log-safe
+    command: "git log"
+    expected:
+      decision: allow
+  - id: git-branch-safe
+    command: "git branch"
+    expected:
+      decision: allow
+  - id: git-show-safe
+    command: "git show"
+    expected:
+      decision: allow
+  - id: git-force-push-main
+    command: "git push --force origin main"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+  - id: git-force-push-master
+    command: "git push -f origin master"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+  - id: git-reset-hard
+    command: "git reset --hard HEAD~1"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+  - id: git-clean-f
+    command: "git clean -f"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-clean-fd
+    command: "git clean -fd"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-branch-D-allowlisted
+    command: "git branch -D feature-branch"
+    expected:
+      decision: allow
+  - id: git-add
+    command: "git add ."
+    expected:
+      decision: ask
+  - id: git-commit
+    command: "git commit -m 'fix: some bug'"
+    expected:
+      decision: ask
+  - id: git-push
+    command: "git push origin feature-branch"
+    expected:
+      decision: ask

@@ -1,0 +1,119 @@
+use serde::Deserialize;
+use std::path::PathBuf;
+
+#[derive(Debug, Deserialize)]
+struct TestSuite {
+    tests: Vec<TestCase>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TestCase {
+    id: String,
+    command: String,
+    expected: Expected,
+}
+
+#[derive(Debug, Deserialize)]
+struct Expected {
+    decision: String,
+    #[serde(default)]
+    rule_id: Option<String>,
+}
+
+fn rules_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("rules")
+        .join("default-rules.yaml")
+}
+
+fn load_golden_tests(filename: &str) -> TestSuite {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("golden")
+        .join(filename);
+    let content = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+    serde_yaml::from_str(&content)
+        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()))
+}
+
+fn run_golden_suite(filename: &str) {
+    let suite = load_golden_tests(filename);
+    let config = longline::policy::load_rules(&rules_path())
+        .expect("Failed to load default rules");
+
+    let mut failures = Vec::new();
+
+    for case in &suite.tests {
+        let stmt = match longline::parser::parse(&case.command) {
+            Ok(s) => s,
+            Err(e) => {
+                failures.push(format!(
+                    "  PARSE ERROR [{}]: command='{}', error='{e}'",
+                    case.id, case.command
+                ));
+                continue;
+            }
+        };
+
+        let result = longline::policy::evaluate(&config, &stmt);
+        let actual_decision = format!("{:?}", result.decision).to_lowercase();
+        let expected_decision = case.expected.decision.to_lowercase();
+
+        if actual_decision != expected_decision {
+            failures.push(format!(
+                "  DECISION MISMATCH [{}]: command='{}', expected={}, actual={}, rule={:?}",
+                case.id, case.command, expected_decision, actual_decision, result.rule_id
+            ));
+            continue;
+        }
+
+        if let Some(expected_rule) = &case.expected.rule_id {
+            if result.rule_id.as_deref() != Some(expected_rule.as_str()) {
+                failures.push(format!(
+                    "  RULE_ID MISMATCH [{}]: command='{}', expected_rule={}, actual_rule={:?}",
+                    case.id, case.command, expected_rule, result.rule_id
+                ));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        panic!(
+            "\n{} golden test failure(s) in {}:\n{}\n",
+            failures.len(),
+            filename,
+            failures.join("\n")
+        );
+    }
+}
+
+#[test]
+fn golden_rm() {
+    run_golden_suite("rm.yaml");
+}
+
+#[test]
+fn golden_pipeline() {
+    run_golden_suite("pipeline.yaml");
+}
+
+#[test]
+fn golden_git() {
+    run_golden_suite("git.yaml");
+}
+
+#[test]
+fn golden_safe_commands() {
+    run_golden_suite("safe-commands.yaml");
+}
+
+#[test]
+fn golden_secrets() {
+    run_golden_suite("secrets.yaml");
+}
+
+#[test]
+fn golden_redirects() {
+    run_golden_suite("redirects.yaml");
+}

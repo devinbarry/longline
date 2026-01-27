@@ -1,0 +1,25 @@
+tests:
+  - id: dd-to-disk
+    command: "dd if=/dev/zero of=/dev/sda bs=4M"
+    expected:
+      decision: deny
+      rule_id: dd-disk-device
+  - id: dd-to-nvme
+    command: "dd if=image.iso of=/dev/nvme0n1"
+    expected:
+      decision: deny
+      rule_id: dd-disk-device
+  - id: dd-to-file-safe
+    command: "dd if=/dev/zero of=/tmp/testfile bs=1M count=10"
+    expected:
+      decision: ask
+  - id: mkfs-ext4
+    command: "mkfs.ext4 /dev/sda1"
+    expected:
+      decision: deny
+      rule_id: mkfs-any
+  - id: mkfs-xfs
+    command: "mkfs.xfs /dev/sdb"
+    expected:
+      decision: deny
+      rule_id: mkfs-any

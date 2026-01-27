@@ -1,0 +1,62 @@
+tests:
+  - id: rm-rf-root
+    command: "rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-root-star
+    command: "rm -rf /*"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-etc
+    command: "rm -rf /etc"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-usr
+    command: "rm -rf /usr"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-var
+    command: "rm -rf /var"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-home-tilde
+    command: "rm -rf ~"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-home
+  - id: rm-r-etc
+    command: "rm -r /etc"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-R-usr
+    command: "rm -R /usr"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-recursive-root-long
+    command: "rm --recursive /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-tmp-file-safe
+    command: "rm /tmp/build/output.o"
+    expected:
+      decision: ask
+  - id: rm-rf-node-modules-safe
+    command: "rm -rf ./node_modules"
+    expected:
+      decision: ask
+  - id: rm-rf-dist-safe
+    command: "rm -rf dist"
+    expected:
+      decision: ask
+  - id: rm-single-file
+    command: "rm file.txt"
+    expected:
+      decision: ask
