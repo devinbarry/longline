@@ -85,6 +85,8 @@ fn default_config_path() -> PathBuf {
 
 /// Main entry point. Returns the process exit code.
 pub fn run() -> i32 {
+    yansi::whenever(yansi::Condition::TTY_AND_COLOR);
+
     let cli = Cli::parse();
 
     // Load rules config
@@ -235,7 +237,7 @@ fn run_check(
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .collect();
 
-    println!("{:<10}{:<18}COMMAND", "DECISION", "RULE");
+    let mut rows: Vec<(Decision, String, String)> = Vec::new();
 
     for cmd_str in commands {
         let (decision, rule_label) = match parser::parse(cmd_str) {
@@ -260,7 +262,6 @@ fn run_check(
             Err(_) => (Decision::Ask, "(parse-error)".to_string()),
         };
 
-        // Apply filter
         let show = match &filter {
             Some(DecisionFilter::Allow) => decision == Decision::Allow,
             Some(DecisionFilter::Ask) => decision == Decision::Ask,
@@ -269,9 +270,11 @@ fn run_check(
         };
 
         if show {
-            println!("{:<10}{:<18}{}", decision, rule_label, cmd_str);
+            rows.push((decision, rule_label, cmd_str.to_string()));
         }
     }
+
+    println!("{}", crate::output::check_table(&rows));
 
     0
 }
@@ -326,28 +329,23 @@ fn run_rules(
         }
     }
 
-    // Footer
-    print_allowlist_summary(&config.allowlists.commands);
+    // Show full allowlist when filtering to allow, compact summary otherwise
+    let is_allow_filter = matches!(&filter, Some(DecisionFilter::Allow));
+    if is_allow_filter {
+        println!(
+            "{}",
+            crate::output::allowlist_table(&config.allowlists.commands)
+        );
+    } else {
+        crate::output::print_allowlist_summary(&config.allowlists.commands);
+    }
+
     println!(
         "Safety level: {} | Default decision: {}",
         config.safety_level, config.default_decision
     );
 
     0
-}
-
-fn print_allowlist_summary(commands: &[String]) {
-    if commands.is_empty() {
-        println!("Allowlist: (none)");
-        return;
-    }
-    let display: Vec<&str> = commands.iter().take(10).map(|s| s.as_str()).collect();
-    let suffix = if commands.len() > 10 {
-        format!(", ... ({} total)", commands.len())
-    } else {
-        String::new()
-    };
-    println!("Allowlist: {}{}", display.join(", "), suffix);
 }
 
 fn format_reason(result: &PolicyResult) -> String {

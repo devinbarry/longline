@@ -216,24 +216,17 @@ fn test_e2e_rules_filter_level() {
         stdout.contains("critical"),
         "Should have critical rules: {stdout}"
     );
-    // In the table, "high" would appear in the LEVEL column for high-level rules
-    // But it won't appear as a data value since we filtered to critical only
-    // The word "high" could appear in the Safety level footer though, so check data lines
-    let data_lines: Vec<&str> = stdout
-        .lines()
-        .skip(1) // skip header
-        .take_while(|l| !l.is_empty())
-        .collect();
-    for line in &data_lines {
-        assert!(
-            !line.contains("high"),
-            "Should not have high-level rules: {line}"
-        );
-        assert!(
-            !line.contains("strict"),
-            "Should not have strict-level rules: {line}"
-        );
-    }
+    // The table portion (before footer) should not contain "high" or "strict" level values.
+    // "high" may appear in the footer "Safety level: high", so split on that.
+    let table_part = stdout.split("Safety level:").next().unwrap_or("");
+    assert!(
+        !table_part.contains("high"),
+        "Should not have high-level rules in table: {table_part}"
+    );
+    assert!(
+        !table_part.contains("strict"),
+        "Should not have strict-level rules in table: {table_part}"
+    );
 }
 
 #[test]
@@ -242,11 +235,11 @@ fn test_e2e_rules_group_by_decision() {
         run_subcommand(&["rules", "--config", &rules_path(), "--group-by", "decision"]);
     assert_eq!(code, 0);
     assert!(
-        stdout.contains("-- deny"),
+        stdout.contains("DENY"),
         "Should have deny group header: {stdout}"
     );
     assert!(
-        stdout.contains("-- ask"),
+        stdout.contains("ASK"),
         "Should have ask group header: {stdout}"
     );
 }
@@ -290,15 +283,18 @@ fn test_e2e_check_filter_deny() {
     ]);
     assert_eq!(code, 0);
     assert!(stdout.contains("deny"), "Should have deny: {stdout}");
-    let data_lines: Vec<&str> = stdout.lines().skip(1).collect();
-    for line in &data_lines {
-        if !line.is_empty() {
-            assert!(
-                line.starts_with("deny"),
-                "Non-deny line in filtered output: {line}"
-            );
-        }
-    }
+    assert!(
+        stdout.contains("rm -rf /"),
+        "Should contain denied command: {stdout}"
+    );
+    assert!(
+        !stdout.contains("ls -la"),
+        "Should not contain allowed command: {stdout}"
+    );
+    assert!(
+        !stdout.contains("chmod 777"),
+        "Should not contain ask command: {stdout}"
+    );
 
     let _ = std::fs::remove_file(&file);
 }
@@ -315,15 +311,19 @@ fn test_e2e_check_skips_comments_and_blanks() {
     let (code, stdout, _) =
         run_subcommand(&["check", "--config", &rules_path(), file.to_str().unwrap()]);
     assert_eq!(code, 0);
-    let data_lines: Vec<&str> = stdout
-        .lines()
-        .skip(1) // skip header
-        .filter(|l| !l.is_empty())
-        .collect();
+    assert!(
+        stdout.contains("ls -la"),
+        "Should contain the ls command: {stdout}"
+    );
+    assert!(
+        !stdout.contains("comment"),
+        "Should not contain comment text: {stdout}"
+    );
+    // Verify exactly one data row by counting command occurrences
+    let cmd_count = stdout.matches("ls -la").count();
     assert_eq!(
-        data_lines.len(),
-        1,
-        "Should have 1 result, got: {data_lines:?}"
+        cmd_count, 1,
+        "Should have exactly 1 result, got {cmd_count}: {stdout}"
     );
 
     let _ = std::fs::remove_file(&file);
