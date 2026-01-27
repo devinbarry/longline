@@ -32,6 +32,13 @@ allowlists:
     - dirname
     - realpath
     - readlink
+    - stat
+    - du
+    - printf
+    - md5sum
+    - sha256sum
+    - sha1sum
+    - cksum
     - "true"
     - "false"
     # Safe build/dev commands
@@ -215,6 +222,62 @@ rules:
         any_of: ["~/.kube/config"]
     decision: deny
     reason: "Reading Kubernetes config"
+
+  - id: cp-secrets
+    level: critical
+    match:
+      command: cp
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc", "**/.env", "**/.env.local",
+                  "~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa", "id_rsa", "id_ed25519", "id_ecdsa",
+                  "~/.aws/credentials", "~/.aws/config",
+                  "~/.kube/config"]
+    decision: ask
+    reason: "Copying sensitive file"
+
+  - id: mv-secrets
+    level: critical
+    match:
+      command: mv
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc", "**/.env", "**/.env.local",
+                  "~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa", "id_rsa", "id_ed25519", "id_ecdsa",
+                  "~/.aws/credentials", "~/.aws/config",
+                  "~/.kube/config"]
+    decision: ask
+    reason: "Moving sensitive file"
+
+  - id: tee-secrets
+    level: critical
+    match:
+      command: tee
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc", "**/.env", "**/.env.local",
+                  "~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa",
+                  "~/.aws/credentials", "~/.aws/config",
+                  "~/.kube/config"]
+    decision: deny
+    reason: "Writing to sensitive file via tee"
+
+  - id: rm-secrets
+    level: critical
+    match:
+      command: rm
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc",
+                  "~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa", "~/.ssh/authorized_keys",
+                  "~/.aws/credentials", "~/.aws/config",
+                  "~/.kube/config"]
+    decision: ask
+    reason: "Deleting sensitive file"
 
   # ============================================================
   # HIGH: VCS destructive operations
