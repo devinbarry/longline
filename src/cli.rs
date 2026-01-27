@@ -230,14 +230,160 @@ fn run_check(
 }
 
 fn run_rules(
-    _config: &policy::RulesConfig,
-    _verbose: bool,
-    _filter: Option<DecisionFilter>,
-    _level: Option<LevelFilter>,
-    _group_by: Option<GroupBy>,
+    config: &policy::RulesConfig,
+    verbose: bool,
+    filter: Option<DecisionFilter>,
+    level: Option<LevelFilter>,
+    group_by: Option<GroupBy>,
 ) -> i32 {
-    eprintln!("longline: rules subcommand not yet implemented");
-    1
+    let rules: Vec<&policy::Rule> = config
+        .rules
+        .iter()
+        .filter(|r| match &filter {
+            Some(DecisionFilter::Allow) => r.decision == Decision::Allow,
+            Some(DecisionFilter::Ask) => r.decision == Decision::Ask,
+            Some(DecisionFilter::Deny) => r.decision == Decision::Deny,
+            None => true,
+        })
+        .filter(|r| match &level {
+            Some(LevelFilter::Critical) => r.level == policy::SafetyLevel::Critical,
+            Some(LevelFilter::High) => r.level == policy::SafetyLevel::High,
+            Some(LevelFilter::Strict) => r.level == policy::SafetyLevel::Strict,
+            None => true,
+        })
+        .collect();
+
+    match group_by {
+        Some(GroupBy::Decision) => print_rules_grouped_by_decision(&rules, verbose),
+        Some(GroupBy::Level) => print_rules_grouped_by_level(&rules, verbose),
+        None => print_rules_table(&rules, verbose),
+    }
+
+    // Footer
+    print_allowlist_summary(&config.allowlists.commands);
+    println!(
+        "Safety level: {} | Default decision: {}",
+        config.safety_level, config.default_decision
+    );
+
+    0
+}
+
+fn print_rules_table(rules: &[&policy::Rule], verbose: bool) {
+    println!(
+        "{:<10}{:<10}{:<28}DESCRIPTION",
+        "DECISION", "LEVEL", "ID"
+    );
+    for rule in rules {
+        println!(
+            "{:<10}{:<10}{:<28}{}",
+            rule.decision, rule.level, rule.id, rule.reason
+        );
+        if verbose {
+            print_matcher_details(&rule.matcher);
+        }
+    }
+    println!();
+}
+
+fn print_rules_grouped_by_decision(rules: &[&policy::Rule], verbose: bool) {
+    for decision in &[Decision::Deny, Decision::Ask, Decision::Allow] {
+        let group: Vec<_> = rules.iter().filter(|r| r.decision == *decision).collect();
+        if group.is_empty() {
+            continue;
+        }
+        println!("-- {} {}", decision, "-".repeat(55));
+        for rule in &group {
+            println!("  {:<10}{:<28}{}", rule.level, rule.id, rule.reason);
+            if verbose {
+                print_matcher_details(&rule.matcher);
+            }
+        }
+        println!();
+    }
+}
+
+fn print_rules_grouped_by_level(rules: &[&policy::Rule], verbose: bool) {
+    for level_val in &[
+        policy::SafetyLevel::Critical,
+        policy::SafetyLevel::High,
+        policy::SafetyLevel::Strict,
+    ] {
+        let group: Vec<_> = rules.iter().filter(|r| r.level == *level_val).collect();
+        if group.is_empty() {
+            continue;
+        }
+        println!("-- {} {}", level_val, "-".repeat(55));
+        for rule in &group {
+            println!("  {:<10}{:<28}{}", rule.decision, rule.id, rule.reason);
+            if verbose {
+                print_matcher_details(&rule.matcher);
+            }
+        }
+        println!();
+    }
+}
+
+fn print_matcher_details(matcher: &policy::Matcher) {
+    match matcher {
+        policy::Matcher::Command {
+            command,
+            flags,
+            args,
+        } => {
+            println!("    match: command={}", format_string_or_list(command));
+            if let Some(f) = flags {
+                if !f.any_of.is_empty() {
+                    println!("    flags.any_of: {:?}", f.any_of);
+                }
+                if !f.all_of.is_empty() {
+                    println!("    flags.all_of: {:?}", f.all_of);
+                }
+            }
+            if let Some(a) = args {
+                if !a.any_of.is_empty() {
+                    println!("    args.any_of: {:?}", a.any_of);
+                }
+            }
+        }
+        policy::Matcher::Pipeline { pipeline } => {
+            let stages: Vec<String> = pipeline
+                .stages
+                .iter()
+                .map(|s| format_string_or_list(&s.command))
+                .collect();
+            println!("    match: pipeline [{}]", stages.join(" | "));
+        }
+        policy::Matcher::Redirect { redirect } => {
+            if let Some(op) = &redirect.op {
+                println!("    redirect.op: {}", format_string_or_list(op));
+            }
+            if let Some(target) = &redirect.target {
+                println!("    redirect.target: {}", format_string_or_list(target));
+            }
+        }
+    }
+}
+
+fn format_string_or_list(sol: &policy::StringOrList) -> String {
+    match sol {
+        policy::StringOrList::Single(s) => s.clone(),
+        policy::StringOrList::List { any_of } => format!("{{{}}}", any_of.join(", ")),
+    }
+}
+
+fn print_allowlist_summary(commands: &[String]) {
+    if commands.is_empty() {
+        println!("Allowlist: (none)");
+        return;
+    }
+    let display: Vec<&str> = commands.iter().take(10).map(|s| s.as_str()).collect();
+    let suffix = if commands.len() > 10 {
+        format!(", ... ({} total)", commands.len())
+    } else {
+        String::new()
+    };
+    println!("Allowlist: {}{}", display.join(", "), suffix);
 }
 
 fn format_reason(result: &PolicyResult) -> String {

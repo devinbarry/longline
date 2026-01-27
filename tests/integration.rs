@@ -17,6 +17,22 @@ fn rules_path() -> String {
         .to_string()
 }
 
+fn run_subcommand(args: &[&str]) -> (i32, String, String) {
+    let child = Command::new(longline_bin())
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    (code, stdout, stderr)
+}
+
 fn run_hook(tool_name: &str, command: &str) -> (i32, String) {
     run_hook_with_flags(tool_name, command, &[])
 }
@@ -150,4 +166,51 @@ fn test_e2e_ask_on_deny_does_not_affect_ask() {
         .as_str()
         .unwrap();
     assert!(!reason.contains("[overridden]"), "Ask should not be overridden: {reason}");
+}
+
+#[test]
+fn test_e2e_rules_shows_table() {
+    let (code, stdout, _) = run_subcommand(&["rules", "--config", &rules_path()]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("DECISION"), "Should have header: {stdout}");
+    assert!(stdout.contains("rm-recursive-root"), "Should list rules: {stdout}");
+    assert!(stdout.contains("Allowlist:"), "Should show allowlist: {stdout}");
+    assert!(stdout.contains("Safety level:"), "Should show safety level: {stdout}");
+}
+
+#[test]
+fn test_e2e_rules_filter_deny() {
+    let (code, stdout, _) = run_subcommand(&["rules", "--config", &rules_path(), "--filter", "deny"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("deny"), "Should have deny rules: {stdout}");
+    // Check data rows don't contain "ask " at the start of a line
+    assert!(!stdout.contains("\nask "), "Should not have ask rules in filtered output");
+}
+
+#[test]
+fn test_e2e_rules_filter_level() {
+    let (code, stdout, _) = run_subcommand(&["rules", "--config", &rules_path(), "--level", "critical"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("critical"), "Should have critical rules: {stdout}");
+    // In the table, "high" would appear in the LEVEL column for high-level rules
+    // But it won't appear as a data value since we filtered to critical only
+    // The word "high" could appear in the Safety level footer though, so check data lines
+    let data_lines: Vec<&str> = stdout.lines()
+        .skip(1)  // skip header
+        .take_while(|l| !l.is_empty())
+        .collect();
+    for line in &data_lines {
+        assert!(!line.contains("high"), "Should not have high-level rules: {line}");
+        assert!(!line.contains("strict"), "Should not have strict-level rules: {line}");
+    }
+}
+
+#[test]
+fn test_e2e_rules_group_by_decision() {
+    let (code, stdout, _) = run_subcommand(&[
+        "rules", "--config", &rules_path(), "--group-by", "decision",
+    ]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("-- deny"), "Should have deny group header: {stdout}");
+    assert!(stdout.contains("-- ask"), "Should have ask group header: {stdout}");
 }

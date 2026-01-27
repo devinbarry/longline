@@ -31,6 +31,16 @@ pub enum SafetyLevel {
     Strict,
 }
 
+impl std::fmt::Display for SafetyLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SafetyLevel::Critical => write!(f, "critical"),
+            SafetyLevel::High => write!(f, "high"),
+            SafetyLevel::Strict => write!(f, "strict"),
+        }
+    }
+}
+
 #[derive(Debug, Default, Deserialize)]
 pub struct Allowlists {
     #[serde(default)]
