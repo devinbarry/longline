@@ -18,6 +18,10 @@ fn rules_path() -> String {
 }
 
 fn run_hook(tool_name: &str, command: &str) -> (i32, String) {
+    run_hook_with_flags(tool_name, command, &[])
+}
+
+fn run_hook_with_flags(tool_name: &str, command: &str, extra_args: &[&str]) -> (i32, String) {
     let input = serde_json::json!({
         "hook_event_name": "PreToolUse",
         "tool_name": tool_name,
@@ -28,8 +32,12 @@ fn run_hook(tool_name: &str, command: &str) -> (i32, String) {
         "cwd": "/tmp"
     });
 
+    let config = rules_path();
+    let mut args = vec!["--config", &config];
+    args.extend_from_slice(extra_args);
+
     let mut child = Command::new(longline_bin())
-        .args(["--config", &rules_path()])
+        .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -109,4 +117,37 @@ fn test_e2e_missing_config_exits_2() {
 
     let output = child.wait_with_output().unwrap();
     assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn test_e2e_ask_on_deny_downgrades_deny_to_ask() {
+    let (code, stdout) = run_hook_with_flags("Bash", "rm -rf /", &["--ask-on-deny"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "ask");
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(reason.contains("[overridden]"), "Reason should be prefixed: {reason}");
+    assert!(reason.contains("rm-recursive-root"), "Should preserve rule ID: {reason}");
+}
+
+#[test]
+fn test_e2e_ask_on_deny_does_not_affect_allow() {
+    let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--ask-on-deny"]);
+    assert_eq!(code, 0);
+    assert_eq!(stdout.trim(), "{}");
+}
+
+#[test]
+fn test_e2e_ask_on_deny_does_not_affect_ask() {
+    // chmod 777 triggers ask via chmod-777 rule
+    let (code, stdout) = run_hook_with_flags("Bash", "chmod 777 /tmp/f", &["--ask-on-deny"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "ask");
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(!reason.contains("[overridden]"), "Ask should not be overridden: {reason}");
 }

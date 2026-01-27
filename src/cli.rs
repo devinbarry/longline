@@ -110,7 +110,7 @@ pub fn run() -> i32 {
 }
 
 /// Run hook mode: read stdin, evaluate, output decision.
-fn run_hook(rules_config: &policy::RulesConfig, _ask_on_deny: bool) -> i32 {
+fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool) -> i32 {
     // Read hook input from stdin
     let mut input_str = String::new();
     if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
@@ -156,14 +156,17 @@ fn run_hook(rules_config: &policy::RulesConfig, _ask_on_deny: bool) -> i32 {
             );
             print_json(&output);
 
-            log_result(
-                &hook_input,
+            let entry = logger::make_entry(
+                &hook_input.tool_name,
+                hook_input.cwd.as_deref().unwrap_or(""),
                 command,
                 Decision::Ask,
                 vec![],
                 Some(format!("Parse error: {e}")),
                 false,
+                hook_input.session_id.clone(),
             );
+            logger::log_decision(&entry);
             return 0;
         }
     };
@@ -171,11 +174,18 @@ fn run_hook(rules_config: &policy::RulesConfig, _ask_on_deny: bool) -> i32 {
     // Evaluate against policy
     let result = policy::evaluate(rules_config, &stmt);
 
+    let (final_decision, overridden) = if ask_on_deny && result.decision == Decision::Deny {
+        (Decision::Ask, true)
+    } else {
+        (result.decision, false)
+    };
+
     // Log the decision
-    log_result(
-        &hook_input,
+    let mut entry = logger::make_entry(
+        &hook_input.tool_name,
+        hook_input.cwd.as_deref().unwrap_or(""),
         command,
-        result.decision,
+        final_decision,
         result.rule_id.clone().into_iter().collect(),
         if result.reason.is_empty() {
             None
@@ -183,16 +193,26 @@ fn run_hook(rules_config: &policy::RulesConfig, _ask_on_deny: bool) -> i32 {
             Some(result.reason.clone())
         },
         parse_ok,
+        hook_input.session_id.clone(),
     );
+    if overridden {
+        entry.original_decision = Some(result.decision);
+        entry.overridden = true;
+    }
+    logger::log_decision(&entry);
 
     // Output the decision
-    match result.decision {
+    match final_decision {
         Decision::Allow => {
             print_allow();
         }
         Decision::Ask | Decision::Deny => {
-            let reason = format_reason(&result);
-            let output = HookOutput::decision(result.decision, &reason);
+            let reason = if overridden {
+                format!("[overridden] {}", format_reason(&result))
+            } else {
+                format_reason(&result)
+            };
+            let output = HookOutput::decision(final_decision, &reason);
             print_json(&output);
         }
     }
@@ -243,24 +263,3 @@ fn print_json<T: serde::Serialize>(value: &T) {
     }
 }
 
-/// Log the evaluation result.
-fn log_result(
-    hook_input: &HookInput,
-    command: &str,
-    decision: Decision,
-    matched_rules: Vec<String>,
-    reason: Option<String>,
-    parse_ok: bool,
-) {
-    let entry = logger::make_entry(
-        &hook_input.tool_name,
-        hook_input.cwd.as_deref().unwrap_or(""),
-        command,
-        decision,
-        matched_rules,
-        reason,
-        parse_ok,
-        hook_input.session_id.clone(),
-    );
-    logger::log_decision(&entry);
-}
