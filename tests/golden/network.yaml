@@ -1,0 +1,78 @@
+tests:
+  # iptables / firewall
+  - id: iptables-append
+    command: "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: iptables-delete
+    command: "iptables -D INPUT 1"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: iptables-flush
+    command: "iptables -F"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: ip6tables-rule
+    command: "ip6tables -A INPUT -j DROP"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: ufw-allow
+    command: "ufw allow 22"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: ufw-deny
+    command: "ufw deny 80"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: ufw-enable
+    command: "ufw enable"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+  - id: nft-add
+    command: "nft add rule inet filter input tcp dport 22 accept"
+    expected:
+      decision: ask
+      rule_id: iptables-modify
+
+  # kill signals
+  - id: kill-9-pid
+    command: "kill -9 1234"
+    expected:
+      decision: ask
+      rule_id: kill-signal
+  - id: kill-sigkill
+    command: "kill -KILL 5678"
+    expected:
+      decision: ask
+      rule_id: kill-signal
+  - id: killall-9
+    command: "killall -9 nginx"
+    expected:
+      decision: ask
+      rule_id: kill-signal
+  - id: pkill-kill
+    command: "pkill -KILL process_name"
+    expected:
+      decision: ask
+      rule_id: kill-signal
+  - id: kill-no-signal-no-rule
+    command: "kill 1234"
+    expected:
+      decision: ask
+  - id: killall-no-signal-no-rule
+    command: "killall nginx"
+    expected:
+      decision: ask
+
+  # wget standalone (not piped) - not allowlisted, no specific rule
+  - id: wget-download
+    command: "wget http://example.com/file.tar.gz"
+    expected:
+      decision: ask

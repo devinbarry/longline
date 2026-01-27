@@ -60,3 +60,83 @@ tests:
     command: "git push origin feature-branch"
     expected:
       decision: ask
+  - id: git-stash-list-safe
+    command: "git stash list"
+    expected:
+      decision: allow
+  - id: git-remote-safe
+    command: "git remote -v"
+    expected:
+      decision: allow
+  - id: git-tag-safe
+    command: "git tag"
+    expected:
+      decision: allow
+  - id: git-rev-parse-safe
+    command: "git rev-parse HEAD"
+    expected:
+      decision: allow
+  - id: git-config-safe
+    command: "git config user.email"
+    expected:
+      decision: allow
+  - id: git-diff-staged
+    command: "git diff --staged"
+    expected:
+      decision: allow
+  - id: git-log-oneline
+    command: "git log --oneline -10"
+    expected:
+      decision: allow
+  - id: git-show-commit
+    command: "git show abc1234"
+    expected:
+      decision: allow
+  - id: git-branch-list
+    command: "git branch -a"
+    expected:
+      decision: allow
+  - id: git-force-push-main-long
+    command: "git push --force origin main"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+  - id: git-clean-fx
+    command: "git clean -fx"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-clean-fxd
+    command: "git clean -fxd"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-reset-hard-head
+    command: "git reset --hard"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+  - id: git-stash-push-not-allowlisted
+    command: "git stash push"
+    expected:
+      decision: ask
+  - id: git-merge-not-allowlisted
+    command: "git merge feature-branch"
+    expected:
+      decision: ask
+  - id: git-rebase-not-allowlisted
+    command: "git rebase main"
+    expected:
+      decision: ask
+  - id: git-cherry-pick
+    command: "git cherry-pick abc1234"
+    expected:
+      decision: ask
+  - id: git-fetch
+    command: "git fetch origin"
+    expected:
+      decision: ask
+  - id: git-pull
+    command: "git pull origin main"
+    expected:
+      decision: ask

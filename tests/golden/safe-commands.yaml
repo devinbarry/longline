@@ -83,3 +83,223 @@ tests:
     command: "tar -czf archive.tar.gz src/"
     expected:
       decision: allow
+  - id: wc-safe
+    command: "wc -l src/main.rs"
+    expected:
+      decision: allow
+  - id: file-safe
+    command: "file binary.out"
+    expected:
+      decision: allow
+  - id: which-safe
+    command: "which cargo"
+    expected:
+      decision: allow
+  - id: type-safe
+    command: "type ls"
+    expected:
+      decision: allow
+  - id: basename-safe
+    command: "basename /path/to/file.txt"
+    expected:
+      decision: allow
+  - id: dirname-safe
+    command: "dirname /path/to/file.txt"
+    expected:
+      decision: allow
+  - id: realpath-safe
+    command: "realpath ./src"
+    expected:
+      decision: allow
+  - id: readlink-safe
+    command: "readlink -f /usr/bin/python3"
+    expected:
+      decision: allow
+  - id: head-safe
+    command: "head -n 10 file.txt"
+    expected:
+      decision: allow
+  - id: tail-safe
+    command: "tail -f /var/log/syslog"
+    expected:
+      decision: allow
+  - id: uniq-safe
+    command: "uniq -c file.txt"
+    expected:
+      decision: allow
+  - id: tr-safe
+    command: "tr '[:lower:]' '[:upper:]'"
+    expected:
+      decision: allow
+  - id: cut-safe
+    command: "cut -d: -f1 /etc/passwd"
+    expected:
+      decision: allow
+  - id: diff-safe
+    command: "diff file1.txt file2.txt"
+    expected:
+      decision: allow
+  - id: sed-safe
+    command: "sed 's/old/new/g' file.txt"
+    expected:
+      decision: allow
+  - id: awk-safe
+    command: "awk '{print $1}' file.txt"
+    expected:
+      decision: allow
+  - id: xargs-safe
+    command: "xargs echo"
+    expected:
+      decision: allow
+  - id: ln-safe
+    command: "ln -s source target"
+    expected:
+      decision: allow
+  - id: gzip-safe
+    command: "gzip file.txt"
+    expected:
+      decision: allow
+  - id: gunzip-safe
+    command: "gunzip file.txt.gz"
+    expected:
+      decision: allow
+  - id: zip-safe
+    command: "zip archive.zip file.txt"
+    expected:
+      decision: allow
+  - id: unzip-safe
+    command: "unzip archive.zip"
+    expected:
+      decision: allow
+  - id: rustc-safe
+    command: "rustc --version"
+    expected:
+      decision: allow
+  - id: npx-safe
+    command: "npx create-react-app myapp"
+    expected:
+      decision: allow
+  - id: node-safe
+    command: "node -e 'console.log(1)'"
+    expected:
+      decision: allow
+  - id: pip-safe
+    command: "pip install requests"
+    expected:
+      decision: allow
+  - id: pip3-safe
+    command: "pip3 install flask"
+    expected:
+      decision: allow
+  - id: ruby-safe
+    command: "ruby script.rb"
+    expected:
+      decision: allow
+  - id: gem-safe
+    command: "gem install bundler"
+    expected:
+      decision: allow
+  - id: go-safe
+    command: "go build ./..."
+    expected:
+      decision: allow
+  - id: java-safe
+    command: "java -jar app.jar"
+    expected:
+      decision: allow
+  - id: javac-safe
+    command: "javac Main.java"
+    expected:
+      decision: allow
+  - id: cmake-safe
+    command: "cmake .."
+    expected:
+      decision: allow
+  - id: rg-safe
+    command: "rg 'pattern' src/"
+    expected:
+      decision: allow
+  - id: fd-safe
+    command: "fd -e rs"
+    expected:
+      decision: allow
+  - id: yq-safe
+    command: "yq '.name' config.yaml"
+    expected:
+      decision: allow
+  - id: patch-safe
+    command: "patch -p1 < fix.patch"
+    expected:
+      decision: allow
+  - id: test-safe
+    command: "test -f file.txt"
+    expected:
+      decision: allow
+  - id: true-safe
+    command: "true"
+    expected:
+      decision: allow
+  - id: false-safe
+    command: "false"
+    expected:
+      decision: allow
+  - id: python-version
+    command: "python --version"
+    expected:
+      decision: allow
+  - id: cat-plain-file
+    command: "cat /etc/passwd"
+    expected:
+      decision: allow
+  - id: echo-empty
+    command: "echo"
+    expected:
+      decision: allow
+  - id: ls-no-args
+    command: "ls"
+    expected:
+      decision: allow
+  - id: grep-count
+    command: "grep -c 'TODO' src/main.rs"
+    expected:
+      decision: allow
+  - id: find-type
+    command: "find /tmp -type f -name '*.log'"
+    expected:
+      decision: allow
+  - id: cargo-clippy
+    command: "cargo clippy"
+    expected:
+      decision: allow
+  - id: npm-run-build
+    command: "npm run build"
+    expected:
+      decision: allow
+  - id: make-clean
+    command: "make clean"
+    expected:
+      decision: allow
+  - id: mv-rename
+    command: "mv src/old.rs src/new.rs"
+    expected:
+      decision: allow
+  - id: cp-recursive
+    command: "cp -r src/ backup/"
+    expected:
+      decision: allow
+  - id: mkdir-nested
+    command: "mkdir -p a/b/c/d"
+    expected:
+      decision: allow
+  - id: touch-multiple
+    command: "touch a.txt b.txt c.txt"
+    expected:
+      decision: allow
+  - id: sort-reverse
+    command: "sort -r file.txt"
+    expected:
+      decision: allow
+  - id: tar-extract
+    command: "tar -xzf archive.tar.gz"
+    expected:
+      decision: allow

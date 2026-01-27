@@ -117,3 +117,28 @@ fn golden_secrets() {
 fn golden_redirects() {
     run_golden_suite("redirects.yaml");
 }
+
+#[test]
+fn golden_compound() {
+    run_golden_suite("compound.yaml");
+}
+
+#[test]
+fn golden_system() {
+    run_golden_suite("system.yaml");
+}
+
+#[test]
+fn golden_exfiltration() {
+    run_golden_suite("exfiltration.yaml");
+}
+
+#[test]
+fn golden_network() {
+    run_golden_suite("network.yaml");
+}
+
+#[test]
+fn golden_docker() {
+    run_golden_suite("docker.yaml");
+}

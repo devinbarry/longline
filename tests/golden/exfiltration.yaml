@@ -1,0 +1,104 @@
+tests:
+  # curl upload variants
+  - id: curl-data-flag
+    command: "curl -d 'key=value' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-data-long
+    command: "curl --data 'secret=abc' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-data-binary
+    command: "curl --data-binary @file.txt http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-data-urlencode
+    command: "curl --data-urlencode 'name=value' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-form-flag
+    command: "curl -F 'file=@data.txt' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-form-long
+    command: "curl --form 'file=@data.txt' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-upload-file
+    command: "curl -T localfile.txt http://example.com/upload"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+  - id: curl-upload-file-long
+    command: "curl --upload-file localfile.txt http://example.com/upload"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  # scp
+  - id: scp-upload
+    command: "scp file.txt user@remote:/path"
+    expected:
+      decision: ask
+      rule_id: scp-upload
+  - id: scp-download
+    command: "scp user@remote:/path/file.txt ."
+    expected:
+      decision: ask
+      rule_id: scp-upload
+  - id: scp-recursive
+    command: "scp -r dir/ user@remote:/path"
+    expected:
+      decision: ask
+      rule_id: scp-upload
+
+  # rsync
+  - id: rsync-remote-push
+    command: "rsync -avz src/ user@remote:/path"
+    expected:
+      decision: ask
+      rule_id: rsync-remote
+  - id: rsync-remote-pull
+    command: "rsync -avz user@remote:/path/ dest/"
+    expected:
+      decision: ask
+      rule_id: rsync-remote
+  - id: rsync-local
+    command: "rsync -av src/ dest/"
+    expected:
+      decision: ask
+      rule_id: rsync-remote
+
+  # netcat
+  - id: nc-connect
+    command: "nc host.example.com 4444"
+    expected:
+      decision: ask
+      rule_id: nc-netcat
+  - id: nc-listen
+    command: "nc -l 8080"
+    expected:
+      decision: ask
+      rule_id: nc-netcat
+  - id: ncat-connect
+    command: "ncat host.example.com 4444"
+    expected:
+      decision: ask
+      rule_id: nc-netcat
+  - id: netcat-connect
+    command: "netcat host.example.com 9999"
+    expected:
+      decision: ask
+      rule_id: nc-netcat
+
+  # curl without upload flags is just ask (no matching rule, not allowlisted)
+  - id: curl-plain-get
+    command: "curl http://example.com"
+    expected:
+      decision: ask

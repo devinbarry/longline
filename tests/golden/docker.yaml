@@ -1,0 +1,70 @@
+tests:
+  # docker volume operations
+  - id: docker-volume-rm
+    command: "docker volume rm mydata"
+    expected:
+      decision: ask
+      rule_id: docker-volume-rm
+  - id: docker-volume-prune
+    command: "docker volume prune"
+    expected:
+      decision: ask
+      rule_id: docker-volume-rm
+  - id: docker-volume-ls-no-rule
+    command: "docker volume ls"
+    expected:
+      decision: ask
+
+  # docker system operations
+  - id: docker-system-prune
+    command: "docker system prune"
+    expected:
+      decision: ask
+      rule_id: docker-system-prune
+  - id: docker-system-prune-all
+    command: "docker system prune -a"
+    expected:
+      decision: ask
+      rule_id: docker-system-prune
+  - id: docker-system-df-no-rule
+    command: "docker system df"
+    expected:
+      decision: ask
+
+  # General docker commands (not allowlisted, no matching rule)
+  - id: docker-build
+    command: "docker build ."
+    expected:
+      decision: ask
+  - id: docker-run
+    command: "docker run -it ubuntu bash"
+    expected:
+      decision: ask
+  - id: docker-ps
+    command: "docker ps"
+    expected:
+      decision: ask
+  - id: docker-images
+    command: "docker images"
+    expected:
+      decision: ask
+  - id: docker-compose-up
+    command: "docker compose up -d"
+    expected:
+      decision: ask
+  - id: docker-pull
+    command: "docker pull nginx:latest"
+    expected:
+      decision: ask
+  - id: docker-stop
+    command: "docker stop mycontainer"
+    expected:
+      decision: ask
+  - id: docker-rm-container
+    command: "docker rm mycontainer"
+    expected:
+      decision: ask
+  - id: docker-rmi
+    command: "docker rmi myimage:latest"
+    expected:
+      decision: ask

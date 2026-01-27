@@ -60,3 +60,65 @@ tests:
     command: "rm file.txt"
     expected:
       decision: ask
+  - id: rm-rf-bin
+    command: "rm -rf /bin"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-sbin
+    command: "rm -rf /sbin"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-lib
+    command: "rm -rf /lib"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-boot
+    command: "rm -rf /boot"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-fr-root
+    command: "rm -fr /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-Rf-root
+    command: "rm -Rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-fR-root
+    command: "rm -fR /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: rm-rf-home-slash
+    command: "rm -rf ~/"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-home
+  - id: rm-rf-home-var
+    command: "rm -rf $HOME"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-home
+  - id: rm-rf-home-var-slash
+    command: "rm -rf $HOME/"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-home
+  - id: rm-rf-target-safe
+    command: "rm -rf target/"
+    expected:
+      decision: ask
+  - id: rm-i-file
+    command: "rm -i important.txt"
+    expected:
+      decision: ask
+  - id: rm-multiple-files
+    command: "rm a.txt b.txt c.txt"
+    expected:
+      decision: ask
