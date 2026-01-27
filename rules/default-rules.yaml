@@ -406,6 +406,17 @@ rules:
     decision: ask
     reason: "Force deleting a git branch"
 
+  - id: git-commit-amend
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["commit"]
+      flags:
+        any_of: ["--amend"]
+    decision: ask
+    reason: "git commit --amend rewrites the previous commit"
+
   # ============================================================
   # HIGH: Exfiltration
   # ============================================================
