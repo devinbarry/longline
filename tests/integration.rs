@@ -214,3 +214,92 @@ fn test_e2e_rules_group_by_decision() {
     assert!(stdout.contains("-- deny"), "Should have deny group header: {stdout}");
     assert!(stdout.contains("-- ask"), "Should have ask group header: {stdout}");
 }
+
+#[test]
+fn test_e2e_check_from_file() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("test-tmp");
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("test-commands.txt");
+    std::fs::write(&file, "ls -la\nrm -rf /\nchmod 777 /tmp/f\n").unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "check",
+        "--config",
+        &rules_path(),
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("DECISION"),
+        "Should have header: {stdout}"
+    );
+    assert!(stdout.contains("allow"), "Should have allow: {stdout}");
+    assert!(stdout.contains("deny"), "Should have deny: {stdout}");
+    assert!(stdout.contains("ask"), "Should have ask: {stdout}");
+
+    let _ = std::fs::remove_file(&file);
+}
+
+#[test]
+fn test_e2e_check_filter_deny() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("test-tmp");
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("test-commands-filter.txt");
+    std::fs::write(&file, "ls -la\nrm -rf /\nchmod 777 /tmp/f\n").unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "check",
+        "--config",
+        &rules_path(),
+        "--filter",
+        "deny",
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("deny"), "Should have deny: {stdout}");
+    let data_lines: Vec<&str> = stdout.lines().skip(1).collect();
+    for line in &data_lines {
+        if !line.is_empty() {
+            assert!(
+                line.starts_with("deny"),
+                "Non-deny line in filtered output: {line}"
+            );
+        }
+    }
+
+    let _ = std::fs::remove_file(&file);
+}
+
+#[test]
+fn test_e2e_check_skips_comments_and_blanks() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("target")
+        .join("test-tmp");
+    let _ = std::fs::create_dir_all(&dir);
+    let file = dir.join("test-commands-comments.txt");
+    std::fs::write(&file, "# this is a comment\n\nls -la\n").unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "check",
+        "--config",
+        &rules_path(),
+        file.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    let data_lines: Vec<&str> = stdout
+        .lines()
+        .skip(1) // skip header
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(
+        data_lines.len(),
+        1,
+        "Should have 1 result, got: {data_lines:?}"
+    );
+
+    let _ = std::fs::remove_file(&file);
+}
