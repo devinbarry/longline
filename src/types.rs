@@ -5,9 +5,11 @@ use serde::{Deserialize, Serialize};
 pub struct HookInput {
     pub session_id: Option<String>,
     pub cwd: Option<String>,
+    #[allow(dead_code)]
     pub hook_event_name: Option<String>,
     pub tool_name: String,
     pub tool_input: ToolInput,
+    #[allow(dead_code)]
     pub tool_use_id: Option<String>,
 }
 
@@ -15,7 +17,9 @@ pub struct HookInput {
 #[derive(Debug, Deserialize)]
 pub struct ToolInput {
     pub command: Option<String>,
+    #[allow(dead_code)]
     pub description: Option<String>,
+    #[allow(dead_code)]
     pub file_path: Option<String>,
 }
 
@@ -68,6 +72,7 @@ impl PolicyResult {
     pub fn allow() -> Self {
         Self { decision: Decision::Allow, rule_id: None, reason: String::new() }
     }
+    #[allow(dead_code)]
     pub fn ask(reason: &str) -> Self {
         Self { decision: Decision::Ask, rule_id: None, reason: reason.to_string() }
     }
