@@ -303,3 +303,31 @@ tests:
     command: "tar -xzf archive.tar.gz"
     expected:
       decision: allow
+  - id: stat-safe
+    command: "stat file.txt"
+    expected:
+      decision: allow
+  - id: du-safe
+    command: "du -sh src/"
+    expected:
+      decision: allow
+  - id: printf-safe
+    command: "printf '%s\\n' hello"
+    expected:
+      decision: allow
+  - id: md5sum-safe
+    command: "md5sum file.txt"
+    expected:
+      decision: allow
+  - id: sha256sum-safe
+    command: "sha256sum file.txt"
+    expected:
+      decision: allow
+  - id: sha1sum-safe
+    command: "sha1sum file.txt"
+    expected:
+      decision: allow
+  - id: cksum-safe
+    command: "cksum file.txt"
+    expected:
+      decision: allow
