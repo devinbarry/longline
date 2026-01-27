@@ -44,10 +44,11 @@ tests:
     expected:
       decision: ask
       rule_id: git-clean-force
-  - id: git-branch-D-allowlisted
+  - id: git-branch-D-ask
     command: "git branch -D feature-branch"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: git-branch-delete-force
   - id: git-add
     command: "git add ."
     expected:
