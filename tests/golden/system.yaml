@@ -1,0 +1,142 @@
+tests:
+  # chmod rules
+  - id: chmod-777-file
+    command: "chmod 777 /tmp/file"
+    expected:
+      decision: ask
+      rule_id: chmod-777
+  - id: chmod-777-dir
+    command: "chmod 777 /var/www"
+    expected:
+      decision: ask
+      rule_id: chmod-777
+  - id: chmod-644-no-rule
+    command: "chmod 644 /tmp/file"
+    expected:
+      decision: ask
+  - id: chmod-755-no-rule
+    command: "chmod 755 script.sh"
+    expected:
+      decision: ask
+  - id: chmod-plus-x-no-rule
+    command: "chmod +x script.sh"
+    expected:
+      decision: ask
+
+  # visudo / sudoers
+  # Bare visudo has no args, so edit-sudoers rule doesn't match (requires /etc/sudoers arg)
+  - id: visudo-no-args
+    command: "visudo"
+    expected:
+      decision: ask
+  - id: visudo-sudoers-deny
+    command: "visudo /etc/sudoers"
+    expected:
+      decision: deny
+      rule_id: edit-sudoers
+  - id: fdisk-deny
+    command: "fdisk /dev/sda"
+    expected:
+      decision: deny
+      rule_id: fdisk
+  - id: gdisk-deny
+    command: "gdisk /dev/sdb"
+    expected:
+      decision: deny
+      rule_id: fdisk
+  - id: parted-deny
+    command: "parted /dev/sda"
+    expected:
+      decision: deny
+      rule_id: fdisk
+  - id: partprobe-deny
+    command: "partprobe"
+    expected:
+      decision: deny
+      rule_id: fdisk
+
+  # systemctl / launchctl
+  - id: systemctl-start
+    command: "systemctl start nginx"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-stop
+    command: "systemctl stop docker"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-restart
+    command: "systemctl restart sshd"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-enable
+    command: "systemctl enable nginx"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-disable
+    command: "systemctl disable bluetooth"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-mask
+    command: "systemctl mask NetworkManager"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: launchctl-start
+    command: "launchctl start com.apple.mdworker"
+    expected:
+      decision: ask
+      rule_id: systemctl-modify
+  - id: systemctl-status-no-rule
+    command: "systemctl status nginx"
+    expected:
+      decision: ask
+
+  # crontab
+  - id: crontab-edit
+    command: "crontab -e"
+    expected:
+      decision: ask
+      rule_id: crontab-modify
+  - id: crontab-remove-strict-skipped
+    command: "crontab -r"
+    expected:
+      decision: ask
+      rule_id: crontab-modify
+  - id: crontab-list-no-rule
+    command: "crontab -l"
+    expected:
+      decision: ask
+
+  # mount / umount
+  - id: mount-device
+    command: "mount /dev/sda1 /mnt"
+    expected:
+      decision: ask
+      rule_id: mount-unmount
+  - id: umount-device
+    command: "umount /mnt"
+    expected:
+      decision: ask
+      rule_id: mount-unmount
+
+  # source-env
+  - id: source-env-file
+    command: "source .env"
+    expected:
+      decision: deny
+      rule_id: source-env
+  - id: source-env-local
+    command: "source .env.local"
+    expected:
+      decision: deny
+      rule_id: source-env
+  - id: source-envrc
+    command: "source .envrc"
+    expected:
+      decision: deny
+      rule_id: source-env

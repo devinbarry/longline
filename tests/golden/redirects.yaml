@@ -23,3 +23,54 @@ tests:
     expected:
       decision: deny
       rule_id: mkfs-any
+  - id: dd-to-hd
+    command: "dd if=/dev/zero of=/dev/hda bs=4M"
+    expected:
+      decision: deny
+      rule_id: dd-disk-device
+  - id: dd-to-vd
+    command: "dd if=image.iso of=/dev/vda"
+    expected:
+      decision: deny
+      rule_id: dd-disk-device
+  - id: dd-to-xvd
+    command: "dd if=image.iso of=/dev/xvda"
+    expected:
+      decision: deny
+      rule_id: dd-disk-device
+  - id: mkfs-btrfs
+    command: "mkfs.btrfs /dev/sdc"
+    expected:
+      decision: deny
+      rule_id: mkfs-any
+  - id: mkfs-vfat
+    command: "mkfs.vfat /dev/sdd1"
+    expected:
+      decision: deny
+      rule_id: mkfs-any
+  - id: mkfs-ntfs
+    command: "mkfs.ntfs /dev/sde1"
+    expected:
+      decision: deny
+      rule_id: mkfs-any
+  - id: mkfs-bare
+    command: "mkfs /dev/sda1"
+    expected:
+      decision: deny
+      rule_id: mkfs-any
+  - id: dd-copy-file-safe
+    command: "dd if=input.img of=output.img bs=1M"
+    expected:
+      decision: ask
+  - id: echo-redirect-safe
+    command: "echo hello > /tmp/out.txt"
+    expected:
+      decision: allow
+  - id: echo-append-safe
+    command: "echo hello >> /tmp/out.txt"
+    expected:
+      decision: allow
+  - id: cat-redirect-safe
+    command: "cat file.txt > /tmp/copy.txt"
+    expected:
+      decision: allow
