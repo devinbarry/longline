@@ -635,4 +635,15 @@ rules:
         assert_eq!(result.decision, Decision::Ask);
         assert!(result.rule_id.is_none(), "Rule should have been skipped due to safety level filtering");
     }
+
+    #[test]
+    fn test_load_default_rules_file() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("rules")
+            .join("default-rules.yaml");
+        let config = load_rules(&path).expect("Default rules should parse");
+        assert!(config.rules.len() > 30, "Should have many rules, got {}", config.rules.len());
+        assert_eq!(config.version, 1);
+        assert_eq!(config.default_decision, Decision::Ask);
+    }
 }

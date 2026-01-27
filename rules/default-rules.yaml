@@ -1,0 +1,487 @@
+version: 1
+default_decision: ask
+safety_level: high
+
+allowlists:
+  commands:
+    # Safe git read operations
+    - "git status"
+    - "git diff"
+    - "git log"
+    - "git show"
+    - "git branch"
+    - "git stash list"
+    - "git remote"
+    - "git tag"
+    - "git rev-parse"
+    - "git config"
+    # Safe read-only commands
+    - ls
+    - echo
+    - pwd
+    - whoami
+    - date
+    - cat
+    - head
+    - tail
+    - wc
+    - file
+    - which
+    - type
+    - basename
+    - dirname
+    - realpath
+    - readlink
+    - "true"
+    - "false"
+    # Safe build/dev commands
+    - cargo
+    - rustc
+    - npm
+    - npx
+    - node
+    - python
+    - python3
+    - pip
+    - pip3
+    - ruby
+    - gem
+    - go
+    - java
+    - javac
+    - make
+    - cmake
+    - grep
+    - rg
+    - fd
+    - find
+    - sort
+    - uniq
+    - tr
+    - cut
+    - tee
+    - diff
+    - patch
+    - jq
+    - yq
+    - sed
+    - awk
+    - xargs
+    - test
+    - mkdir
+    - touch
+    - cp
+    - mv
+    - ln
+    - tar
+    - gzip
+    - gunzip
+    - zip
+    - unzip
+
+rules:
+  # ============================================================
+  # CRITICAL: Filesystem destruction
+  # ============================================================
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-fR"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting root filesystem"
+
+  - id: rm-recursive-system
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-fR"]
+      args:
+        any_of: ["/etc", "/etc/*", "/usr", "/usr/*", "/var", "/var/*", "/bin",
+                  "/bin/*", "/sbin", "/sbin/*", "/lib", "/lib/*", "/boot",
+                  "/boot/*", "/sys", "/sys/*", "/proc", "/proc/*"]
+    decision: deny
+    reason: "Recursive delete targeting system directory"
+
+  - id: rm-recursive-home
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr", "-Rf", "-fR"]
+      args:
+        any_of: ["~", "~/", "$HOME", "$HOME/"]
+    decision: deny
+    reason: "Recursive delete targeting home directory"
+
+  - id: dd-disk-device
+    level: critical
+    match:
+      command: dd
+      args:
+        any_of: ["of=/dev/sd*", "of=/dev/nvme*", "of=/dev/hd*",
+                  "of=/dev/vd*", "of=/dev/xvd*", "of=/dev/disk*"]
+    decision: deny
+    reason: "dd writing directly to disk device"
+
+  - id: mkfs-any
+    level: critical
+    match:
+      command:
+        any_of: [mkfs, "mkfs.ext4", "mkfs.xfs", "mkfs.btrfs", "mkfs.vfat", "mkfs.ntfs"]
+    decision: deny
+    reason: "Formatting a filesystem"
+
+  - id: fork-bomb
+    level: critical
+    match:
+      command: ":"
+    decision: ask
+    reason: "Potential fork bomb pattern"
+
+  # ============================================================
+  # CRITICAL: Shell injection / remote code execution
+  # ============================================================
+  - id: curl-pipe-shell
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [sh, bash, zsh, dash, ksh, fish]
+    decision: deny
+    reason: "Remote code execution: piping download to shell"
+
+  - id: wget-pipe-interpreter
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [python, python3, ruby, perl, node]
+    decision: deny
+    reason: "Remote code execution: piping download to interpreter"
+
+  # ============================================================
+  # CRITICAL: Secrets exposure
+  # ============================================================
+  - id: cat-env-file
+    level: critical
+    match:
+      command:
+        any_of: [cat, less, more, head, tail, bat]
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc", "**/.env", "**/.env.local",
+                  "**/.env.production"]
+    decision: deny
+    reason: "Reading sensitive environment file"
+
+  - id: cat-ssh-key
+    level: critical
+    match:
+      command:
+        any_of: [cat, less, more, head, tail, bat]
+      args:
+        any_of: ["~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa", "id_rsa", "id_ed25519", "id_ecdsa"]
+    decision: deny
+    reason: "Reading SSH private key"
+
+  - id: cat-aws-creds
+    level: critical
+    match:
+      command:
+        any_of: [cat, less, more, head, tail, bat]
+      args:
+        any_of: ["~/.aws/credentials", "~/.aws/config"]
+    decision: deny
+    reason: "Reading AWS credentials"
+
+  - id: cat-kube-config
+    level: critical
+    match:
+      command:
+        any_of: [cat, less, more, head, tail, bat]
+      args:
+        any_of: ["~/.kube/config"]
+    decision: deny
+    reason: "Reading Kubernetes config"
+
+  # ============================================================
+  # HIGH: VCS destructive operations
+  # ============================================================
+  - id: git-force-push-main
+    level: high
+    match:
+      command: git
+      flags:
+        any_of: ["--force", "-f"]
+      args:
+        any_of: ["main", "master"]
+    decision: deny
+    reason: "Force pushing to main/master branch"
+
+  - id: git-reset-hard
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["--hard"]
+    decision: ask
+    reason: "git reset --hard discards uncommitted changes"
+
+  - id: git-clean-force
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["clean"]
+      flags:
+        any_of: ["-f", "--force", "-fd", "-fx", "-fxd"]
+    decision: ask
+    reason: "git clean -f permanently removes untracked files"
+
+  - id: git-branch-delete-force
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["branch"]
+      flags:
+        any_of: ["-D"]
+    decision: ask
+    reason: "Force deleting a git branch"
+
+  # ============================================================
+  # HIGH: Exfiltration
+  # ============================================================
+  - id: curl-upload-secrets
+    level: high
+    match:
+      command: curl
+      flags:
+        any_of: ["-d", "--data", "-F", "--form", "--data-binary", "--data-urlencode", "-T", "--upload-file"]
+    decision: ask
+    reason: "curl with data upload flags"
+
+  - id: scp-upload
+    level: high
+    match:
+      command: scp
+    decision: ask
+    reason: "scp file transfer"
+
+  - id: rsync-remote
+    level: high
+    match:
+      command: rsync
+    decision: ask
+    reason: "rsync file transfer"
+
+  - id: nc-netcat
+    level: high
+    match:
+      command:
+        any_of: [nc, netcat, ncat]
+    decision: ask
+    reason: "Netcat network connection"
+
+  # ============================================================
+  # HIGH: Secrets via environment
+  # ============================================================
+  - id: printenv
+    level: high
+    match:
+      command:
+        any_of: [printenv, env]
+    decision: ask
+    reason: "Environment dump may expose secrets"
+
+  - id: source-env
+    level: high
+    match:
+      command:
+        any_of: [source, "."]
+      args:
+        any_of: [".env", ".env.*", "**/.env", "**/.env.*", ".envrc"]
+    decision: deny
+    reason: "Sourcing environment file"
+
+  # ============================================================
+  # HIGH: Network / process operations
+  # ============================================================
+  - id: kill-signal
+    level: high
+    match:
+      command:
+        any_of: [kill, killall, pkill]
+      flags:
+        any_of: ["-9", "-KILL", "-SIGKILL"]
+    decision: ask
+    reason: "Forceful process termination"
+
+  - id: iptables-modify
+    level: high
+    match:
+      command:
+        any_of: [iptables, ip6tables, nft, ufw]
+    decision: ask
+    reason: "Firewall rule modification"
+
+  # ============================================================
+  # HIGH: System config modification
+  # ============================================================
+  - id: chmod-777
+    level: high
+    match:
+      command: chmod
+      args:
+        any_of: ["777"]
+    decision: ask
+    reason: "Setting world-writable permissions"
+
+  - id: edit-etc-hosts
+    level: high
+    match:
+      command:
+        any_of: [tee, ">>"]
+      args:
+        any_of: ["/etc/hosts"]
+    decision: deny
+    reason: "Modifying /etc/hosts"
+
+  - id: edit-sudoers
+    level: high
+    match:
+      command:
+        any_of: [visudo, tee]
+      args:
+        any_of: ["/etc/sudoers", "/etc/sudoers.d/*"]
+    decision: deny
+    reason: "Modifying sudoers configuration"
+
+  - id: crontab-modify
+    level: high
+    match:
+      command: crontab
+      flags:
+        any_of: ["-e", "-r"]
+    decision: ask
+    reason: "Modifying system crontab"
+
+  - id: systemctl-modify
+    level: high
+    match:
+      command:
+        any_of: [systemctl, launchctl]
+      args:
+        any_of: ["stop", "disable", "mask", "enable", "start", "restart"]
+    decision: ask
+    reason: "Modifying system service"
+
+  - id: edit-shell-profile
+    level: high
+    match:
+      command:
+        any_of: [tee]
+      args:
+        any_of: ["~/.bashrc", "~/.zshrc", "~/.bash_profile", "~/.profile",
+                  "~/.zprofile", "/etc/profile", "/etc/bash.bashrc"]
+    decision: deny
+    reason: "Modifying shell profile"
+
+  # ============================================================
+  # HIGH: Docker destructive
+  # ============================================================
+  - id: docker-volume-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["volume"]
+      flags:
+        any_of: ["rm", "prune"]
+    decision: ask
+    reason: "Docker volume removal"
+
+  - id: docker-system-prune
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["system"]
+      flags:
+        any_of: ["prune"]
+    decision: ask
+    reason: "Docker system prune"
+
+  # ============================================================
+  # HIGH: Disk / partition
+  # ============================================================
+  - id: fdisk
+    level: high
+    match:
+      command:
+        any_of: [fdisk, gdisk, parted, partprobe]
+    decision: deny
+    reason: "Disk partitioning tool"
+
+  - id: mount-unmount
+    level: high
+    match:
+      command:
+        any_of: [mount, umount]
+    decision: ask
+    reason: "Filesystem mount/unmount"
+
+  # ============================================================
+  # STRICT: Cautionary
+  # ============================================================
+  - id: git-force-push-any
+    level: strict
+    match:
+      command: git
+      flags:
+        any_of: ["--force", "-f"]
+      args:
+        any_of: ["push"]
+    decision: ask
+    reason: "Force pushing (any branch)"
+
+  - id: git-checkout-dot
+    level: strict
+    match:
+      command: git
+      args:
+        any_of: ["checkout", "restore"]
+      flags:
+        any_of: [".", "--"]
+    decision: ask
+    reason: "Discarding all local changes"
+
+  - id: sudo-rm
+    level: strict
+    match:
+      command: sudo
+      args:
+        any_of: ["rm"]
+    decision: ask
+    reason: "Running rm with elevated privileges"
+
+  - id: crontab-remove
+    level: strict
+    match:
+      command: crontab
+      flags:
+        any_of: ["-r"]
+    decision: deny
+    reason: "Removing all cron jobs"
