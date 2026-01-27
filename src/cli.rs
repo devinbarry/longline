@@ -315,9 +315,15 @@ fn run_rules(
         .collect();
 
     match group_by {
-        Some(GroupBy::Decision) => print_rules_grouped_by_decision(&rules, verbose),
-        Some(GroupBy::Level) => print_rules_grouped_by_level(&rules, verbose),
-        None => print_rules_table(&rules, verbose),
+        Some(GroupBy::Decision) => crate::output::print_rules_grouped_by_decision(&rules, verbose),
+        Some(GroupBy::Level) => crate::output::print_rules_grouped_by_level(&rules, verbose),
+        None => {
+            if verbose {
+                println!("{}", crate::output::rules_table_verbose(&rules));
+            } else {
+                println!("{}", crate::output::rules_table(&rules));
+            }
+        }
     }
 
     // Footer
@@ -328,106 +334,6 @@ fn run_rules(
     );
 
     0
-}
-
-fn print_rules_table(rules: &[&policy::Rule], verbose: bool) {
-    println!("{:<10}{:<10}{:<28}DESCRIPTION", "DECISION", "LEVEL", "ID");
-    for rule in rules {
-        println!(
-            "{:<10}{:<10}{:<28}{}",
-            rule.decision, rule.level, rule.id, rule.reason
-        );
-        if verbose {
-            print_matcher_details(&rule.matcher);
-        }
-    }
-    println!();
-}
-
-fn print_rules_grouped_by_decision(rules: &[&policy::Rule], verbose: bool) {
-    for decision in &[Decision::Deny, Decision::Ask, Decision::Allow] {
-        let group: Vec<_> = rules.iter().filter(|r| r.decision == *decision).collect();
-        if group.is_empty() {
-            continue;
-        }
-        println!("-- {} {}", decision, "-".repeat(55));
-        for rule in &group {
-            println!("  {:<10}{:<28}{}", rule.level, rule.id, rule.reason);
-            if verbose {
-                print_matcher_details(&rule.matcher);
-            }
-        }
-        println!();
-    }
-}
-
-fn print_rules_grouped_by_level(rules: &[&policy::Rule], verbose: bool) {
-    for level_val in &[
-        policy::SafetyLevel::Critical,
-        policy::SafetyLevel::High,
-        policy::SafetyLevel::Strict,
-    ] {
-        let group: Vec<_> = rules.iter().filter(|r| r.level == *level_val).collect();
-        if group.is_empty() {
-            continue;
-        }
-        println!("-- {} {}", level_val, "-".repeat(55));
-        for rule in &group {
-            println!("  {:<10}{:<28}{}", rule.decision, rule.id, rule.reason);
-            if verbose {
-                print_matcher_details(&rule.matcher);
-            }
-        }
-        println!();
-    }
-}
-
-fn print_matcher_details(matcher: &policy::Matcher) {
-    match matcher {
-        policy::Matcher::Command {
-            command,
-            flags,
-            args,
-        } => {
-            println!("    match: command={}", format_string_or_list(command));
-            if let Some(f) = flags {
-                if !f.any_of.is_empty() {
-                    println!("    flags.any_of: {:?}", f.any_of);
-                }
-                if !f.all_of.is_empty() {
-                    println!("    flags.all_of: {:?}", f.all_of);
-                }
-            }
-            if let Some(a) = args {
-                if !a.any_of.is_empty() {
-                    println!("    args.any_of: {:?}", a.any_of);
-                }
-            }
-        }
-        policy::Matcher::Pipeline { pipeline } => {
-            let stages: Vec<String> = pipeline
-                .stages
-                .iter()
-                .map(|s| format_string_or_list(&s.command))
-                .collect();
-            println!("    match: pipeline [{}]", stages.join(" | "));
-        }
-        policy::Matcher::Redirect { redirect } => {
-            if let Some(op) = &redirect.op {
-                println!("    redirect.op: {}", format_string_or_list(op));
-            }
-            if let Some(target) = &redirect.target {
-                println!("    redirect.target: {}", format_string_or_list(target));
-            }
-        }
-    }
-}
-
-fn format_string_or_list(sol: &policy::StringOrList) -> String {
-    match sol {
-        policy::StringOrList::Single(s) => s.clone(),
-        policy::StringOrList::List { any_of } => format!("{{{}}}", any_of.join(", ")),
-    }
 }
 
 fn print_allowlist_summary(commands: &[String]) {
