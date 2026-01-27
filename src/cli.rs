@@ -221,12 +221,77 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool) -> i32 {
 }
 
 fn run_check(
-    _config: &policy::RulesConfig,
-    _file: Option<PathBuf>,
-    _filter: Option<DecisionFilter>,
+    config: &policy::RulesConfig,
+    file: Option<PathBuf>,
+    filter: Option<DecisionFilter>,
 ) -> i32 {
-    eprintln!("longline: check subcommand not yet implemented");
-    1
+    let input = match read_check_input(file) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 1;
+        }
+    };
+
+    let commands: Vec<&str> = input
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect();
+
+    println!("{:<10}{:<18}COMMAND", "DECISION", "RULE");
+
+    for cmd_str in commands {
+        let (decision, rule_label) = match parser::parse(cmd_str) {
+            Ok(stmt) => {
+                let result = policy::evaluate(config, &stmt);
+                let label = match &result.rule_id {
+                    Some(id) => id.clone(),
+                    None => match result.decision {
+                        Decision::Allow => "(allowlist)".to_string(),
+                        Decision::Ask => {
+                            if result.reason.contains("Unrecognized") {
+                                "(opaque)".to_string()
+                            } else {
+                                "(default)".to_string()
+                            }
+                        }
+                        Decision::Deny => "(default)".to_string(),
+                    },
+                };
+                (result.decision, label)
+            }
+            Err(_) => (Decision::Ask, "(parse-error)".to_string()),
+        };
+
+        // Apply filter
+        let show = match &filter {
+            Some(DecisionFilter::Allow) => decision == Decision::Allow,
+            Some(DecisionFilter::Ask) => decision == Decision::Ask,
+            Some(DecisionFilter::Deny) => decision == Decision::Deny,
+            None => true,
+        };
+
+        if show {
+            println!("{:<10}{:<18}{}", decision, rule_label, cmd_str);
+        }
+    }
+
+    0
+}
+
+fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
+    match file {
+        Some(path) if path.to_str() != Some("-") => std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display())),
+        _ => {
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .map_err(|e| format!("Failed to read stdin: {e}"))?;
+            Ok(buf)
+        }
+    }
 }
 
 fn run_rules(
