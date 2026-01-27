@@ -4,18 +4,7 @@ safety_level: high
 
 allowlists:
   commands:
-    # Safe git read operations
-    - "git status"
-    - "git diff"
-    - "git log"
-    - "git show"
-    - "git branch"
-    - "git stash list"
-    - "git remote"
-    - "git tag"
-    - "git rev-parse"
-    - "git config"
-    # Safe read-only commands
+    # ── Always safe: read-only / output-only ──────────────────────
     - ls
     - echo
     - pwd
@@ -41,50 +30,143 @@ allowlists:
     - cksum
     - "true"
     - "false"
-    # Safe build/dev commands
-    - cargo
-    - rustc
-    - npm
-    - npx
-    - node
-    - python
-    - python3
-    - pip
-    - pip3
-    - ruby
-    - gem
-    - go
-    - java
-    - javac
-    - make
-    - cmake
     - grep
     - rg
     - fd
-    - find
     - sort
     - uniq
     - tr
     - cut
-    - tee
     - diff
-    - patch
     - jq
     - yq
-    - sed
-    - awk
-    - xargs
     - test
+    # ── Always safe: dev tools (no publish risk) ──────────────────
+    - make
+    - cmake
+    - rustc
+    - java
+    - javac
+    - node
+    - python
+    - python3
+    - ruby
+    - npx
+    # ── Always safe: filesystem ops (secrets caught by rules) ─────
     - mkdir
     - touch
+    - ln
     - cp
     - mv
-    - ln
+    - tee
     - tar
     - gzip
     - gunzip
     - zip
     - unzip
+    # ── Always safe: text processing ──────────────────────────────
+    - sed
+    - awk
+    - xargs
+    - patch
+    - find
+    # ── Git: read operations ──────────────────────────────────────
+    - "git status"
+    - "git diff"
+    - "git log"
+    - "git show"
+    - "git branch"
+    - "git stash list"
+    - "git remote"
+    - "git tag"
+    - "git rev-parse"
+    - "git config"
+    # ── Git: safe write operations ────────────────────────────────
+    - "git add"
+    - "git commit"
+    - "git fetch"
+    - "git pull"
+    - "git push"
+    - "git stash"
+    - "git checkout"
+    - "git switch"
+    - "git restore"
+    - "git merge"
+    - "git rebase"
+    - "git cherry-pick"
+    - "git worktree"
+    - "git clone"
+    - "git init"
+    # ── Git: read-only extras ─────────────────────────────────────
+    - "git blame"
+    - "git bisect"
+    - "git describe"
+    - "git shortlog"
+    - "git reflog"
+    - "git ls-files"
+    - "git ls-tree"
+    - "git cat-file"
+    # ── Cargo: safe invocations ───────────────────────────────────
+    - "cargo build"
+    - "cargo test"
+    - "cargo check"
+    - "cargo clippy"
+    - "cargo fmt"
+    - "cargo run"
+    - "cargo bench"
+    - "cargo doc"
+    - "cargo clean"
+    - "cargo update"
+    - "cargo add"
+    - "cargo remove"
+    - "cargo init"
+    - "cargo new"
+    - "cargo tree"
+    - "cargo metadata"
+    - "cargo vendor"
+    # ── npm: safe invocations ─────────────────────────────────────
+    - "npm install"
+    - "npm ci"
+    - "npm test"
+    - "npm run"
+    - "npm start"
+    - "npm ls"
+    - "npm outdated"
+    - "npm audit"
+    - "npm init"
+    - "npm exec"
+    - "npm info"
+    - "npm pack"
+    # ── pip/pip3: safe invocations ────────────────────────────────
+    - "pip install"
+    - "pip list"
+    - "pip show"
+    - "pip freeze"
+    - "pip check"
+    - "pip3 install"
+    - "pip3 list"
+    - "pip3 show"
+    - "pip3 freeze"
+    - "pip3 check"
+    # ── gem: safe invocations ─────────────────────────────────────
+    - "gem install"
+    - "gem list"
+    - "gem info"
+    - "gem search"
+    # ── go: safe invocations ──────────────────────────────────────
+    - "go build"
+    - "go test"
+    - "go run"
+    - "go vet"
+    - "go fmt"
+    - "go mod"
+    - "go generate"
+    - "go doc"
+    - "go get"
+    - "go clean"
+    - "go env"
+    - "go version"
+    - "go work"
 
 rules:
   # ============================================================
