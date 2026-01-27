@@ -52,15 +52,25 @@ tests:
   - id: git-add
     command: "git add ."
     expected:
-      decision: ask
+      decision: allow
   - id: git-commit
     command: "git commit -m 'fix: some bug'"
     expected:
+      decision: allow
+  - id: git-commit-amend
+    command: "git commit --amend"
+    expected:
       decision: ask
+      rule_id: git-commit-amend
+  - id: git-commit-amend-message
+    command: "git commit --amend -m 'updated message'"
+    expected:
+      decision: ask
+      rule_id: git-commit-amend
   - id: git-push
     command: "git push origin feature-branch"
     expected:
-      decision: ask
+      decision: allow
   - id: git-stash-list-safe
     command: "git stash list"
     expected:
@@ -117,27 +127,79 @@ tests:
     expected:
       decision: ask
       rule_id: git-reset-hard
-  - id: git-stash-push-not-allowlisted
+  - id: git-stash-push
     command: "git stash push"
     expected:
-      decision: ask
-  - id: git-merge-not-allowlisted
+      decision: allow
+  - id: git-merge
     command: "git merge feature-branch"
     expected:
-      decision: ask
-  - id: git-rebase-not-allowlisted
+      decision: allow
+  - id: git-rebase
     command: "git rebase main"
     expected:
-      decision: ask
+      decision: allow
   - id: git-cherry-pick
     command: "git cherry-pick abc1234"
     expected:
-      decision: ask
+      decision: allow
   - id: git-fetch
     command: "git fetch origin"
     expected:
-      decision: ask
+      decision: allow
   - id: git-pull
     command: "git pull origin main"
     expected:
-      decision: ask
+      decision: allow
+  - id: git-switch-safe
+    command: "git switch feature-branch"
+    expected:
+      decision: allow
+  - id: git-restore-safe
+    command: "git restore file.txt"
+    expected:
+      decision: allow
+  - id: git-worktree-safe
+    command: "git worktree add ../feature feature-branch"
+    expected:
+      decision: allow
+  - id: git-clone-safe
+    command: "git clone https://github.com/user/repo.git"
+    expected:
+      decision: allow
+  - id: git-init-safe
+    command: "git init"
+    expected:
+      decision: allow
+  - id: git-blame-safe
+    command: "git blame src/main.rs"
+    expected:
+      decision: allow
+  - id: git-bisect-safe
+    command: "git bisect start"
+    expected:
+      decision: allow
+  - id: git-describe-safe
+    command: "git describe --tags"
+    expected:
+      decision: allow
+  - id: git-shortlog-safe
+    command: "git shortlog -sn"
+    expected:
+      decision: allow
+  - id: git-reflog-safe
+    command: "git reflog"
+    expected:
+      decision: allow
+  - id: git-ls-files-safe
+    command: "git ls-files"
+    expected:
+      decision: allow
+  - id: git-ls-tree-safe
+    command: "git ls-tree HEAD"
+    expected:
+      decision: allow
+  - id: git-cat-file-safe
+    command: "git cat-file -p HEAD"
+    expected:
+      decision: allow
