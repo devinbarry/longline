@@ -32,6 +32,16 @@ pub enum Decision {
     Deny,
 }
 
+impl std::fmt::Display for Decision {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Decision::Allow => write!(f, "allow"),
+            Decision::Ask => write!(f, "ask"),
+            Decision::Deny => write!(f, "deny"),
+        }
+    }
+}
+
 /// Hook-specific output wrapper.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
