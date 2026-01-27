@@ -1,3 +1,4 @@
+mod types;
 mod cli;
 mod logger;
 mod parser;
