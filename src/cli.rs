@@ -123,10 +123,8 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool) -> i32 {
     let hook_input: HookInput = match serde_json::from_str(&input_str) {
         Ok(h) => h,
         Err(e) => {
-            let output = HookOutput::decision(
-                Decision::Ask,
-                &format!("Failed to parse hook input: {e}"),
-            );
+            let output =
+                HookOutput::decision(Decision::Ask, &format!("Failed to parse hook input: {e}"));
             print_json(&output);
             return 0;
         }
@@ -150,10 +148,8 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool) -> i32 {
     let (stmt, parse_ok) = match parser::parse(command) {
         Ok(s) => (s, true),
         Err(e) => {
-            let output = HookOutput::decision(
-                Decision::Ask,
-                &format!("Failed to parse bash command: {e}"),
-            );
+            let output =
+                HookOutput::decision(Decision::Ask, &format!("Failed to parse bash command: {e}"));
             print_json(&output);
 
             let entry = logger::make_entry(
@@ -335,10 +331,7 @@ fn run_rules(
 }
 
 fn print_rules_table(rules: &[&policy::Rule], verbose: bool) {
-    println!(
-        "{:<10}{:<10}{:<28}DESCRIPTION",
-        "DECISION", "LEVEL", "ID"
-    );
+    println!("{:<10}{:<10}{:<28}DESCRIPTION", "DECISION", "LEVEL", "ID");
     for rule in rules {
         println!(
             "{:<10}{:<10}{:<28}{}",
@@ -473,4 +466,3 @@ fn print_json<T: serde::Serialize>(value: &T) {
         }
     }
 }
-

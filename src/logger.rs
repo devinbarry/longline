@@ -110,14 +110,32 @@ mod tests {
     #[test]
     fn test_make_entry_truncates_long_command() {
         let long_cmd = "x".repeat(2000);
-        let entry = make_entry("Bash", "/tmp", &long_cmd, Decision::Allow, vec![], None, true, None);
+        let entry = make_entry(
+            "Bash",
+            "/tmp",
+            &long_cmd,
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
         assert!(entry.command.len() <= 1028); // 1024 + "..."
         assert!(entry.command.ends_with("..."));
     }
 
     #[test]
     fn test_make_entry_short_command() {
-        let entry = make_entry("Bash", "/tmp", "ls", Decision::Allow, vec![], None, true, None);
+        let entry = make_entry(
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
         assert_eq!(entry.command, "ls");
     }
 
@@ -148,7 +166,16 @@ mod tests {
         // Clean up from previous runs
         let _ = fs::remove_file(&path);
 
-        let entry = make_entry("Bash", "/tmp", "ls", Decision::Allow, vec![], None, true, None);
+        let entry = make_entry(
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
         log_decision_to(&entry, &path);
 
         let content = fs::read_to_string(&path).unwrap();

@@ -20,8 +20,12 @@ pub struct RulesConfig {
     pub rules: Vec<Rule>,
 }
 
-fn default_decision() -> Decision { Decision::Ask }
-fn default_safety_level() -> SafetyLevel { SafetyLevel::High }
+fn default_decision() -> Decision {
+    Decision::Ask
+}
+fn default_safety_level() -> SafetyLevel {
+    SafetyLevel::High
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -63,8 +67,12 @@ pub struct Rule {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum Matcher {
-    Pipeline { pipeline: PipelineMatcher },
-    Redirect { redirect: RedirectMatcher },
+    Pipeline {
+        pipeline: PipelineMatcher,
+    },
+    Redirect {
+        redirect: RedirectMatcher,
+    },
     Command {
         command: StringOrList,
         #[serde(default)]
@@ -276,7 +284,9 @@ fn is_command_allowlisted(config: &RulesConfig, cmd: &SimpleCommand) -> bool {
         }
         // Multi-word entry: all additional parts must appear in argv
         let required_args = &parts[1..];
-        let all_present = required_args.iter().all(|req| cmd.argv.iter().any(|a| a == req));
+        let all_present = required_args
+            .iter()
+            .all(|req| cmd.argv.iter().any(|a| a == req));
         if all_present {
             return true;
         }
@@ -324,9 +334,10 @@ fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             // Check args with glob matching
             if let Some(args_matcher) = args {
                 if !args_matcher.any_of.is_empty() {
-                    let has_any = args_matcher.any_of.iter().any(|pattern| {
-                        cmd.argv.iter().any(|a| glob_match::glob_match(pattern, a))
-                    });
+                    let has_any = args_matcher
+                        .any_of
+                        .iter()
+                        .any(|pattern| cmd.argv.iter().any(|a| glob_match::glob_match(pattern, a)));
                     if !has_any {
                         return false;
                     }
@@ -375,12 +386,10 @@ fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand) -> 
         // Check target with glob matching if specified
         let target_matches = match &redirect_matcher.target {
             Some(target_matcher) => match target_matcher {
-                StringOrList::Single(pattern) => {
-                    glob_match::glob_match(pattern, &redir.target)
-                }
-                StringOrList::List { any_of } => {
-                    any_of.iter().any(|p| glob_match::glob_match(p, &redir.target))
-                }
+                StringOrList::Single(pattern) => glob_match::glob_match(pattern, &redir.target),
+                StringOrList::List { any_of } => any_of
+                    .iter()
+                    .any(|p| glob_match::glob_match(p, &redir.target)),
             },
             None => true,
         };
@@ -653,7 +662,10 @@ rules:
         // The high-level rule should be skipped at critical safety level,
         // so we get the default decision (ask) rather than a rule match
         assert_eq!(result.decision, Decision::Ask);
-        assert!(result.rule_id.is_none(), "Rule should have been skipped due to safety level filtering");
+        assert!(
+            result.rule_id.is_none(),
+            "Rule should have been skipped due to safety level filtering"
+        );
     }
 
     #[test]
@@ -662,7 +674,11 @@ rules:
             .join("rules")
             .join("default-rules.yaml");
         let config = load_rules(&path).expect("Default rules should parse");
-        assert!(config.rules.len() > 30, "Should have many rules, got {}", config.rules.len());
+        assert!(
+            config.rules.len() > 30,
+            "Should have many rules, got {}",
+            config.rules.len()
+        );
         assert_eq!(config.version, 1);
         assert_eq!(config.default_decision, Decision::Ask);
     }
@@ -692,7 +708,11 @@ rules:
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
         let stmt = parse("cat .env").unwrap();
         let result = evaluate(&config, &stmt);
-        assert_eq!(result.decision, Decision::Deny, "Rules should override allowlist");
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Rules should override allowlist"
+        );
         assert_eq!(result.rule_id.as_deref(), Some("cat-env-file"));
     }
 
@@ -718,6 +738,10 @@ rules:
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
         let stmt = parse("cat README.md").unwrap();
         let result = evaluate(&config, &stmt);
-        assert_eq!(result.decision, Decision::Allow, "Allowlist should work when no rule matches");
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Allowlist should work when no rule matches"
+        );
     }
 }
