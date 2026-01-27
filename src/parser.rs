@@ -49,13 +49,13 @@ pub struct Redirect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RedirectOp {
-    Write,      // >
-    Append,     // >>
-    Read,       // <
-    ReadWrite,  // <>
-    DupOutput,  // >&
-    DupInput,   // <&
-    Clobber,    // >|
+    Write,     // >
+    Append,    // >>
+    Read,      // <
+    ReadWrite, // <>
+    DupOutput, // >&
+    DupInput,  // <&
+    Clobber,   // >|
 }
 
 impl fmt::Display for RedirectOp {
@@ -119,8 +119,7 @@ fn convert_program(node: Node, source: &str) -> Statement {
             // Multiple top-level statements -> wrap in a List with Semi operators
             let mut iter = children.into_iter();
             let first = Box::new(iter.next().unwrap());
-            let rest: Vec<(ListOp, Statement)> =
-                iter.map(|s| (ListOp::Semi, s)).collect();
+            let rest: Vec<(ListOp, Statement)> = iter.map(|s| (ListOp::Semi, s)).collect();
             Statement::List(List { first, rest })
         }
     }
@@ -155,8 +154,8 @@ fn convert_command(node: Node, source: &str) -> Statement {
             "command_name" => {
                 name = Some(resolve_node_text(child, source));
             }
-            "word" | "string" | "raw_string" | "number" | "concatenation"
-            | "simple_expansion" | "expansion" | "string_content" => {
+            "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion"
+            | "expansion" | "string_content" => {
                 argv.push(resolve_node_text(child, source));
             }
             "variable_assignment" => {
@@ -222,10 +221,7 @@ fn convert_list(node: Node, source: &str) -> Statement {
 
     let mut iter = items.into_iter();
     let first = Box::new(iter.next().unwrap());
-    let rest: Vec<(ListOp, Statement)> = operators
-        .into_iter()
-        .zip(iter)
-        .collect();
+    let rest: Vec<(ListOp, Statement)> = operators.into_iter().zip(iter).collect();
 
     Statement::List(List { first, rest })
 }

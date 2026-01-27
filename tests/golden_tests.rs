@@ -39,8 +39,7 @@ fn load_golden_tests(filename: &str) -> TestSuite {
 
 fn run_golden_suite(filename: &str) {
     let suite = load_golden_tests(filename);
-    let config = longline::policy::load_rules(&rules_path())
-        .expect("Failed to load default rules");
+    let config = longline::policy::load_rules(&rules_path()).expect("Failed to load default rules");
 
     let mut failures = Vec::new();
 

@@ -80,11 +80,19 @@ pub struct PolicyResult {
 
 impl PolicyResult {
     pub fn allow() -> Self {
-        Self { decision: Decision::Allow, rule_id: None, reason: String::new() }
+        Self {
+            decision: Decision::Allow,
+            rule_id: None,
+            reason: String::new(),
+        }
     }
     #[allow(dead_code)]
     pub fn ask(reason: &str) -> Self {
-        Self { decision: Decision::Ask, rule_id: None, reason: reason.to_string() }
+        Self {
+            decision: Decision::Ask,
+            rule_id: None,
+            reason: reason.to_string(),
+        }
     }
 }
 
@@ -97,7 +105,10 @@ mod tests {
         let json = r#"{"session_id":"abc123","cwd":"/Users/dev/project","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /tmp/build","description":"Clean build directory"},"tool_use_id":"toolu_01ABC123"}"#;
         let input: HookInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.tool_name, "Bash");
-        assert_eq!(input.tool_input.command.as_deref(), Some("rm -rf /tmp/build"));
+        assert_eq!(
+            input.tool_input.command.as_deref(),
+            Some("rm -rf /tmp/build")
+        );
         assert_eq!(input.session_id.as_deref(), Some("abc123"));
     }
 
@@ -115,7 +126,10 @@ mod tests {
         let json = serde_json::to_string(&output).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "deny");
-        assert_eq!(parsed["hookSpecificOutput"]["permissionDecisionReason"], "[rm-root] Destructive operation");
+        assert_eq!(
+            parsed["hookSpecificOutput"]["permissionDecisionReason"],
+            "[rm-root] Destructive operation"
+        );
         assert_eq!(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse");
     }
 
