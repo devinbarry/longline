@@ -37,11 +37,11 @@ pub enum SafetyLevel {
 
 impl std::fmt::Display for SafetyLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SafetyLevel::Critical => write!(f, "critical"),
-            SafetyLevel::High => write!(f, "high"),
-            SafetyLevel::Strict => write!(f, "strict"),
-        }
+        f.pad(match self {
+            SafetyLevel::Critical => "critical",
+            SafetyLevel::High => "high",
+            SafetyLevel::Strict => "strict",
+        })
     }
 }
 
