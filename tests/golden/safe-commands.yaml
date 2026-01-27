@@ -331,3 +331,92 @@ tests:
     command: "cksum file.txt"
     expected:
       decision: allow
+  # ── Cargo safe invocations ──────────────────────────────────────
+  - id: cargo-check-safe
+    command: "cargo check"
+    expected:
+      decision: allow
+  - id: cargo-fmt-safe
+    command: "cargo fmt"
+    expected:
+      decision: allow
+  - id: cargo-run-safe
+    command: "cargo run -- --arg"
+    expected:
+      decision: allow
+  - id: cargo-doc-safe
+    command: "cargo doc --open"
+    expected:
+      decision: allow
+  - id: cargo-clean-safe
+    command: "cargo clean"
+    expected:
+      decision: allow
+  - id: cargo-add-safe
+    command: "cargo add serde"
+    expected:
+      decision: allow
+  - id: cargo-tree-safe
+    command: "cargo tree"
+    expected:
+      decision: allow
+  # ── npm safe invocations ────────────────────────────────────────
+  - id: npm-ci-safe
+    command: "npm ci"
+    expected:
+      decision: allow
+  - id: npm-start-safe
+    command: "npm start"
+    expected:
+      decision: allow
+  - id: npm-audit-safe
+    command: "npm audit"
+    expected:
+      decision: allow
+  - id: npm-ls-safe
+    command: "npm ls"
+    expected:
+      decision: allow
+  # ── pip safe invocations ────────────────────────────────────────
+  - id: pip-list-safe
+    command: "pip list"
+    expected:
+      decision: allow
+  - id: pip-freeze-safe
+    command: "pip freeze"
+    expected:
+      decision: allow
+  # ── go safe invocations ─────────────────────────────────────────
+  - id: go-test-safe
+    command: "go test ./..."
+    expected:
+      decision: allow
+  - id: go-run-safe
+    command: "go run main.go"
+    expected:
+      decision: allow
+  - id: go-vet-safe
+    command: "go vet ./..."
+    expected:
+      decision: allow
+  - id: go-fmt-safe
+    command: "go fmt ./..."
+    expected:
+      decision: allow
+  - id: go-mod-safe
+    command: "go mod tidy"
+    expected:
+      decision: allow
+  - id: go-env-safe
+    command: "go env"
+    expected:
+      decision: allow
+  - id: go-version-safe
+    command: "go version"
+    expected:
+      decision: allow
+  # ── gem safe invocations ────────────────────────────────────────
+  - id: gem-list-safe
+    command: "gem list"
+    expected:
+      decision: allow
