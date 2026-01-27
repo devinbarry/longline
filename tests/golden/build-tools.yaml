@@ -1,0 +1,54 @@
+tests:
+  # ── Cargo: non-allowlisted (should ask) ─────────────────────────
+  - id: cargo-publish-ask
+    command: "cargo publish"
+    expected:
+      decision: ask
+  - id: cargo-login-ask
+    command: "cargo login"
+    expected:
+      decision: ask
+  - id: cargo-yank-ask
+    command: "cargo yank --version 1.0.0"
+    expected:
+      decision: ask
+  - id: cargo-owner-ask
+    command: "cargo owner --add user"
+    expected:
+      decision: ask
+  # ── npm: non-allowlisted (should ask) ───────────────────────────
+  - id: npm-publish-ask
+    command: "npm publish"
+    expected:
+      decision: ask
+  - id: npm-unpublish-ask
+    command: "npm unpublish package@1.0.0"
+    expected:
+      decision: ask
+  - id: npm-deprecate-ask
+    command: "npm deprecate package@1.0.0 'message'"
+    expected:
+      decision: ask
+  - id: npm-access-ask
+    command: "npm access public"
+    expected:
+      decision: ask
+  # ── pip: non-allowlisted (should ask) ───────────────────────────
+  - id: pip-uninstall-ask
+    command: "pip uninstall requests"
+    expected:
+      decision: ask
+  # ── gem: non-allowlisted (should ask) ───────────────────────────
+  - id: gem-push-ask
+    command: "gem push package.gem"
+    expected:
+      decision: ask
+  - id: gem-uninstall-ask
+    command: "gem uninstall bundler"
+    expected:
+      decision: ask
+  # ── go: non-allowlisted (should ask) ────────────────────────────
+  - id: go-install-ask
+    command: "go install github.com/user/tool@latest"
+    expected:
+      decision: ask

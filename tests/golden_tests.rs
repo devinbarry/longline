@@ -142,3 +142,8 @@ fn golden_network() {
 fn golden_docker() {
     run_golden_suite("docker.yaml");
 }
+
+#[test]
+fn golden_build_tools() {
+    run_golden_suite("build-tools.yaml");
+}
