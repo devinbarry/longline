@@ -777,4 +777,16 @@ mod tests {
             other => panic!("Expected SimpleCommand, got {other:?}"),
         }
     }
+
+    #[test]
+    fn test_flatten_includes_embedded_substitutions() {
+        let stmt = parse("echo $(rm -rf /)").unwrap();
+        let leaves = flatten(&stmt);
+        // Should have: echo (SimpleCommand) + rm (SimpleCommand from substitution)
+        assert!(
+            leaves.len() >= 2,
+            "Should flatten embedded substitution: got {} leaves",
+            leaves.len()
+        );
+    }
 }

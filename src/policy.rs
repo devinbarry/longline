@@ -786,4 +786,43 @@ rules:
             "Allowlist should work when no rule matches"
         );
     }
+
+    // --- Embedded command substitution policy tests ---
+
+    #[test]
+    fn test_command_substitution_deny_propagates() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("echo $(rm -rf /)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Command substitution containing rm -rf / should deny: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_safe_substitution_allows() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("echo $(date)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_backtick_substitution_deny() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("echo `rm -rf /`").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny);
+    }
+
+    #[test]
+    fn test_substitution_cat_env_denies() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("echo $(cat .env)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny);
+    }
 }
