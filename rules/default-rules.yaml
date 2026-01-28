@@ -619,6 +619,38 @@ rules:
     reason: "Filesystem mount/unmount"
 
   # ============================================================
+  # HIGH: Destructive find/xargs patterns
+  # ============================================================
+  - id: find-delete
+    level: high
+    match:
+      command: find
+      flags:
+        any_of: ["-delete"]
+    decision: ask
+    reason: "find -delete recursively removes matching files"
+
+  - id: find-exec-rm
+    level: high
+    match:
+      command: find
+      args:
+        any_of: ["-exec"]
+      flags:
+        any_of: ["rm"]
+    decision: ask
+    reason: "find -exec with rm can delete files"
+
+  - id: xargs-rm
+    level: high
+    match:
+      command: xargs
+      args:
+        any_of: ["rm"]
+    decision: ask
+    reason: "xargs executing rm on piped input"
+
+  # ============================================================
   # STRICT: Cautionary
   # ============================================================
   - id: git-force-push-any
