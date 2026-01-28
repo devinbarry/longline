@@ -19,6 +19,7 @@ pub struct SimpleCommand {
     pub argv: Vec<String>,
     pub redirects: Vec<Redirect>,
     pub assignments: Vec<Assignment>,
+    pub embedded_substitutions: Vec<Statement>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -147,12 +148,19 @@ fn convert_command(node: Node, source: &str) -> Statement {
     let mut argv: Vec<String> = Vec::new();
     let mut redirects: Vec<Redirect> = Vec::new();
     let mut assignments: Vec<Assignment> = Vec::new();
+    let mut embedded_substitutions: Vec<Statement> = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         match child.kind() {
             "command_name" => {
                 name = Some(resolve_node_text(child, source));
+            }
+            "command_substitution" => {
+                // Keep the raw text as an argument for display/matching purposes
+                argv.push(resolve_node_text(child, source));
+                // Parse the inner command for security evaluation
+                embedded_substitutions.push(convert_command_substitution(child, source));
             }
             "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion"
             | "expansion" | "string_content" => {
@@ -176,6 +184,7 @@ fn convert_command(node: Node, source: &str) -> Statement {
         argv,
         redirects,
         assignments,
+        embedded_substitutions,
     })
 }
 
@@ -326,6 +335,7 @@ fn convert_bare_assignment(node: Node, source: &str) -> Statement {
         argv: vec![],
         redirects: vec![],
         assignments,
+        embedded_substitutions: vec![],
     })
 }
 
@@ -427,7 +437,14 @@ fn resolve_node_text(node: Node, source: &str) -> String {
 /// Flatten a Statement into its leaf SimpleCommand and Opaque nodes.
 pub fn flatten(stmt: &Statement) -> Vec<&Statement> {
     match stmt {
-        Statement::SimpleCommand(_) | Statement::Opaque(_) => vec![stmt],
+        Statement::SimpleCommand(cmd) => {
+            let mut out = vec![stmt];
+            for sub in &cmd.embedded_substitutions {
+                out.extend(flatten(sub));
+            }
+            out
+        }
+        Statement::Opaque(_) => vec![stmt],
         Statement::Pipeline(p) => p.stages.iter().flat_map(flatten).collect(),
         Statement::List(l) => {
             let mut out = flatten(&l.first);
@@ -452,6 +469,7 @@ mod tests {
             argv: vec![],
             redirects: vec![],
             assignments: vec![],
+            embedded_substitutions: vec![],
         });
         let leaves = flatten(&cmd);
         assert_eq!(leaves.len(), 1);
@@ -466,12 +484,14 @@ mod tests {
                     argv: vec!["http://example.com".into()],
                     redirects: vec![],
                     assignments: vec![],
+                    embedded_substitutions: vec![],
                 }),
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("sh".into()),
                     argv: vec![],
                     redirects: vec![],
                     assignments: vec![],
+                    embedded_substitutions: vec![],
                 }),
             ],
             negated: false,
@@ -488,6 +508,7 @@ mod tests {
                 argv: vec!["hello".into()],
                 redirects: vec![],
                 assignments: vec![],
+                embedded_substitutions: vec![],
             })),
             rest: vec![(
                 ListOp::And,
@@ -496,6 +517,7 @@ mod tests {
                     argv: vec!["-rf".into(), "/".into()],
                     redirects: vec![],
                     assignments: vec![],
+                    embedded_substitutions: vec![],
                 }),
             )],
         });
@@ -519,12 +541,14 @@ mod tests {
                     argv: vec!["/etc/passwd".into()],
                     redirects: vec![],
                     assignments: vec![],
+                    embedded_substitutions: vec![],
                 }),
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("grep".into()),
                     argv: vec!["root".into()],
                     redirects: vec![],
                     assignments: vec![],
+                    embedded_substitutions: vec![],
                 }),
             ],
             negated: false,
@@ -680,6 +704,75 @@ mod tests {
                 assert_eq!(cmd.assignments.len(), 1);
                 assert_eq!(cmd.assignments[0].name, "FOO");
                 assert_eq!(cmd.assignments[0].value, "bar");
+            }
+            other => panic!("Expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    // --- Embedded command substitution tests ---
+
+    #[test]
+    fn test_parse_command_with_substitution() {
+        let stmt = parse("echo $(rm -rf /)").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("echo"));
+                assert_eq!(
+                    cmd.embedded_substitutions.len(),
+                    1,
+                    "Should have 1 embedded substitution"
+                );
+                match &cmd.embedded_substitutions[0] {
+                    Statement::CommandSubstitution(inner) => match inner.as_ref() {
+                        Statement::SimpleCommand(inner_cmd) => {
+                            assert_eq!(inner_cmd.name.as_deref(), Some("rm"));
+                        }
+                        other => panic!("Expected inner SimpleCommand, got {other:?}"),
+                    },
+                    other => panic!("Expected CommandSubstitution, got {other:?}"),
+                }
+            }
+            other => panic!("Expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_backtick_substitution() {
+        let stmt = parse("echo `rm -rf /`").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.embedded_substitutions.len(), 1);
+            }
+            other => panic!("Expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_no_substitution_normal_command() {
+        let stmt = parse("ls -la /tmp").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert!(cmd.embedded_substitutions.is_empty());
+            }
+            other => panic!("Expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_safe_substitution() {
+        let stmt = parse("echo $(date)").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.embedded_substitutions.len(), 1);
+                match &cmd.embedded_substitutions[0] {
+                    Statement::CommandSubstitution(inner) => match inner.as_ref() {
+                        Statement::SimpleCommand(inner_cmd) => {
+                            assert_eq!(inner_cmd.name.as_deref(), Some("date"));
+                        }
+                        other => panic!("Expected inner SimpleCommand, got {other:?}"),
+                    },
+                    other => panic!("Expected CommandSubstitution, got {other:?}"),
+                }
             }
             other => panic!("Expected SimpleCommand, got {other:?}"),
         }
