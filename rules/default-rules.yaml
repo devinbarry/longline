@@ -32,6 +32,8 @@ allowlists:
     - "false"
     - grep
     - rg
+    - find
+    - xargs
     - fd
     - sort
     - uniq

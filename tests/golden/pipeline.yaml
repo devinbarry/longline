@@ -70,15 +70,6 @@ tests:
     command: "cat README.md | wc -l"
     expected:
       decision: allow
-  - id: find-pipe-head-not-allowlisted
-    command: "find . -name '*.rs' | head -10"
-    expected:
-      decision: ask
-  - id: safe-pipe-xargs-rm
-    command: "find . -name '*.tmp' | xargs rm"
-    expected:
-      decision: ask
-      rule_id: xargs-rm
   - id: safe-triple-pipe
     command: "cat file.txt | grep pattern | sort"
     expected:

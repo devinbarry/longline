@@ -161,3 +161,8 @@ fn golden_bypass_attempts() {
 fn golden_command_substitution() {
     run_golden_suite("command-substitution.yaml");
 }
+
+#[test]
+fn golden_find_xargs() {
+    run_golden_suite("find-xargs.yaml");
+}

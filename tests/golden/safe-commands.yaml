@@ -23,10 +23,6 @@ tests:
     command: "grep -r 'function' src/"
     expected:
       decision: allow
-  - id: find-not-allowlisted
-    command: "find . -name '*.rs'"
-    expected:
-      decision: ask
   - id: cargo-build-safe
     command: "cargo build"
     expected:
@@ -147,10 +143,6 @@ tests:
     command: "awk '{print $1}' file.txt"
     expected:
       decision: allow
-  - id: xargs-not-allowlisted
-    command: "xargs echo"
-    expected:
-      decision: ask
   - id: ln-safe
     command: "ln -s source target"
     expected:
@@ -263,10 +255,6 @@ tests:
     command: "grep -c 'TODO' src/main.rs"
     expected:
       decision: allow
-  - id: find-type-not-allowlisted
-    command: "find /tmp -type f -name '*.log'"
-    expected:
-      decision: ask
   - id: cargo-clippy
     command: "cargo clippy"
     expected:
@@ -420,31 +408,3 @@ tests:
     command: "gem list"
     expected:
       decision: allow
-  # ── find/xargs safety ─────────────────────────────────────────
-  - id: find-safe-name-not-allowlisted
-    command: "find . -name '*.rs'"
-    expected:
-      decision: ask
-
-  - id: find-delete-dangerous
-    command: "find / -delete"
-    expected:
-      decision: ask
-      rule_id: find-delete
-
-  - id: find-exec-rm-dangerous
-    command: "find . -name '*.bak' -exec rm {} \\;"
-    expected:
-      decision: ask
-      rule_id: find-exec-rm
-
-  - id: xargs-rm-dangerous
-    command: "xargs rm -rf < /tmp/files.txt"
-    expected:
-      decision: ask
-      rule_id: xargs-rm
-
-  - id: xargs-echo-not-allowlisted
-    command: "xargs echo"
-    expected:
-      decision: ask
