@@ -1,0 +1,154 @@
+tests:
+  # ── Python: version checks (allowed via allowlist) ─────────────
+  - id: python-version-long
+    command: "python --version"
+    expected:
+      decision: allow
+  - id: python3-version-long
+    command: "python3 --version"
+    expected:
+      decision: allow
+  - id: python-version-short
+    command: "python -V"
+    expected:
+      decision: allow
+  - id: python3-version-short
+    command: "python3 -V"
+    expected:
+      decision: allow
+
+  # ── Python: safe modules (allowed via allowlist) ───────────────
+  - id: python-m-json-tool
+    command: "python -m json.tool input.json"
+    expected:
+      decision: allow
+  - id: python3-m-json-tool
+    command: "python3 -m json.tool input.json"
+    expected:
+      decision: allow
+  - id: python-m-py-compile
+    command: "python -m py_compile script.py"
+    expected:
+      decision: allow
+  - id: python3-m-compileall
+    command: "python3 -m compileall src/"
+    expected:
+      decision: allow
+
+  # ── Python: inline code (should ask) ───────────────────────────
+  - id: python-inline-code
+    command: "python -c 'print(1)'"
+    expected:
+      decision: ask
+  - id: python3-inline-code
+    command: "python3 -c 'import json; print(json.dumps({}))'"
+    expected:
+      decision: ask
+
+  # ── Python: script execution (should ask) ──────────────────────
+  - id: python-script-exec
+    command: "python3 script.py"
+    expected:
+      decision: ask
+  - id: python-script-with-args
+    command: "python3 script.py --arg value"
+    expected:
+      decision: ask
+
+  # ── Python: unsafe modules (should ask) ────────────────────────
+  - id: python-m-http-server
+    command: "python3 -m http.server 8080"
+    expected:
+      decision: ask
+  - id: python-m-pip
+    command: "python3 -m pip install requests"
+    expected:
+      decision: ask
+
+  # ── Node: version checks (allowed) ────────────────────────────
+  - id: node-version-long
+    command: "node --version"
+    expected:
+      decision: allow
+  - id: node-version-short
+    command: "node -v"
+    expected:
+      decision: allow
+
+  # ── Node: inline code (should ask) ────────────────────────────
+  - id: node-inline-code
+    command: "node -e 'console.log(1)'"
+    expected:
+      decision: ask
+
+  # ── Node: script execution (should ask) ───────────────────────
+  - id: node-script
+    command: "node script.js"
+    expected:
+      decision: ask
+
+  # ── Ruby: version checks (allowed) ────────────────────────────
+  - id: ruby-version-long
+    command: "ruby --version"
+    expected:
+      decision: allow
+  - id: ruby-version-short
+    command: "ruby -v"
+    expected:
+      decision: allow
+
+  # ── Ruby: inline code (should ask) ────────────────────────────
+  - id: ruby-inline-code
+    command: "ruby -e 'puts 1'"
+    expected:
+      decision: ask
+
+  # ── Ruby: script execution (should ask) ───────────────────────
+  - id: ruby-script
+    command: "ruby script.rb"
+    expected:
+      decision: ask
+
+  # ── uv: safe tool invocations (allowed) ───────────────────────
+  - id: uv-run-pytest
+    command: "uv run pytest tests/"
+    expected:
+      decision: allow
+  - id: uv-run-mypy
+    command: "uv run mypy src/"
+    expected:
+      decision: allow
+  - id: uv-run-ruff
+    command: "uv run ruff check src/"
+    expected:
+      decision: allow
+  - id: uv-run-black
+    command: "uv run black src/"
+    expected:
+      decision: allow
+  - id: uv-run-isort
+    command: "uv run isort src/"
+    expected:
+      decision: allow
+  - id: uv-run-flake8
+    command: "uv run flake8 src/"
+    expected:
+      decision: allow
+  - id: uv-run-pylint
+    command: "uv run pylint src/"
+    expected:
+      decision: allow
+
+  # ── uv: python invocations (should ask) ───────────────────────
+  - id: uv-run-python
+    command: "uv run python script.py"
+    expected:
+      decision: ask
+  - id: uv-run-python-inline
+    command: "uv run python -c 'print(1)'"
+    expected:
+      decision: ask
+  - id: uv-run-python3
+    command: "uv run python3 -c 'import os; os.system(\"ls\")'"
+    expected:
+      decision: ask

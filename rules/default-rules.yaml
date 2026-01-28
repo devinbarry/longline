@@ -47,11 +47,30 @@ allowlists:
     - rustc
     - java
     - javac
-    - node
-    - python
-    - python3
-    - ruby
     - npx
+    # ── Interpreters: safe invocations only ─────────────────────
+    - "python --version"
+    - "python -V"
+    - "python3 --version"
+    - "python3 -V"
+    - "python -m json.tool"
+    - "python3 -m json.tool"
+    - "python -m py_compile"
+    - "python3 -m py_compile"
+    - "python -m compileall"
+    - "python3 -m compileall"
+    - "node --version"
+    - "node -v"
+    - "ruby --version"
+    - "ruby -v"
+    # ── uv: safe tool invocations ───────────────────────────────
+    - "uv run pytest"
+    - "uv run mypy"
+    - "uv run ruff"
+    - "uv run black"
+    - "uv run isort"
+    - "uv run flake8"
+    - "uv run pylint"
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
     - mkdir
     - touch
