@@ -146,10 +146,7 @@ mod tests {
         let output = HookOutput::decision(Decision::Allow, "longline: allowlisted");
         let json = serde_json::to_string(&output).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            parsed["hookSpecificOutput"]["permissionDecision"],
-            "allow"
-        );
+        assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
         assert_eq!(
             parsed["hookSpecificOutput"]["permissionDecisionReason"],
             "longline: allowlisted"

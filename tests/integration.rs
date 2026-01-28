@@ -360,10 +360,7 @@ fn test_e2e_allow_emits_explicit_decision() {
     let (code, stdout) = run_hook("Bash", "ls -la");
     assert_eq!(code, 0);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(
-        parsed["hookSpecificOutput"]["permissionDecision"],
-        "allow"
-    );
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
     assert!(
         parsed["hookSpecificOutput"]["permissionDecisionReason"]
             .as_str()

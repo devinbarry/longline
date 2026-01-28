@@ -172,7 +172,10 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         let result = evaluate_leaf(config, leaf);
         if result.decision > worst.decision {
             worst = result;
-        } else if result.decision == worst.decision && worst.reason.is_empty() && !result.reason.is_empty() {
+        } else if result.decision == worst.decision
+            && worst.reason.is_empty()
+            && !result.reason.is_empty()
+        {
             // Propagate allowlist reason when decision is the same but worst has no reason
             worst = result;
         }
