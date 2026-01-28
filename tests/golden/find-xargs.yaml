@@ -1,0 +1,598 @@
+tests:
+  # ============================================================
+  # SAFE find: bare and basic predicates (allow)
+  # ============================================================
+  - id: find-bare
+    command: "find"
+    expected:
+      decision: allow
+
+  - id: find-dot
+    command: "find ."
+    expected:
+      decision: allow
+
+  - id: find-absolute-path
+    command: "find /tmp"
+    expected:
+      decision: allow
+
+  - id: find-home-path
+    command: "find ~"
+    expected:
+      decision: allow
+
+  - id: find-multiple-paths
+    command: "find /tmp /var/log"
+    expected:
+      decision: allow
+
+  - id: find-name-glob
+    command: "find . -name '*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-name-exact
+    command: "find . -name Cargo.toml"
+    expected:
+      decision: allow
+
+  - id: find-iname
+    command: "find . -iname '*.RS'"
+    expected:
+      decision: allow
+
+  - id: find-type-f
+    command: "find . -type f"
+    expected:
+      decision: allow
+
+  - id: find-type-d
+    command: "find . -type d"
+    expected:
+      decision: allow
+
+  - id: find-type-l
+    command: "find . -type l"
+    expected:
+      decision: allow
+
+  - id: find-path-predicate
+    command: "find . -path '*/src/*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-regex
+    command: "find . -regex '.*\\.rs$'"
+    expected:
+      decision: allow
+
+  - id: find-iregex
+    command: "find . -iregex '.*\\.yaml$'"
+    expected:
+      decision: allow
+
+  - id: find-size
+    command: "find . -size +1M"
+    expected:
+      decision: allow
+
+  - id: find-mtime
+    command: "find . -mtime -7"
+    expected:
+      decision: allow
+
+  - id: find-atime
+    command: "find . -atime +30"
+    expected:
+      decision: allow
+
+  - id: find-ctime
+    command: "find . -ctime -1"
+    expected:
+      decision: allow
+
+  - id: find-newer
+    command: "find . -newer reference.txt"
+    expected:
+      decision: allow
+
+  - id: find-perm
+    command: "find . -perm 644"
+    expected:
+      decision: allow
+
+  - id: find-perm-mode
+    command: "find . -perm -u+x"
+    expected:
+      decision: allow
+
+  - id: find-user
+    command: "find /tmp -user root"
+    expected:
+      decision: allow
+
+  - id: find-group
+    command: "find /tmp -group staff"
+    expected:
+      decision: allow
+
+  - id: find-empty
+    command: "find . -empty"
+    expected:
+      decision: allow
+
+  - id: find-maxdepth
+    command: "find . -maxdepth 2 -name '*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-mindepth
+    command: "find . -mindepth 1 -maxdepth 3"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # SAFE find: output and control actions (allow)
+  # ============================================================
+  - id: find-print
+    command: "find . -name '*.rs' -print"
+    expected:
+      decision: allow
+
+  - id: find-print0
+    command: "find . -name '*.rs' -print0"
+    expected:
+      decision: allow
+
+  - id: find-ls
+    command: "find . -name '*.log' -ls"
+    expected:
+      decision: allow
+
+  - id: find-prune
+    command: "find . -name node_modules -prune -o -name '*.js' -print"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # SAFE find: compound predicates and logical operators (allow)
+  # ============================================================
+  - id: find-and-implicit
+    command: "find . -type f -name '*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-or-operator
+    command: "find . -name '*.rs' -o -name '*.toml'"
+    expected:
+      decision: allow
+
+  - id: find-not-operator
+    command: "find . -not -name '*.log'"
+    expected:
+      decision: allow
+
+  - id: find-negation-bang
+    command: "find . ! -name '*.tmp'"
+    expected:
+      decision: allow
+
+  - id: find-grouped
+    command: "find . \\( -name '*.rs' -o -name '*.toml' \\) -type f"
+    expected:
+      decision: allow
+
+  - id: find-complex-predicates
+    command: "find /tmp -type f -name '*.log' -mtime +30 -size +1M"
+    expected:
+      decision: allow
+
+  - id: find-multiple-name-or
+    command: "find . \\( -name '*.log' -o -name '*.jsonl' \\)"
+    expected:
+      decision: allow
+
+  - id: find-type-and-name-absolute
+    command: "find /tmp/project -type f -name '*.yaml'"
+    expected:
+      decision: allow
+
+  - id: find-stderr-suppress
+    command: "find /var -type f -name '*.conf' 2>/dev/null"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # SAFE find: -exec with non-destructive commands (allow)
+  # ============================================================
+  - id: find-exec-echo
+    command: "find . -name '*.rs' -exec echo {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-exec-ls
+    command: "find . -type f -exec ls -la {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-exec-grep
+    command: "find . -name '*.rs' -exec grep -l 'TODO' {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-exec-cat
+    command: "find . -name '*.md' -exec cat {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-exec-chmod
+    command: "find . -type f -exec chmod 644 {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-exec-wc
+    command: "find . -name '*.rs' -exec wc -l {} +"
+    expected:
+      decision: allow
+
+  - id: find-exec-file
+    command: "find . -type f -exec file {} +"
+    expected:
+      decision: allow
+
+  - id: find-exec-head
+    command: "find . -name '*.log' -exec head -5 {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-execdir-echo
+    command: "find . -name '*.rs' -execdir echo {} \\;"
+    expected:
+      decision: allow
+
+  - id: find-execdir-ls
+    command: "find . -type f -execdir ls -la {} \\;"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # DANGEROUS find: -delete flag (ask, rule: find-delete)
+  # ============================================================
+  - id: find-delete-root
+    command: "find / -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-dot
+    command: "find . -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-tmp
+    command: "find /tmp -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-with-name
+    command: "find . -name '*.tmp' -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-with-type
+    command: "find . -type f -name '*.bak' -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-with-mtime
+    command: "find /home -name '*.log' -mtime +30 -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-empty
+    command: "find . -empty -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-delete-with-maxdepth
+    command: "find . -maxdepth 1 -name '*.tmp' -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  # ============================================================
+  # DANGEROUS find: -exec rm (ask, rule: find-exec-rm)
+  # ============================================================
+  - id: find-exec-rm-semicolon
+    command: "find . -name '*.bak' -exec rm {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  - id: find-exec-rm-plus
+    command: "find . -name '*.tmp' -exec rm {} +"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  - id: find-exec-rm-rf-plus
+    command: "find / -exec rm -rf {} +"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  - id: find-exec-rm-f
+    command: "find . -name '*.o' -exec rm -f {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  - id: find-exec-rm-with-predicates
+    command: "find /tmp -type f -name '*.cache' -mtime +7 -exec rm {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  # ============================================================
+  # SAFE xargs: with non-destructive commands (allow)
+  # ============================================================
+  - id: xargs-echo
+    command: "xargs echo"
+    expected:
+      decision: allow
+
+  - id: xargs-ls
+    command: "xargs ls -la"
+    expected:
+      decision: allow
+
+  - id: xargs-cat
+    command: "xargs cat"
+    expected:
+      decision: allow
+
+  - id: xargs-grep
+    command: "xargs grep pattern"
+    expected:
+      decision: allow
+
+  - id: xargs-grep-l
+    command: "xargs grep -l 'TODO'"
+    expected:
+      decision: allow
+
+  - id: xargs-wc
+    command: "xargs wc -l"
+    expected:
+      decision: allow
+
+  - id: xargs-head
+    command: "xargs head -5"
+    expected:
+      decision: allow
+
+  - id: xargs-file
+    command: "xargs file"
+    expected:
+      decision: allow
+
+  - id: xargs-stat
+    command: "xargs stat"
+    expected:
+      decision: allow
+
+  - id: xargs-0-ls
+    command: "xargs -0 ls -la"
+    expected:
+      decision: allow
+
+  - id: xargs-0-grep
+    command: "xargs -0 grep pattern"
+    expected:
+      decision: allow
+
+  - id: xargs-null-cat
+    command: "xargs --null cat"
+    expected:
+      decision: allow
+
+  - id: xargs-I-placeholder-ls
+    command: "xargs -I{} ls {}"
+    expected:
+      decision: allow
+
+  - id: xargs-n1-grep
+    command: "xargs -n1 grep pattern"
+    expected:
+      decision: allow
+
+  - id: xargs-P4-wc
+    command: "xargs -P4 wc -l"
+    expected:
+      decision: allow
+
+  - id: xargs-max-args-echo
+    command: "xargs --max-args=10 echo"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # DANGEROUS xargs: with rm (ask, rule: xargs-rm)
+  # ============================================================
+  - id: xargs-rm
+    command: "xargs rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-rm-f
+    command: "xargs rm -f"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-rm-rf
+    command: "xargs rm -rf"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-rm-r
+    command: "xargs rm -r"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-0-rm
+    command: "xargs -0 rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-I-rm
+    command: "xargs -I{} rm {}"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-I-rm-rf
+    command: "xargs -I{} rm -rf {}"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-n1-rm
+    command: "xargs -n1 rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-P4-n1-rm
+    command: "xargs -P4 -n1 rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-rm-redirect-input
+    command: "xargs rm -rf < /tmp/files.txt"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  # ============================================================
+  # SAFE pipelines: find piped to non-destructive commands (allow)
+  # ============================================================
+  - id: find-pipe-head
+    command: "find . -name '*.rs' | head -10"
+    expected:
+      decision: allow
+
+  - id: find-pipe-tail
+    command: "find . -name '*.rs' | tail -5"
+    expected:
+      decision: allow
+
+  - id: find-pipe-sort
+    command: "find . -name '*.rs' | sort"
+    expected:
+      decision: allow
+
+  - id: find-pipe-wc
+    command: "find . -type f | wc -l"
+    expected:
+      decision: allow
+
+  - id: find-pipe-grep
+    command: "find . -type f | grep '*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-pipe-sort-head
+    command: "find . -name '*.rs' | sort | head"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-echo
+    command: "find . -name '*.rs' | xargs echo"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-grep
+    command: "find . -name '*.rs' | xargs grep pattern"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-wc
+    command: "find . -name '*.rs' | xargs wc -l"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-ls
+    command: "find . -type f | xargs ls -la"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-cat
+    command: "find . -name '*.md' | xargs cat"
+    expected:
+      decision: allow
+
+  - id: find-pipe-xargs-file
+    command: "find . -type f | xargs file"
+    expected:
+      decision: allow
+
+  - id: find-print0-pipe-xargs-0-ls
+    command: "find . -type f -print0 | xargs -0 ls"
+    expected:
+      decision: allow
+
+  - id: find-print0-pipe-xargs-0-grep
+    command: "find . -name '*.rs' -print0 | xargs -0 grep 'fn main'"
+    expected:
+      decision: allow
+
+  - id: find-print0-pipe-xargs-0-wc
+    command: "find . -name '*.rs' -print0 | xargs -0 wc -l"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # DANGEROUS pipelines: find piped to xargs rm (ask)
+  # ============================================================
+  - id: find-pipe-xargs-rm
+    command: "find . -name '*.tmp' | xargs rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: find-pipe-xargs-rm-rf
+    command: "find . -name '*.bak' | xargs rm -rf"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: find-pipe-xargs-rm-f
+    command: "find . -name '*.o' | xargs rm -f"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: find-print0-pipe-xargs-0-rm
+    command: "find . -type f -print0 | xargs -0 rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: find-pipe-xargs-I-rm
+    command: "find . -name '*.tmp' | xargs -I{} rm {}"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
