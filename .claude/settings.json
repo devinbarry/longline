@@ -19,5 +19,18 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "longline --config /Users/axion/git/longline/rules/default-rules.yaml --ask-ai"
+          }
+        ]
+      }
+    ]
   }
 }
