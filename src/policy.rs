@@ -172,6 +172,9 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         let result = evaluate_leaf(config, leaf);
         if result.decision > worst.decision {
             worst = result;
+        } else if result.decision == worst.decision && worst.reason.is_empty() && !result.reason.is_empty() {
+            // Propagate allowlist reason when decision is the same but worst has no reason
+            worst = result;
         }
     }
 
@@ -242,8 +245,17 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
             }
 
             // No rule matched -- check allowlist as fallback
-            if is_command_allowlisted(config, cmd) {
-                return PolicyResult::allow();
+            if let Some(entry) = find_allowlist_match(config, cmd) {
+                let reason = if entry.contains(' ') {
+                    format!("allowlisted ({})", entry)
+                } else {
+                    "allowlisted".to_string()
+                };
+                return PolicyResult {
+                    decision: Decision::Allow,
+                    rule_id: None,
+                    reason,
+                };
             }
 
             // Not allowlisted, no rule -- return allow (default_decision
@@ -256,18 +268,19 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
 /// Check if a leaf node is allowlisted.
 fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
-        Statement::SimpleCommand(cmd) => is_command_allowlisted(config, cmd),
+        Statement::SimpleCommand(cmd) => find_allowlist_match(config, cmd).is_some(),
         _ => false,
     }
 }
 
-/// Check if a SimpleCommand matches any allowlist entry.
+/// Find the matching allowlist entry for a SimpleCommand.
 /// Entries like "git status" match command name + required args.
 /// Bare entries like "ls" match any invocation of that command.
-fn is_command_allowlisted(config: &RulesConfig, cmd: &SimpleCommand) -> bool {
+/// Returns the matching entry string, or None if no match.
+fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) -> Option<&'a str> {
     let cmd_name = match &cmd.name {
         Some(n) => n.as_str(),
-        None => return false,
+        None => return None,
     };
 
     for entry in &config.allowlists.commands {
@@ -280,7 +293,7 @@ fn is_command_allowlisted(config: &RulesConfig, cmd: &SimpleCommand) -> bool {
         }
         if parts.len() == 1 {
             // Bare command name matches any invocation
-            return true;
+            return Some(entry);
         }
         // Multi-word entry: all additional parts must appear in argv
         let required_args = &parts[1..];
@@ -288,10 +301,10 @@ fn is_command_allowlisted(config: &RulesConfig, cmd: &SimpleCommand) -> bool {
             .iter()
             .all(|req| cmd.argv.iter().any(|a| a == req));
         if all_present {
-            return true;
+            return Some(entry);
         }
     }
-    false
+    None
 }
 
 /// Check if a rule's matcher matches a given SimpleCommand.
@@ -714,6 +727,32 @@ rules:
             "Rules should override allowlist"
         );
         assert_eq!(result.rule_id.as_deref(), Some("cat-env-file"));
+    }
+
+    #[test]
+    fn test_allowlist_match_populates_reason() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("git status").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+        assert!(
+            result.reason.contains("git status"),
+            "Reason should mention matching allowlist entry: {}",
+            result.reason
+        );
+    }
+
+    #[test]
+    fn test_bare_allowlist_match_reason() {
+        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let stmt = crate::parser::parse("ls -la").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+        assert!(
+            result.reason.contains("allowlisted"),
+            "Reason should mention allowlisted: {}",
+            result.reason
+        );
     }
 
     #[test]
