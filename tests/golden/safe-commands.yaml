@@ -43,10 +43,10 @@ tests:
     command: "npm test"
     expected:
       decision: allow
-  - id: python-safe
+  - id: python-script-ask
     command: "python3 script.py"
     expected:
-      decision: allow
+      decision: ask
   - id: make-safe
     command: "make build"
     expected:
@@ -179,10 +179,10 @@ tests:
     command: "npx create-react-app myapp"
     expected:
       decision: allow
-  - id: node-safe
+  - id: node-inline-ask
     command: "node -e 'console.log(1)'"
     expected:
-      decision: allow
+      decision: ask
   - id: pip-safe
     command: "pip install requests"
     expected:
@@ -191,10 +191,10 @@ tests:
     command: "pip3 install flask"
     expected:
       decision: allow
-  - id: ruby-safe
+  - id: ruby-script-ask
     command: "ruby script.rb"
     expected:
-      decision: allow
+      decision: ask
   - id: gem-safe
     command: "gem install bundler"
     expected:

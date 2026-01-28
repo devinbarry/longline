@@ -146,3 +146,8 @@ fn golden_docker() {
 fn golden_build_tools() {
     run_golden_suite("build-tools.yaml");
 }
+
+#[test]
+fn golden_interpreters() {
+    run_golden_suite("interpreters.yaml");
+}
