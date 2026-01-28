@@ -156,3 +156,8 @@ fn golden_interpreters() {
 fn golden_bypass_attempts() {
     run_golden_suite("bypass-attempts.yaml");
 }
+
+#[test]
+fn golden_command_substitution() {
+    run_golden_suite("command-substitution.yaml");
+}
