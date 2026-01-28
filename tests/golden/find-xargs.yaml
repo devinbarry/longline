@@ -596,3 +596,114 @@ tests:
     expected:
       decision: ask
       rule_id: xargs-rm
+
+  # ============================================================
+  # REGRESSION: exact commands from hooks log that were blocked
+  # ============================================================
+  - id: regression-find-grouped-or-stderr
+    command: "find /Users/axion/git/longline -type f \\( -name \"*.log\" -o -name \"*.jsonl\" \\) 2>/dev/null"
+    expected:
+      decision: allow
+
+  - id: regression-find-tilde-or-stderr
+    command: "find ~/.claude -type f -name \"*.jsonl\" -o -name \"*.log\" 2>/dev/null"
+    expected:
+      decision: allow
+
+  - id: regression-find-tests-yaml
+    command: "find /Users/axion/git/longline/tests -name \"*.yaml\" -type f"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # REAL-WORLD: common Claude Code find patterns (allow)
+  # ============================================================
+  - id: realworld-find-exclude-path
+    command: "find . -name '*.ts' -not -path '*/node_modules/*'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-exclude-vendor
+    command: "find . -name '*.go' -not -path './vendor/*'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-exclude-dotgit
+    command: "find . -type f -not -path './.git/*'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-or-pipe-xargs-grep
+    command: "find . -name '*.ts' -o -name '*.tsx' | xargs grep -l 'import'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-pipe-xargs-grep-pub
+    command: "find . -type f -name '*.rs' | xargs grep -l 'pub fn'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-multiple-or
+    command: "find . -name 'Makefile' -o -name 'makefile' -o -name 'GNUmakefile'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-wholename
+    command: "find . -wholename '*/migrations/*.py'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-maxdepth-name
+    command: "find . -maxdepth 3 -name 'package.json'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-type-d
+    command: "find . -type d -name 'node_modules'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-pyc
+    command: "find . -name '*.pyc' -type f"
+    expected:
+      decision: allow
+
+  - id: realworld-find-newer-pipe-wc
+    command: "find . -type f -newer reference | wc -l"
+    expected:
+      decision: allow
+
+  - id: realworld-find-pipe-head-20
+    command: "find . -type f -name '*.py' | head -20"
+    expected:
+      decision: allow
+
+  - id: realworld-find-pipe-xargs-stat
+    command: "find . -name '*.rs' | xargs stat"
+    expected:
+      decision: allow
+
+  - id: realworld-find-depth-name
+    command: "find . -depth -name '*.tmp'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-follow-symlinks
+    command: "find -L . -name '*.so'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-readable
+    command: "find . -readable -name '*.conf'"
+    expected:
+      decision: allow
+
+  - id: realworld-find-size-range
+    command: "find . -size +100k -size -10M -type f"
+    expected:
+      decision: allow
+
+  - id: realworld-xargs-sort-uniq
+    command: "find . -name '*.rs' | xargs grep 'use ' | sort | uniq"
+    expected:
+      decision: allow
