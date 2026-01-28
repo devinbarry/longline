@@ -1,0 +1,83 @@
+# Bypass attempt tests — verify evasion patterns are caught.
+# These test every bypass pattern identified during the security audit.
+tests:
+  # ── Absolute path bypass ──────────────────────────────────
+  - id: abs-path-rm
+    command: "/bin/rm -rf /"
+    expected:
+      decision: ask
+
+  - id: abs-path-env-rm
+    command: "/usr/bin/env rm -rf /"
+    expected:
+      decision: ask
+
+  # ── Shell interpreter bypass ────────────────────────────────
+  - id: echo-pipe-bash
+    command: "echo payload | bash"
+    expected:
+      decision: ask
+
+  - id: echo-pipe-sh
+    command: "echo payload | sh"
+    expected:
+      decision: ask
+
+  - id: sh-c-rm
+    command: "sh -c 'rm -rf /'"
+    expected:
+      decision: ask
+
+  - id: bash-c-rm
+    command: "bash -c 'rm -rf /'"
+    expected:
+      decision: ask
+
+  # ── Eval / builtin bypass ───────────────────────────────────
+  - id: eval-rm
+    command: "eval 'rm -rf /'"
+    expected:
+      decision: ask
+
+  - id: command-builtin-rm
+    command: "command rm -rf /"
+    expected:
+      decision: ask
+
+  # ── Command substitution bypass (FIXED) ────────────────────
+  - id: echo-subst-rm
+    command: "echo $(rm -rf /)"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+
+  - id: echo-backtick-rm
+    command: "echo `rm -rf /`"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+
+  - id: echo-subst-cat-env
+    command: "echo $(cat .env)"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── find/xargs with destructive args (NEW RULES) ──────────
+  - id: find-root-delete-bypass
+    command: "find / -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: xargs-rm-rf-bypass
+    command: "xargs rm -rf"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: find-exec-rm-bypass
+    command: "find / -exec rm -rf {} +"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
