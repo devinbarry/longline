@@ -1,6 +1,6 @@
 use comfy_table::{
-    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color,
-    ContentArrangement, Table,
+    modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Attribute, Cell, Color, ContentArrangement,
+    Table,
 };
 
 use crate::policy;
@@ -194,7 +194,7 @@ pub fn allowlist_table(commands: &[String]) -> Table {
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold),
+            Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold)
         ]);
 
     for cmd in commands {

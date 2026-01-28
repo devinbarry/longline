@@ -176,7 +176,11 @@ pub fn parse_response(output: &str) -> Decision {
 pub fn evaluate(config: &AiJudgeConfig, language: &str, code: &str, cwd: &str) -> Decision {
     let prompt = build_prompt(language, code, cwd);
 
-    let parts: Vec<String> = config.command.split_whitespace().map(String::from).collect();
+    let parts: Vec<String> = config
+        .command
+        .split_whitespace()
+        .map(String::from)
+        .collect();
     if parts.is_empty() {
         eprintln!("longline: ai-judge command is empty");
         return Decision::Ask;
@@ -306,7 +310,10 @@ mod tests {
 
     #[test]
     fn test_parse_response_ask() {
-        assert_eq!(parse_response("ASK: network access detected"), Decision::Ask);
+        assert_eq!(
+            parse_response("ASK: network access detected"),
+            Decision::Ask
+        );
     }
 
     #[test]
