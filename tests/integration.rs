@@ -77,7 +77,8 @@ fn run_hook_with_flags(tool_name: &str, command: &str, extra_args: &[&str]) -> (
 fn test_e2e_safe_command_allows() {
     let (code, stdout) = run_hook("Bash", "ls -la");
     assert_eq!(code, 0);
-    assert_eq!(stdout.trim(), "{}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
 
 #[test]
@@ -96,7 +97,15 @@ fn test_e2e_dangerous_command_denies() {
 fn test_e2e_non_bash_tool_passes_through() {
     let (code, stdout) = run_hook("Read", "");
     assert_eq!(code, 0);
-    assert_eq!(stdout.trim(), "{}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("non-Bash"),
+        "Reason should mention non-Bash tool"
+    );
 }
 
 #[test]
@@ -156,7 +165,8 @@ fn test_e2e_ask_on_deny_downgrades_deny_to_ask() {
 fn test_e2e_ask_on_deny_does_not_affect_allow() {
     let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--ask-on-deny"]);
     assert_eq!(code, 0);
-    assert_eq!(stdout.trim(), "{}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
 
 #[test]
@@ -333,7 +343,8 @@ fn test_e2e_check_skips_comments_and_blanks() {
 fn test_e2e_ask_ai_flag_accepted() {
     let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--ask-ai"]);
     assert_eq!(code, 0);
-    assert_eq!(stdout.trim(), "{}");
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
 
 #[test]
@@ -345,6 +356,24 @@ fn test_e2e_ask_ai_does_not_affect_deny() {
 }
 
 #[test]
+fn test_e2e_allow_emits_explicit_decision() {
+    let (code, stdout) = run_hook("Bash", "ls -la");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"],
+        "allow"
+    );
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("longline:"),
+        "Reason should be prefixed with longline:"
+    );
+}
+
+#[test]
 fn test_e2e_ask_ai_falls_back_on_missing_codex() {
     // python3 -c should be ask (not on allowlist).
     // With --ask-ai, if codex isn't available, fallback to ask.
@@ -353,10 +382,10 @@ fn test_e2e_ask_ai_falls_back_on_missing_codex() {
     assert_eq!(code, 0);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     // When codex is not installed, ai_judge falls back to ask.
-    // When codex IS installed, it evaluates the safe code and returns allow ({}).
+    // When codex IS installed, it evaluates the safe code and returns allow.
     let decision = parsed["hookSpecificOutput"]["permissionDecision"]
         .as_str()
-        .unwrap_or("allow"); // {} output means allow (no hookSpecificOutput)
+        .unwrap();
     assert!(
         decision == "ask" || decision == "allow",
         "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
