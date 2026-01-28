@@ -77,7 +77,8 @@ tests:
   - id: safe-pipe-xargs-rm
     command: "find . -name '*.tmp' | xargs rm"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: xargs-rm
   - id: safe-triple-pipe
     command: "cat file.txt | grep pattern | sort"
     expected:

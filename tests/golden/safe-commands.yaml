@@ -420,3 +420,31 @@ tests:
     command: "gem list"
     expected:
       decision: allow
+  # ── find/xargs safety ─────────────────────────────────────────
+  - id: find-safe-name
+    command: "find . -name '*.rs'"
+    expected:
+      decision: allow
+
+  - id: find-delete-dangerous
+    command: "find / -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+
+  - id: find-exec-rm-dangerous
+    command: "find . -name '*.bak' -exec rm {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  - id: xargs-rm-dangerous
+    command: "xargs rm -rf < /tmp/files.txt"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  - id: xargs-echo-safe
+    command: "xargs echo"
+    expected:
+      decision: allow
