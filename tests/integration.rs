@@ -328,3 +328,18 @@ fn test_e2e_check_skips_comments_and_blanks() {
 
     let _ = std::fs::remove_file(&file);
 }
+
+#[test]
+fn test_e2e_ask_ai_flag_accepted() {
+    let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--ask-ai"]);
+    assert_eq!(code, 0);
+    assert_eq!(stdout.trim(), "{}");
+}
+
+#[test]
+fn test_e2e_ask_ai_does_not_affect_deny() {
+    let (code, stdout) = run_hook_with_flags("Bash", "rm -rf /", &["--ask-ai"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "deny");
+}

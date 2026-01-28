@@ -19,6 +19,10 @@ struct Cli {
     #[arg(long)]
     ask_on_deny: bool,
 
+    /// Use AI to evaluate inline interpreter code instead of asking
+    #[arg(long)]
+    ask_ai: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -107,12 +111,12 @@ pub fn run() -> i32 {
             level,
             group_by,
         }) => run_rules(&rules_config, verbose, filter, level, group_by),
-        None => run_hook(&rules_config, cli.ask_on_deny),
+        None => run_hook(&rules_config, cli.ask_on_deny, cli.ask_ai),
     }
 }
 
 /// Run hook mode: read stdin, evaluate, output decision.
-fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool) -> i32 {
+fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, _ask_ai: bool) -> i32 {
     // Read hook input from stdin
     let mut input_str = String::new();
     if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
