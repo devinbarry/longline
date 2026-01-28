@@ -142,6 +142,22 @@ mod tests {
     }
 
     #[test]
+    fn test_hook_output_allow_serializes_correctly() {
+        let output = HookOutput::decision(Decision::Allow, "longline: allowlisted");
+        let json = serde_json::to_string(&output).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["hookSpecificOutput"]["permissionDecision"],
+            "allow"
+        );
+        assert_eq!(
+            parsed["hookSpecificOutput"]["permissionDecisionReason"],
+            "longline: allowlisted"
+        );
+        assert_eq!(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse");
+    }
+
+    #[test]
     fn test_decision_ordering() {
         assert!(Decision::Deny > Decision::Ask);
         assert!(Decision::Ask > Decision::Allow);
