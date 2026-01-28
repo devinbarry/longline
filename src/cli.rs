@@ -139,14 +139,16 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
 
     // Only handle Bash tool in MVP
     if hook_input.tool_name != "Bash" {
-        print_allow();
+        let output = HookOutput::decision(Decision::Allow, "longline: non-Bash tool");
+        print_json(&output);
         return 0;
     }
 
     let command = match &hook_input.tool_input.command {
         Some(cmd) => cmd.as_str(),
         None => {
-            print_allow();
+            let output = HookOutput::decision(Decision::Allow, "longline: no command");
+            print_json(&output);
             return 0;
         }
     };
@@ -223,7 +225,9 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
     // Output the decision
     match final_decision {
         Decision::Allow => {
-            print_allow();
+            let reason = format!("longline: {}", result.reason);
+            let output = HookOutput::decision(Decision::Allow, &reason);
+            print_json(&output);
         }
         Decision::Ask | Decision::Deny => {
             let reason = if overridden {
@@ -374,11 +378,6 @@ fn format_reason(result: &PolicyResult) -> String {
         Some(id) => format!("[{id}] {}", result.reason),
         None => result.reason.clone(),
     }
-}
-
-/// Print the empty JSON object to allow the operation.
-fn print_allow() {
-    println!("{{}}");
 }
 
 /// Print a JSON value to stdout.
