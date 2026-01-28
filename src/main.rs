@@ -1,3 +1,4 @@
+mod ai_judge;
 mod cli;
 mod logger;
 mod output;
