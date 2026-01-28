@@ -151,3 +151,8 @@ fn golden_build_tools() {
 fn golden_interpreters() {
     run_golden_suite("interpreters.yaml");
 }
+
+#[test]
+fn golden_bypass_attempts() {
+    run_golden_suite("bypass-attempts.yaml");
+}
