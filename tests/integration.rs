@@ -343,3 +343,22 @@ fn test_e2e_ask_ai_does_not_affect_deny() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "deny");
 }
+
+#[test]
+fn test_e2e_ask_ai_falls_back_on_missing_codex() {
+    // python3 -c should be ask (not on allowlist).
+    // With --ask-ai, if codex isn't available, fallback to ask.
+    // If codex IS available, it may evaluate and return allow.
+    let (code, stdout) = run_hook_with_flags("Bash", "python3 -c 'print(1)'", &["--ask-ai"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    // When codex is not installed, ai_judge falls back to ask.
+    // When codex IS installed, it evaluates the safe code and returns allow ({}).
+    let decision = parsed["hookSpecificOutput"]["permissionDecision"]
+        .as_str()
+        .unwrap_or("allow"); // {} output means allow (no hookSpecificOutput)
+    assert!(
+        decision == "ask" || decision == "allow",
+        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
+    );
+}

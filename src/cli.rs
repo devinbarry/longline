@@ -3,6 +3,7 @@ use clap::Subcommand;
 use std::io::Read;
 use std::path::PathBuf;
 
+use crate::ai_judge;
 use crate::logger;
 use crate::parser;
 use crate::policy;
@@ -116,7 +117,7 @@ pub fn run() -> i32 {
 }
 
 /// Run hook mode: read stdin, evaluate, output decision.
-fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, _ask_ai: bool) -> i32 {
+fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool) -> i32 {
     // Read hook input from stdin
     let mut input_str = String::new();
     if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
@@ -176,10 +177,26 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, _ask_ai: bool
     // Evaluate against policy
     let result = policy::evaluate(rules_config, &stmt);
 
-    let (final_decision, overridden) = if ask_on_deny && result.decision == Decision::Deny {
+    let (initial_decision, overridden) = if ask_on_deny && result.decision == Decision::Deny {
         (Decision::Ask, true)
     } else {
         (result.decision, false)
+    };
+
+    // AI judge: evaluate inline interpreter code instead of asking user
+    let final_decision = if ask_ai && initial_decision == Decision::Ask {
+        let ai_config = ai_judge::load_config();
+        match ai_judge::extract_inline_code(&stmt, &ai_config) {
+            Some((language, code)) => {
+                let cwd = hook_input.cwd.as_deref().unwrap_or("");
+                let ai_decision = ai_judge::evaluate(&ai_config, &language, &code, cwd);
+                eprintln!("longline: ai-judge evaluated {language} code: {ai_decision}");
+                ai_decision
+            }
+            None => initial_decision,
+        }
+    } else {
+        initial_decision
     };
 
     // Log the decision
