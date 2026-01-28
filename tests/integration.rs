@@ -388,3 +388,111 @@ fn test_e2e_ask_ai_falls_back_on_missing_codex() {
         "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
     );
 }
+
+#[test]
+fn test_e2e_allow_has_hook_event_name() {
+    let (code, stdout) = run_hook("Bash", "ls -la");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse",
+        "Allow decisions must include hookEventName: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_non_bash_explicit_allow_with_reason() {
+    let (code, stdout) = run_hook("Read", "");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("non-Bash"),
+        "Reason should mention non-Bash: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_git_commit_allows_with_reason() {
+    let (code, stdout) = run_hook("Bash", "git commit -m 'test'");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("git commit"),
+        "Reason should mention git commit: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_cargo_test_allows_with_reason() {
+    let (code, stdout) = run_hook("Bash", "cargo test --lib");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("cargo test"),
+        "Reason should mention cargo test: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_command_substitution_deny() {
+    let (code, stdout) = run_hook("Bash", "echo $(rm -rf /)");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "deny",
+        "Command substitution containing rm -rf / must be denied: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_safe_command_substitution_allows() {
+    let (code, stdout) = run_hook("Bash", "echo $(date)");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "Safe command substitution should be allowed: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_find_delete_asks() {
+    let (code, stdout) = run_hook("Bash", "find / -name '*.tmp' -delete");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "ask");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("find-delete"),
+        "Reason should mention find-delete: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_xargs_rm_asks() {
+    let (code, stdout) = run_hook("Bash", "find . -name '*.o' | xargs rm");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "ask");
+    assert!(
+        parsed["hookSpecificOutput"]["permissionDecisionReason"]
+            .as_str()
+            .unwrap()
+            .contains("xargs-rm"),
+        "Reason should mention xargs-rm: {stdout}"
+    );
+}
