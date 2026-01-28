@@ -86,9 +86,7 @@ allowlists:
     # ── Always safe: text processing ──────────────────────────────
     - sed
     - awk
-    - xargs
     - patch
-    - find
     # ── Git: read operations ──────────────────────────────────────
     - "git status"
     - "git diff"

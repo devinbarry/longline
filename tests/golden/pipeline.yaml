@@ -70,10 +70,10 @@ tests:
     command: "cat README.md | wc -l"
     expected:
       decision: allow
-  - id: safe-pipe-head
+  - id: find-pipe-head-not-allowlisted
     command: "find . -name '*.rs' | head -10"
     expected:
-      decision: allow
+      decision: ask
   - id: safe-pipe-xargs-rm
     command: "find . -name '*.tmp' | xargs rm"
     expected:
