@@ -1,0 +1,108 @@
+# Tests for commands that would trigger AI judge extraction
+# These test the policy behavior (ask) for inline interpreter code
+# The AI judge itself is tested separately
+
+tests:
+  # Pipeline tests - interpreter at end
+  - id: pipeline-python-c-end
+    command: "grep foo bar | python3 -c 'print(1)'"
+    expected:
+      decision: ask
+    note: "Pipeline with python3 -c at end triggers AI judge"
+
+  - id: pipeline-multi-stage-python
+    command: "cat file | head -10 | python3 -c 'import sys; print(sys.stdin.read())'"
+    expected:
+      decision: ask
+    note: "Multi-stage pipeline with python3 -c"
+
+  - id: pipeline-node-e
+    command: "echo test | node -e 'console.log(process.stdin)'"
+    expected:
+      decision: ask
+    note: "Pipeline with node -e"
+
+  - id: pipeline-ruby-e
+    command: "ls | ruby -e 'puts STDIN.read'"
+    expected:
+      decision: ask
+    note: "Pipeline with ruby -e"
+
+  # Pipeline tests - interpreter at start
+  - id: pipeline-python-c-start
+    command: "python3 -c 'print(1)' | grep 1"
+    expected:
+      decision: ask
+    note: "Pipeline with python3 -c at start"
+
+  # Pipeline tests - interpreter in middle
+  - id: pipeline-python-c-middle
+    command: "echo x | python3 -c 'print(1)' | cat"
+    expected:
+      decision: ask
+    note: "Pipeline with python3 -c in middle"
+
+  # List tests (&&, ||, ;)
+  - id: list-and-python
+    command: "true && python3 -c 'print(1)'"
+    expected:
+      decision: ask
+    note: "List with && and python3 -c"
+
+  - id: list-or-python
+    command: "false || python3 -c 'print(1)'"
+    expected:
+      decision: ask
+    note: "List with || and python3 -c"
+
+  - id: list-semi-python
+    command: "echo first; python3 -c 'print(2)'"
+    expected:
+      decision: ask
+    note: "List with ; and python3 -c"
+
+  - id: list-python-first
+    command: "python3 -c 'print(1)' && echo done"
+    expected:
+      decision: ask
+    note: "List with python3 -c first"
+
+  # Subshell tests
+  - id: subshell-python
+    command: "(python3 -c 'print(1)')"
+    expected:
+      decision: ask
+    note: "Subshell containing python3 -c"
+
+  - id: subshell-list-python
+    command: "(cd /tmp && python3 -c 'print(1)')"
+    expected:
+      decision: ask
+    note: "Subshell with list containing python3 -c"
+
+  # Command substitution tests
+  - id: substitution-python
+    command: "echo $(python3 -c 'print(1)')"
+    expected:
+      decision: ask
+    note: "Command substitution with python3 -c"
+
+  # Complex nested tests
+  - id: nested-pipeline-in-subshell
+    command: "(grep foo | python3 -c 'print(1)')"
+    expected:
+      decision: ask
+    note: "Pipeline in subshell with python3 -c"
+
+  # Perl tests
+  - id: pipeline-perl-e
+    command: "ls | perl -e 'print 1'"
+    expected:
+      decision: ask
+    note: "Pipeline with perl -e"
+
+  - id: standalone-perl-e
+    command: "perl -e 'print 1'"
+    expected:
+      decision: ask
+    note: "Standalone perl -e"

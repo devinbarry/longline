@@ -1,0 +1,146 @@
+# Tests for commands that should be allowlisted
+
+tests:
+  # Git info/help commands
+  - id: git-version-long
+    command: "git --version"
+    expected:
+      decision: allow
+    note: "Git version check should be allowed"
+
+  - id: git-version-short
+    command: "git -v"
+    expected:
+      decision: allow
+    note: "Git version short flag should be allowed"
+
+  - id: git-help
+    command: "git help"
+    expected:
+      decision: allow
+    note: "Git help should be allowed"
+
+  - id: git-help-short
+    command: "git -h"
+    expected:
+      decision: allow
+    note: "Git help short flag should be allowed"
+
+  - id: git-help-command
+    command: "git help commit"
+    expected:
+      decision: allow
+    note: "Git help for specific command should be allowed"
+
+  # Git maintenance/inspection commands
+  - id: git-gc
+    command: "git gc"
+    expected:
+      decision: allow
+    note: "Git garbage collection should be allowed"
+
+  - id: git-gc-auto
+    command: "git gc --auto"
+    expected:
+      decision: allow
+    note: "Git auto garbage collection should be allowed"
+
+  - id: git-fsck
+    command: "git fsck"
+    expected:
+      decision: allow
+    note: "Git filesystem check should be allowed"
+
+  - id: git-fsck-full
+    command: "git fsck --full"
+    expected:
+      decision: allow
+    note: "Git full filesystem check should be allowed"
+
+  - id: git-verify-pack
+    command: "git verify-pack -v .git/objects/pack/pack-abc.idx"
+    expected:
+      decision: allow
+    note: "Git verify-pack should be allowed"
+
+  # Git history/ref commands
+  - id: git-merge-base
+    command: "git merge-base HEAD main"
+    expected:
+      decision: allow
+    note: "Git merge-base should be allowed"
+
+  - id: git-merge-base-fork
+    command: "git merge-base --fork-point main"
+    expected:
+      decision: allow
+    note: "Git merge-base fork-point should be allowed"
+
+  - id: git-rev-list
+    command: "git rev-list HEAD"
+    expected:
+      decision: allow
+    note: "Git rev-list should be allowed"
+
+  - id: git-rev-list-count
+    command: "git rev-list --count HEAD"
+    expected:
+      decision: allow
+    note: "Git rev-list with count should be allowed"
+
+  - id: git-rev-list-range
+    command: "git rev-list HEAD~10..HEAD"
+    expected:
+      decision: allow
+    note: "Git rev-list with range should be allowed"
+
+  - id: git-for-each-ref
+    command: "git for-each-ref refs/heads"
+    expected:
+      decision: allow
+    note: "Git for-each-ref should be allowed"
+
+  - id: git-name-rev
+    command: "git name-rev HEAD"
+    expected:
+      decision: allow
+    note: "Git name-rev should be allowed"
+
+  # git symbolic-ref removed - has destructive --delete mode
+
+  # uv commands
+  - id: uv-run-pyright
+    command: "uv run pyright"
+    expected:
+      decision: allow
+    note: "uv run pyright should be allowed"
+
+  - id: uv-run-pyright-path
+    command: "uv run pyright src/"
+    expected:
+      decision: allow
+    note: "uv run pyright with path should be allowed"
+
+  - id: uv-run-pyright-version
+    command: "uv run pyright --version"
+    expected:
+      decision: allow
+    note: "uv run pyright version should be allowed"
+
+  - id: uv-run-bandit
+    command: "uv run bandit -r src/"
+    expected:
+      decision: allow
+    note: "uv run bandit should be allowed"
+
+  - id: uv-run-coverage-run
+    command: "uv run coverage run -m pytest"
+    expected:
+      decision: allow
+    note: "uv run coverage should be allowed"
+
+  - id: uv-run-coverage-report
+    command: "uv run coverage report"
+    expected:
+      decision: allow
+    note: "uv run coverage report should be allowed"
