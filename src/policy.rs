@@ -108,6 +108,10 @@ pub struct FlagsMatcher {
     pub all_of: Vec<String>,
     #[serde(default)]
     pub none_of: Vec<String>,
+    /// Match if any argument starts with any of these prefixes.
+    /// Useful for combined short flags like -xf, -xvf matching "-x".
+    #[serde(default)]
+    pub starts_with: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -355,6 +359,17 @@ fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         .iter()
                         .any(|f| cmd.argv.iter().any(|a| a == f));
                     if has_any_excluded {
+                        return false;
+                    }
+                }
+                // starts_with: rule matches if any arg starts with any of these prefixes
+                // Useful for combined flags like -xf matching "-x"
+                if !flags_matcher.starts_with.is_empty() {
+                    let has_prefix = flags_matcher
+                        .starts_with
+                        .iter()
+                        .any(|prefix| cmd.argv.iter().any(|a| a.starts_with(prefix)));
+                    if !has_prefix {
                         return false;
                     }
                 }
@@ -984,5 +999,199 @@ rules:
         let stmt2 = parse("unzip archive.zip").unwrap();
         let result2 = evaluate(&config, &stmt2);
         assert_eq!(result2.decision, Decision::Ask);
+    }
+
+    // --- starts_with flag prefix matching tests ---
+
+    #[test]
+    fn test_starts_with_matches_exact() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: tar-extract
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x", "--extract"]
+    decision: ask
+    reason: "tar extraction can overwrite files"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // Exact match with -x
+        let stmt = parse("tar -x archive.tar").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(result.rule_id.as_deref(), Some("tar-extract"));
+    }
+
+    #[test]
+    fn test_starts_with_matches_combined_flags() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: tar-extract
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x"]
+    decision: ask
+    reason: "tar extraction can overwrite files"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // Combined flag -xf should match starts_with "-x"
+        let stmt = parse("tar -xf archive.tar").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+
+        // Combined flag -xvf should match
+        let stmt2 = parse("tar -xvf archive.tar").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Ask);
+
+        // Combined flag -xzf should match
+        let stmt3 = parse("tar -xzf archive.tar.gz").unwrap();
+        let result3 = evaluate(&config, &stmt3);
+        assert_eq!(result3.decision, Decision::Ask);
+    }
+
+    #[test]
+    fn test_starts_with_no_match_different_flag() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: tar-extract
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x", "--extract"]
+    decision: ask
+    reason: "tar extraction can overwrite files"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // -t (list) should NOT match starts_with "-x"
+        let stmt = parse("tar -tf archive.tar").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+
+        // -c (create) should NOT match
+        let stmt2 = parse("tar -cvf archive.tar files/").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_starts_with_long_flag() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: tar-extract
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x", "--extract"]
+    decision: ask
+    reason: "tar extraction can overwrite files"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // Long flag --extract should match
+        let stmt = parse("tar --extract -f archive.tar").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+    }
+
+    #[test]
+    fn test_starts_with_sed_inplace() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: sed-inplace
+    level: high
+    match:
+      command: sed
+      flags:
+        starts_with: ["-i"]
+    decision: ask
+    reason: "sed -i modifies files in place"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // -i should match
+        let stmt = parse("sed -i 's/a/b/' file.txt").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+
+        // -i.bak (backup suffix) should also match starts_with "-i"
+        let stmt2 = parse("sed -i.bak 's/a/b/' file.txt").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Ask);
+
+        // No -i should NOT match
+        let stmt3 = parse("sed 's/a/b/' file.txt").unwrap();
+        let result3 = evaluate(&config, &stmt3);
+        assert_eq!(result3.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_starts_with_combined_with_none_of() {
+        // Test that starts_with and none_of can work together
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: tar-extract-not-verbose
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x"]
+        none_of: ["--verbose", "-v"]
+    decision: ask
+    reason: "tar extract without verbose"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // -xf (has -x prefix, no -v) should match
+        let stmt = parse("tar -xf archive.tar").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+
+        // -xf with separate -v should NOT match (none_of excludes)
+        let stmt2 = parse("tar -xf -v archive.tar").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Allow);
+
+        // Note: -xvf won't be excluded because -v is embedded, not separate
+        // This is a known limitation - none_of checks exact matches
     }
 }
