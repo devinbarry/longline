@@ -106,6 +106,8 @@ pub struct FlagsMatcher {
     pub any_of: Vec<String>,
     #[serde(default)]
     pub all_of: Vec<String>,
+    #[serde(default)]
+    pub none_of: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -343,6 +345,16 @@ fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         .iter()
                         .all(|f| cmd.argv.iter().any(|a| a == f));
                     if !has_all {
+                        return false;
+                    }
+                }
+                // none_of: rule matches only if NONE of these flags are present
+                if !flags_matcher.none_of.is_empty() {
+                    let has_any_excluded = flags_matcher
+                        .none_of
+                        .iter()
+                        .any(|f| cmd.argv.iter().any(|a| a == f));
+                    if has_any_excluded {
                         return false;
                     }
                 }
@@ -824,5 +836,153 @@ rules:
         let stmt = crate::parser::parse("echo $(cat .env)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Deny);
+    }
+
+    // --- none_of flag matching tests ---
+
+    #[test]
+    fn test_none_of_flags_matches_when_absent() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: gzip-no-keep
+    level: high
+    match:
+      command: gzip
+      flags:
+        none_of: ["-k", "--keep", "-c", "--stdout"]
+    decision: ask
+    reason: "gzip removes original file by default"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        // No safe flags present - rule should match
+        let stmt = parse("gzip file.txt").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(result.rule_id.as_deref(), Some("gzip-no-keep"));
+    }
+
+    #[test]
+    fn test_none_of_flags_no_match_when_present() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: gzip-no-keep
+    level: high
+    match:
+      command: gzip
+      flags:
+        none_of: ["-k", "--keep", "-c", "--stdout"]
+    decision: ask
+    reason: "gzip removes original file by default"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        // Safe flag present - rule should NOT match
+        let stmt = parse("gzip -k file.txt").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+        assert!(result.rule_id.is_none());
+    }
+
+    #[test]
+    fn test_none_of_with_keep_long_flag() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: gzip-no-keep
+    level: high
+    match:
+      command: gzip
+      flags:
+        none_of: ["-k", "--keep"]
+    decision: ask
+    reason: "gzip removes original file by default"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        // --keep flag present - rule should NOT match
+        let stmt = parse("gzip --keep file.txt").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_none_of_combined_with_any_of() {
+        // Test combining any_of and none_of with separate flags
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: cmd-with-a-not-b
+    level: high
+    match:
+      command: mycmd
+      flags:
+        any_of: ["-a", "--alpha"]
+        none_of: ["-b", "--beta"]
+    decision: ask
+    reason: "has -a but not -b"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // Has -a but no -b - should match
+        let stmt = parse("mycmd -a file.txt").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+
+        // Has -a and -b - should NOT match (none_of excludes it)
+        let stmt2 = parse("mycmd -a -b file.txt").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Allow);
+
+        // No -a - should NOT match (any_of not satisfied)
+        let stmt3 = parse("mycmd -c file.txt").unwrap();
+        let result3 = evaluate(&config, &stmt3);
+        assert_eq!(result3.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_none_of_unzip_list_safe() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: unzip-extract
+    level: high
+    match:
+      command: unzip
+      flags:
+        none_of: ["-l", "-t", "-Z"]
+    decision: ask
+    reason: "unzip extraction can overwrite files"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+
+        // List operation - safe, rule should NOT match
+        let stmt = parse("unzip -l archive.zip").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+
+        // Extract operation - dangerous, rule should match
+        let stmt2 = parse("unzip archive.zip").unwrap();
+        let result2 = evaluate(&config, &stmt2);
+        assert_eq!(result2.decision, Decision::Ask);
     }
 }
