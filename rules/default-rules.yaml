@@ -73,6 +73,9 @@ allowlists:
     - "uv run isort"
     - "uv run flake8"
     - "uv run pylint"
+    - "uv run pyright"
+    - "uv run bandit"
+    - "uv run coverage"
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
     - mkdir
     - touch
@@ -125,6 +128,20 @@ allowlists:
     - "git ls-files"
     - "git ls-tree"
     - "git cat-file"
+    # ── Git: info/help commands ───────────────────────────────────
+    - "git --version"
+    - "git -v"
+    - "git help"
+    - "git -h"
+    # ── Git: maintenance/inspection commands ──────────────────────
+    - "git gc"
+    - "git fsck"
+    - "git verify-pack"
+    # ── Git: history/ref commands ─────────────────────────────────
+    - "git merge-base"
+    - "git rev-list"
+    - "git for-each-ref"
+    - "git name-rev"
     # ── Cargo: safe invocations ───────────────────────────────────
     - "cargo build"
     - "cargo test"

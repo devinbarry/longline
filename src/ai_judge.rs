@@ -102,14 +102,52 @@ fn default_config() -> AiJudgeConfig {
 
 // ── Trigger detection ───────────────────────────────────────────
 
-/// Check if a statement is an interpreter with inline code.
+/// Check if a statement contains an interpreter with inline code.
 /// Returns (language, code) if matched.
+/// Recurses into Pipeline, List, Subshell, and CommandSubstitution to find interpreter stages.
 pub fn extract_inline_code(stmt: &Statement, config: &AiJudgeConfig) -> Option<(String, String)> {
-    let cmd = match stmt {
-        Statement::SimpleCommand(cmd) => cmd,
-        _ => return None,
-    };
+    match stmt {
+        Statement::SimpleCommand(cmd) => {
+            // First check embedded substitutions
+            for sub in &cmd.embedded_substitutions {
+                if let Some(result) = extract_inline_code(sub, config) {
+                    return Some(result);
+                }
+            }
+            // Then check the command itself
+            extract_from_simple_command(cmd, config)
+        }
+        Statement::Pipeline(pipeline) => {
+            for stage in &pipeline.stages {
+                if let Some(result) = extract_inline_code(stage, config) {
+                    return Some(result);
+                }
+            }
+            None
+        }
+        Statement::List(list) => {
+            if let Some(result) = extract_inline_code(&list.first, config) {
+                return Some(result);
+            }
+            for (_, stmt) in &list.rest {
+                if let Some(result) = extract_inline_code(stmt, config) {
+                    return Some(result);
+                }
+            }
+            None
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            extract_inline_code(inner, config)
+        }
+        Statement::Opaque(_) => None,
+    }
+}
 
+/// Extract inline code from a simple command if it matches a trigger.
+fn extract_from_simple_command(
+    cmd: &crate::parser::SimpleCommand,
+    config: &AiJudgeConfig,
+) -> Option<(String, String)> {
     let cmd_name = cmd.name.as_deref()?;
 
     for trigger in &config.triggers.interpreters {
@@ -158,22 +196,30 @@ pub fn build_prompt(language: &str, code: &str, cwd: &str) -> String {
 
 // ── Response parsing ────────────────────────────────────────────
 
-pub fn parse_response(output: &str) -> Decision {
+/// Parse the AI judge response, returning both the decision and the full reason line.
+pub fn parse_response_with_reason(output: &str) -> (Decision, String) {
     for line in output.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("ALLOW:") {
-            return Decision::Allow;
+            return (Decision::Allow, trimmed.to_string());
         }
         if trimmed.starts_with("ASK:") {
-            return Decision::Ask;
+            return (Decision::Ask, trimmed.to_string());
         }
     }
-    Decision::Ask
+    (Decision::Ask, "AI judge: unparseable response".to_string())
 }
 
 // ── LLM invocation ─────────────────────────────────────────────
 
-pub fn evaluate(config: &AiJudgeConfig, language: &str, code: &str, cwd: &str) -> Decision {
+/// Evaluate inline code using the AI judge.
+/// Returns (decision, reason) where reason is the AI's assessment.
+pub fn evaluate(
+    config: &AiJudgeConfig,
+    language: &str,
+    code: &str,
+    cwd: &str,
+) -> (Decision, String) {
     let prompt = build_prompt(language, code, cwd);
 
     let parts: Vec<String> = config
@@ -182,8 +228,9 @@ pub fn evaluate(config: &AiJudgeConfig, language: &str, code: &str, cwd: &str) -
         .map(String::from)
         .collect();
     if parts.is_empty() {
+        let reason = "AI judge error: command is empty".to_string();
         eprintln!("longline: ai-judge command is empty");
-        return Decision::Ask;
+        return (Decision::Ask, reason);
     }
 
     let timeout = std::time::Duration::from_secs(config.timeout);
@@ -202,19 +249,22 @@ pub fn evaluate(config: &AiJudgeConfig, language: &str, code: &str, cwd: &str) -
     match rx.recv_timeout(timeout) {
         Ok(Ok(output)) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            parse_response(&stdout)
+            parse_response_with_reason(&stdout)
         }
         Ok(Err(e)) => {
+            let reason = format!("AI judge error: {e}");
             eprintln!("longline: ai-judge process error: {e}");
-            Decision::Ask
+            (Decision::Ask, reason)
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            let reason = format!("AI judge error: timed out after {}s", config.timeout);
             eprintln!("longline: ai-judge timed out after {}s", config.timeout);
-            Decision::Ask
+            (Decision::Ask, reason)
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            let reason = "AI judge error: thread error".to_string();
             eprintln!("longline: ai-judge thread error");
-            Decision::Ask
+            (Decision::Ask, reason)
         }
     }
 }
@@ -285,12 +335,212 @@ mod tests {
         assert!(result.is_none());
     }
 
+    // ============================================================
+    // Pipeline extraction tests
+    // ============================================================
+
     #[test]
-    fn test_no_extract_for_pipeline() {
-        let stmt = parser::parse("echo hello | python3 -c 'import sys'").unwrap();
+    fn test_extract_from_pipeline_end() {
+        let stmt = parser::parse("grep foo | python3 -c 'print(1)'").unwrap();
         let config = test_config();
         let result = extract_inline_code(&stmt, &config);
-        assert!(result.is_none());
+        assert!(result.is_some(), "Should extract from pipeline end");
+        let (lang, code) = result.unwrap();
+        assert_eq!(lang, "python3");
+        assert_eq!(code, "print(1)");
+    }
+
+    #[test]
+    fn test_extract_from_pipeline_start() {
+        let stmt = parser::parse("python3 -c 'print(1)' | grep 1").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from pipeline start");
+        let (lang, code) = result.unwrap();
+        assert_eq!(lang, "python3");
+        assert_eq!(code, "print(1)");
+    }
+
+    #[test]
+    fn test_extract_from_pipeline_middle() {
+        let stmt = parser::parse("echo x | python3 -c 'print(1)' | cat").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from pipeline middle");
+    }
+
+    #[test]
+    fn test_extract_from_multi_stage_pipeline() {
+        let stmt = parser::parse("grep a | sort | uniq | python3 -c 'print(1)'").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from multi-stage pipeline");
+    }
+
+    #[test]
+    fn test_no_extract_from_pipeline_without_interpreter() {
+        let stmt = parser::parse("grep foo | sort | uniq").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(
+            result.is_none(),
+            "Should not extract from pipeline without interpreter"
+        );
+    }
+
+    // ============================================================
+    // List extraction tests
+    // ============================================================
+
+    #[test]
+    fn test_extract_from_and_list() {
+        let stmt = parser::parse("echo ok && python3 -c 'print(1)'").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from && list");
+    }
+
+    #[test]
+    fn test_extract_from_or_list() {
+        let stmt = parser::parse("false || python3 -c 'print(1)'").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from || list");
+    }
+
+    #[test]
+    fn test_extract_from_semicolon_list() {
+        let stmt = parser::parse("echo a; python3 -c 'print(1)'").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from ; list");
+    }
+
+    #[test]
+    fn test_extract_from_list_first_element() {
+        let stmt = parser::parse("python3 -c 'print(1)' && echo done").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from list first element");
+    }
+
+    // ============================================================
+    // Subshell extraction tests
+    // ============================================================
+
+    #[test]
+    fn test_extract_from_subshell() {
+        let stmt = parser::parse("(python3 -c 'print(1)')").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from subshell");
+    }
+
+    // ============================================================
+    // Command substitution extraction tests
+    // ============================================================
+
+    #[test]
+    fn test_extract_from_command_substitution() {
+        let stmt = parser::parse("echo $(python3 -c 'print(1)')").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from command substitution");
+    }
+
+    #[test]
+    fn test_extract_from_backtick_substitution() {
+        let stmt = parser::parse("echo `python3 -c 'print(1)'`").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(
+            result.is_some(),
+            "Should extract from backtick substitution"
+        );
+    }
+
+    // ============================================================
+    // Complex nested tests
+    // ============================================================
+
+    #[test]
+    fn test_extract_from_pipeline_in_subshell() {
+        let stmt = parser::parse("(grep foo | python3 -c 'print(1)')").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_some(), "Should extract from pipeline in subshell");
+    }
+
+    // ============================================================
+    // Negative tests - should NOT extract
+    // ============================================================
+
+    #[test]
+    fn test_no_extract_for_module() {
+        let stmt = parser::parse("python3 -m pytest").unwrap();
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_none(), "Should not extract for -m flag");
+    }
+
+    #[test]
+    fn test_no_extract_for_opaque() {
+        let stmt = Statement::Opaque("some complex thing".to_string());
+        let config = test_config();
+        let result = extract_inline_code(&stmt, &config);
+        assert!(result.is_none(), "Should not extract from Opaque");
+    }
+
+    // ============================================================
+    // Response parsing with reason tests
+    // ============================================================
+
+    #[test]
+    fn test_parse_response_with_reason_allow() {
+        let (decision, reason) = parse_response_with_reason("ALLOW: safe computation only");
+        assert_eq!(decision, Decision::Allow);
+        assert_eq!(reason, "ALLOW: safe computation only");
+    }
+
+    #[test]
+    fn test_parse_response_with_reason_ask() {
+        let (decision, reason) = parse_response_with_reason("ASK: accesses files outside cwd");
+        assert_eq!(decision, Decision::Ask);
+        assert_eq!(reason, "ASK: accesses files outside cwd");
+    }
+
+    #[test]
+    fn test_parse_response_with_noise_before() {
+        let output = "Loading model...\nALLOW: safe computation";
+        let (decision, reason) = parse_response_with_reason(output);
+        assert_eq!(decision, Decision::Allow);
+        assert_eq!(reason, "ALLOW: safe computation");
+    }
+
+    #[test]
+    fn test_parse_response_with_noise_after() {
+        let output = "ASK: network access\nTokens used: 150";
+        let (decision, reason) = parse_response_with_reason(output);
+        assert_eq!(decision, Decision::Ask);
+        assert_eq!(reason, "ASK: network access");
+    }
+
+    #[test]
+    fn test_parse_response_with_reason_unparseable() {
+        let (decision, reason) = parse_response_with_reason("something random");
+        assert_eq!(decision, Decision::Ask);
+        assert!(
+            reason.contains("unparseable"),
+            "Reason should indicate unparseable: {}",
+            reason
+        );
+    }
+
+    #[test]
+    fn test_parse_response_with_reason_empty() {
+        let (decision, reason) = parse_response_with_reason("");
+        assert_eq!(decision, Decision::Ask);
+        assert!(reason.contains("unparseable") || reason.contains("AI judge"));
     }
 
     #[test]
@@ -305,31 +555,33 @@ mod tests {
 
     #[test]
     fn test_parse_response_allow() {
-        assert_eq!(parse_response("ALLOW: safe computation"), Decision::Allow);
+        let (decision, _) = parse_response_with_reason("ALLOW: safe computation");
+        assert_eq!(decision, Decision::Allow);
     }
 
     #[test]
     fn test_parse_response_ask() {
-        assert_eq!(
-            parse_response("ASK: network access detected"),
-            Decision::Ask
-        );
+        let (decision, _) = parse_response_with_reason("ASK: network access detected");
+        assert_eq!(decision, Decision::Ask);
     }
 
     #[test]
     fn test_parse_response_with_noise() {
         let output = "OpenAI Codex v0.84.0\n--------\nALLOW: safe computation\ntokens used\n";
-        assert_eq!(parse_response(output), Decision::Allow);
+        let (decision, _) = parse_response_with_reason(output);
+        assert_eq!(decision, Decision::Allow);
     }
 
     #[test]
     fn test_parse_response_unparseable() {
-        assert_eq!(parse_response("something unexpected"), Decision::Ask);
+        let (decision, _) = parse_response_with_reason("something unexpected");
+        assert_eq!(decision, Decision::Ask);
     }
 
     #[test]
     fn test_parse_response_empty() {
-        assert_eq!(parse_response(""), Decision::Ask);
+        let (decision, _) = parse_response_with_reason("");
+        assert_eq!(decision, Decision::Ask);
     }
 
     #[test]

@@ -166,3 +166,13 @@ fn golden_command_substitution() {
 fn golden_find_xargs() {
     run_golden_suite("find-xargs.yaml");
 }
+
+#[test]
+fn golden_ai_judge_extraction() {
+    run_golden_suite("ai-judge-extraction.yaml");
+}
+
+#[test]
+fn golden_missing_allowlist() {
+    run_golden_suite("missing-allowlist.yaml");
+}

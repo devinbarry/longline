@@ -186,33 +186,42 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
     };
 
     // AI judge: evaluate inline interpreter code instead of asking user
-    let final_decision = if ask_ai && initial_decision == Decision::Ask {
+    let (final_decision, ai_reason) = if ask_ai && initial_decision == Decision::Ask {
         let ai_config = ai_judge::load_config();
         match ai_judge::extract_inline_code(&stmt, &ai_config) {
             Some((language, code)) => {
-                let cwd = hook_input.cwd.as_deref().unwrap_or("");
-                let ai_decision = ai_judge::evaluate(&ai_config, &language, &code, cwd);
+                // Default to "." if cwd is empty or missing
+                let cwd = hook_input
+                    .cwd
+                    .as_deref()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or(".");
+                let (ai_decision, reason) = ai_judge::evaluate(&ai_config, &language, &code, cwd);
                 eprintln!("longline: ai-judge evaluated {language} code: {ai_decision}");
-                ai_decision
+                (ai_decision, Some(reason))
             }
-            None => initial_decision,
+            None => (initial_decision, None),
         }
     } else {
-        initial_decision
+        (initial_decision, None)
     };
 
     // Log the decision
+    // Use AI reason if available, otherwise policy reason
+    let log_reason = if let Some(ref ai_reason) = ai_reason {
+        Some(ai_reason.clone())
+    } else if result.reason.is_empty() {
+        None
+    } else {
+        Some(result.reason.clone())
+    };
     let mut entry = logger::make_entry(
         &hook_input.tool_name,
         hook_input.cwd.as_deref().unwrap_or(""),
         command,
         final_decision,
         result.rule_id.clone().into_iter().collect(),
-        if result.reason.is_empty() {
-            None
-        } else {
-            Some(result.reason.clone())
-        },
+        log_reason,
         parse_ok,
         hook_input.session_id.clone(),
     );
@@ -225,12 +234,20 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
     // Output the decision
     match final_decision {
         Decision::Allow => {
-            let reason = format!("longline: {}", result.reason);
+            // Use AI reason if available, otherwise policy reason
+            let reason = if let Some(ref ai_reason) = ai_reason {
+                format!("longline: {}", ai_reason)
+            } else {
+                format!("longline: {}", result.reason)
+            };
             let output = HookOutput::decision(Decision::Allow, &reason);
             print_json(&output);
         }
         Decision::Ask | Decision::Deny => {
-            let reason = if overridden {
+            // Use AI reason if available, otherwise policy reason
+            let reason = if let Some(ref ai_reason) = ai_reason {
+                ai_reason.clone()
+            } else if overridden {
                 format!("[overridden] {}", format_reason(&result))
             } else {
                 format_reason(&result)
