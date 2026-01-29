@@ -176,3 +176,8 @@ fn golden_ai_judge_extraction() {
 fn golden_missing_allowlist() {
     run_golden_suite("missing-allowlist.yaml");
 }
+
+#[test]
+fn golden_allowlist_bypass() {
+    run_golden_suite("allowlist-bypass.yaml");
+}
