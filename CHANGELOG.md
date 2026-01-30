@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-01-30
+
+
+### Added
+
+- add none_of flag matcher for inverse flag matching
+- add starts_with prefix matching for combined flags
+- add filesystem destructive operation rules
+- add git destructive operation rules
+- add package manager security rules
+- add version field to log entries
+- add justfile for dev commands and release workflow
+- add cargo-release configuration
+- add git-cliff configuration for changelog generation
+
+
+### Changed
+
+- add allowlist bypass security audit tests
+- fix npm run/start expectations (dev tasks are allowed)
+- update safe-commands expectations for new security rules
+- add sed -n print lines test to ensure read-only sed is allowed
+- add versioning design plan
+- add versioning implementation plan
+- update plan and design to reflect cargo-release hook limitations
+- remove install.sh (replaced by justfile)
+- add license, repository, and publish=false to Cargo.toml
+- add CHANGELOG.md for v0.1.0
+
+
+### Fixed
+
+- AI judge now handles pipelines and returns reasons
+- add --no-confirm and --force flags to justfile release
 ## [v0.1.0] - 2026-01-28
 
 
