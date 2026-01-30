@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+
+### Fixed
+
+- consistent changelog version format and section spacing
+
 ## [0.1.1] - 2026-01-30
 
 
@@ -30,6 +37,7 @@ All notable changes to this project will be documented in this file.
 - remove install.sh (replaced by justfile)
 - add license, repository, and publish=false to Cargo.toml
 - add CHANGELOG.md for v0.1.0
+- release v0.1.1
 
 
 ### Fixed
@@ -81,17 +89,23 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - add project brief and design documents for longline
+- add MVP implementation plan
 - final cleanup and lint fixes
 - add CLAUDE.md with project guidance for Claude Code
+- add rules override and secrets hardening plans
 - split allowlist into always-safe and conditionally-safe groups
 - update git golden tests for allowlist classification
 - add golden tests for expanded build tool safe invocations
 - add golden tests for non-allowlisted build tool commands
 - remove superseded design doc
 - add design for diagnostic and override modes
+- add allowlist classification plan
 - restructure CLI for subcommand support
+- apply cargo fmt
 - move claude permissions to settings.json and gitignore settings.local
+- apply cargo fmt formatting
 - add git hooks design plan
+- apply cargo fmt to ai_judge and output modules
 - add longline hook to Claude Code settings
 - add design plans for diagnostics, table formatting, and ai-judge
 - add bypass attempt golden tests for security audit
@@ -108,3 +122,4 @@ All notable changes to this project will be documented in this file.
 - use f.pad() in Display impls to respect format width specifiers
 - re-add find and xargs to bare allowlist
 - do not install rules by default in install script
+

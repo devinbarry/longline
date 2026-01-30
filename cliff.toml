@@ -29,6 +29,7 @@ commit_parsers = [
     { message = "^perf", group = "Changed" },
     { message = "^test", group = "Changed" },
     { message = "^docs", group = "Changed" },
+    { message = "^style", group = "Changed" },
     { message = "^chore", group = "Changed" },
 ]
 filter_commits = true
