@@ -140,6 +140,10 @@ tests:
     command: "sed 's/old/new/g' file.txt"
     expected:
       decision: allow
+  - id: sed-print-lines-safe
+    command: "sed -n '1,10p' file.txt"
+    expected:
+      decision: allow
   - id: awk-safe
     command: "awk '{print $1}' file.txt"
     expected:
