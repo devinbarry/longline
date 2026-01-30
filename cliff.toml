@@ -1,0 +1,32 @@
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+"""
+body = """
+{% if version %}## [{{ version }}] - {{ timestamp | default(value=now()) | date(format="%Y-%m-%d") }}{% else %}## [Unreleased]{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+
+### {{ group | title }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first }}
+{%- endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+    { message = "^feat", group = "Added" },
+    { message = "^fix", group = "Fixed" },
+    { message = "^refactor", group = "Changed" },
+    { message = "^perf", group = "Changed" },
+    { message = "^test", group = "Changed" },
+    { message = "^docs", group = "Changed" },
+    { message = "^chore", group = "Changed" },
+]
+filter_commits = true
