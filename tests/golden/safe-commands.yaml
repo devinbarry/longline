@@ -34,7 +34,8 @@ tests:
   - id: npm-install-safe
     command: "npm install"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: npm-install
   - id: npm-test-safe
     command: "npm test"
     expected:
@@ -170,7 +171,8 @@ tests:
   - id: npx-safe
     command: "npx create-react-app myapp"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: npx-run
   - id: node-inline-ask
     command: "node -e 'console.log(1)'"
     expected:
@@ -178,11 +180,13 @@ tests:
   - id: pip-safe
     command: "pip install requests"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: pip-install
   - id: pip3-safe
     command: "pip3 install flask"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: pip-install
   - id: ruby-script-ask
     command: "ruby script.rb"
     expected:
@@ -190,7 +194,8 @@ tests:
   - id: gem-safe
     command: "gem install bundler"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: gem-install
   - id: go-safe
     command: "go build ./..."
     expected:
@@ -352,7 +357,8 @@ tests:
   - id: npm-ci-safe
     command: "npm ci"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: npm-install
   - id: npm-start-safe
     command: "npm start"
     expected:
