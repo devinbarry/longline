@@ -36,7 +36,8 @@ All notable changes to this project will be documented in this file.
 
 - AI judge now handles pipelines and returns reasons
 - add --no-confirm and --force flags to justfile release
-## [v0.1.0] - 2026-01-28
+
+## [0.1.0] - 2026-01-28
 
 
 ### Added
