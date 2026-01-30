@@ -4,8 +4,8 @@ default:
 
 # Release and install a new version (patch/minor/major)
 release level:
-    cargo release {{level}} --execute
-    cargo install --path . --root ~/.local
+    cargo release {{level}} --execute --no-confirm
+    cargo install --path . --root ~/.local --force
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
@@ -32,4 +32,4 @@ fmt:
 
 # Install binary to ~/.local/bin
 install:
-    cargo install --path . --root ~/.local
+    cargo install --path . --root ~/.local --force
