@@ -8,6 +8,7 @@ use crate::types::Decision;
 
 #[derive(Debug, Serialize)]
 pub struct LogEntry {
+    pub version: &'static str,
     pub ts: String,
     pub tool: String,
     pub cwd: String,
@@ -88,6 +89,7 @@ pub fn make_entry(
     };
 
     LogEntry {
+        version: env!("CARGO_PKG_VERSION"),
         ts: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         tool: tool.to_string(),
         cwd: cwd.to_string(),
@@ -152,6 +154,7 @@ mod tests {
             Some("session-123".into()),
         );
         let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"version\":\""));
         assert!(json.contains("\"decision\":\"deny\""));
         assert!(json.contains("\"rm-recursive-root\""));
         assert!(json.contains("\"session_id\":\"session-123\""));
