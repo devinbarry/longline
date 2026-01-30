@@ -2,12 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.2] - 2026-01-30
 
 
 ### Fixed
 
 - consistent changelog version format and section spacing
+- add style commits to changelog and regenerate
 
 ## [0.1.1] - 2026-01-30
 
