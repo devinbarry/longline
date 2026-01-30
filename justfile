@@ -5,6 +5,7 @@ default:
 # Release and install a new version (patch/minor/major)
 release level:
     cargo release {{level}} --execute
+    cargo install --path . --root ~/.local
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
@@ -29,7 +30,6 @@ lint:
 fmt:
     cargo fmt
 
-# Internal: called by cargo-release post-release hook
-[private]
-_install:
+# Install binary to ~/.local/bin
+install:
     cargo install --path . --root ~/.local
