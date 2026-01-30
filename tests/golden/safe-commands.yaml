@@ -151,11 +151,13 @@ tests:
   - id: gzip-safe
     command: "gzip file.txt"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: gzip-no-keep
   - id: gunzip-safe
     command: "gunzip file.txt.gz"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: gunzip-no-keep
   - id: zip-safe
     command: "zip archive.zip file.txt"
     expected:
@@ -163,7 +165,8 @@ tests:
   - id: unzip-safe
     command: "unzip archive.zip"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: unzip-extract
   - id: rustc-safe
     command: "rustc --version"
     expected:
@@ -227,7 +230,8 @@ tests:
   - id: patch-safe
     command: "patch -p1 < fix.patch"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: patch-apply
   - id: test-safe
     command: "test -f file.txt"
     expected:
@@ -295,7 +299,8 @@ tests:
   - id: tar-extract
     command: "tar -xzf archive.tar.gz"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: tar-extract
   - id: stat-safe
     command: "stat file.txt"
     expected:
