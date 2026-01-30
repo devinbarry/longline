@@ -453,6 +453,127 @@ rules:
     decision: ask
     reason: "git commit --amend rewrites the previous commit"
 
+  - id: git-remote-modify
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["remote"]
+      flags:
+        any_of: ["add", "remove", "rm", "set-url", "rename"]
+    decision: ask
+    reason: "Modifying git remote configuration"
+
+  - id: git-tag-delete
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["tag"]
+      flags:
+        any_of: ["-d", "--delete"]
+    decision: ask
+    reason: "Deleting git tag"
+
+  - id: git-push-delete
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["push"]
+      flags:
+        any_of: ["--delete", "-d"]
+    decision: ask
+    reason: "Deleting remote branch or tag"
+
+  - id: git-config-global
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["config"]
+      flags:
+        any_of: ["--global", "--system"]
+    decision: ask
+    reason: "Modifying global/system git configuration"
+
+  - id: git-stash-drop
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["stash"]
+      flags:
+        any_of: ["drop", "clear"]
+    decision: ask
+    reason: "Dropping stashed changes (data loss)"
+
+  - id: git-reflog-delete
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["reflog"]
+      flags:
+        any_of: ["delete", "expire"]
+    decision: ask
+    reason: "Deleting reflog entries (history loss)"
+
+  - id: git-gc-prune
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["gc"]
+      flags:
+        starts_with: ["--prune"]
+    decision: ask
+    reason: "git gc with pruning can remove unreachable objects"
+
+  - id: git-worktree-remove
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["worktree"]
+      flags:
+        any_of: ["remove", "prune"]
+    decision: ask
+    reason: "Removing git worktree"
+
+  - id: git-bisect-reset
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["bisect"]
+      flags:
+        any_of: ["reset"]
+    decision: ask
+    reason: "Exiting bisect mode (changes HEAD)"
+
+  - id: git-pull-force
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["pull"]
+      flags:
+        any_of: ["--force", "-f"]
+    decision: ask
+    reason: "git pull --force can overwrite local changes"
+
+  - id: git-rebase-abort
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["rebase"]
+      flags:
+        any_of: ["--abort", "--skip"]
+    decision: ask
+    reason: "Aborting or skipping rebase (may lose changes)"
+
   # ============================================================
   # HIGH: Exfiltration
   # ============================================================
