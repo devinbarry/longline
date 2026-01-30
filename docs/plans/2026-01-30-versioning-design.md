@@ -45,7 +45,6 @@ Add to clap derive in `src/cli.rs`:
 Create `release.toml`:
 
 ```toml
-[workspace]
 allow-branch = ["master"]
 sign-commit = false
 sign-tag = false
@@ -53,8 +52,9 @@ push = false
 tag-name = "v{{version}}"
 pre-release-commit-message = "chore: release v{{version}}"
 pre-release-hook = ["git-cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
-post-release-hook = ["just", "_install"]
 ```
+
+Note: cargo-release only supports `pre-release-hook`, not `post-release-hook`. The install step is handled by the justfile `release` recipe instead (see below).
 
 ### 4. git-cliff Configuration
 
@@ -98,6 +98,11 @@ default:
 # Release and install a new version (patch/minor/major)
 release level:
     cargo release {{level}} --execute
+    cargo install --path . --root ~/.local
+
+# Install binary to ~/.local/bin (for manual installs)
+install:
+    cargo install --path . --root ~/.local
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
@@ -121,12 +126,9 @@ lint:
 # Format code
 fmt:
     cargo fmt
-
-# Internal: called by cargo-release post-release hook
-[private]
-_install:
-    cargo install --path . --root ~/.local
 ```
+
+Note: The install is inlined in the `release` recipe because cargo-release doesn't support `post-release-hook`. A separate `install` recipe is provided for manual installs when needed.
 
 ## File Changes Summary
 
@@ -159,8 +161,8 @@ just release major  # 0.1.0 → 1.0.0
 ```
 
 Each release:
-1. Runs git-cliff to update CHANGELOG.md
+1. Runs git-cliff to update CHANGELOG.md (pre-release-hook)
 2. Bumps version in Cargo.toml
 3. Commits "chore: release v0.2.0"
 4. Creates git tag `v0.2.0`
-5. Runs `just _install` to install to `~/.local/bin`
+5. Installs binary to `~/.local/bin` (justfile inline, after cargo-release completes)

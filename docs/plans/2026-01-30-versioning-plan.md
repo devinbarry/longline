@@ -4,7 +4,7 @@
 
 **Goal:** Add version tracking to logs and implement industry-standard release workflow with cargo-release, git-cliff, and justfile.
 
-**Architecture:** Version embedded at compile time via `env!("CARGO_PKG_VERSION")`. Releases managed by cargo-release which bumps Cargo.toml, generates changelog via git-cliff, commits, tags, and auto-installs via justfile hook.
+**Architecture:** Version embedded at compile time via `env!("CARGO_PKG_VERSION")`. Releases managed by cargo-release which bumps Cargo.toml, generates changelog via git-cliff (pre-release-hook), commits, and tags. Install is handled by the justfile `release` recipe after cargo-release completes (cargo-release doesn't support post-release hooks).
 
 **Tech Stack:** cargo-release, git-cliff, just
 
@@ -98,6 +98,11 @@ default:
 # Release and install a new version (patch/minor/major)
 release level:
     cargo release {{level}} --execute
+    cargo install --path . --root ~/.local
+
+# Install binary to ~/.local/bin (for manual installs)
+install:
+    cargo install --path . --root ~/.local
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
@@ -121,12 +126,9 @@ lint:
 # Format code
 fmt:
     cargo fmt
-
-# Internal: called by cargo-release post-release hook
-[private]
-_install:
-    cargo install --path . --root ~/.local
 ```
+
+Note: The install is inlined in the `release` recipe because cargo-release doesn't support `post-release-hook`.
 
 **Step 2: Verify justfile syntax**
 
@@ -157,7 +159,6 @@ git commit -m "feat: add justfile for dev commands and release workflow"
 Create `release.toml` in project root:
 
 ```toml
-[workspace]
 allow-branch = ["master"]
 sign-commit = false
 sign-tag = false
@@ -165,8 +166,9 @@ push = false
 tag-name = "v{{version}}"
 pre-release-commit-message = "chore: release v{{version}}"
 pre-release-hook = ["git-cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
-post-release-hook = ["just", "_install"]
 ```
+
+Note: cargo-release only supports `pre-release-hook`, not `post-release-hook`. The install step is handled by the justfile `release` recipe instead.
 
 **Step 2: Verify cargo-release recognizes config**
 
@@ -276,7 +278,8 @@ Expected: Shows:
 - Would run git-cliff pre-release hook
 - Would commit "chore: release v0.1.1"
 - Would tag v0.1.1
-- Would run just _install post-release hook
+
+Note: The install step happens after cargo-release completes, via the justfile.
 
 **Step 3: Execute actual release**
 
