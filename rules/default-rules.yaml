@@ -882,6 +882,64 @@ rules:
     reason: "Writing to system directory"
 
   # ============================================================
+  # HIGH: Package manager operations
+  # ============================================================
+  - id: pip-install
+    level: high
+    match:
+      command:
+        any_of: [pip, pip3]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python packages"
+
+  - id: npm-install
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["install", "i", "ci"]
+    decision: ask
+    reason: "Installing npm packages"
+
+  - id: gem-install
+    level: high
+    match:
+      command: gem
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Ruby gems"
+
+  - id: npm-audit-fix
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["audit"]
+      flags:
+        any_of: ["fix"]
+    decision: ask
+    reason: "npm audit fix modifies package dependencies"
+
+  - id: npm-exec
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["exec"]
+    decision: ask
+    reason: "npm exec runs arbitrary package code"
+
+  - id: npx-run
+    level: high
+    match:
+      command: npx
+    decision: ask
+    reason: "npx can execute arbitrary npm packages"
+
+  # ============================================================
   # STRICT: Cautionary
   # ============================================================
   - id: git-force-push-any

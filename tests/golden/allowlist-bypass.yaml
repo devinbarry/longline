@@ -102,7 +102,8 @@ tests:
   - id: npx-known-safe
     command: "npx prettier --check ."
     expected:
-      decision: allow
+      decision: ask
+      rule_id: npx-run
   - id: npx-arbitrary-package
     command: "npx some-random-package"
     expected:
@@ -487,7 +488,8 @@ tests:
   - id: pip-install-known-safe
     command: "pip install requests"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: pip-install
   - id: pip-install-arbitrary-dangerous
     command: "pip install evil-malicious-pkg"
     expected:
@@ -515,7 +517,8 @@ tests:
   - id: gem-install-known-safe
     command: "gem install rails"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: gem-install
   - id: gem-install-arbitrary-dangerous
     command: "gem install evil-malicious-gem"
     expected:
