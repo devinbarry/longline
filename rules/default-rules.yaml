@@ -668,6 +668,99 @@ rules:
     reason: "xargs executing rm on piped input"
 
   # ============================================================
+  # HIGH: Filesystem destructive operations (allowlist bypass)
+  # ============================================================
+  - id: ln-force
+    level: high
+    match:
+      command: ln
+      flags:
+        any_of: ["-f", "--force", "-sf", "-fs", "-fn", "-nf"]
+    decision: ask
+    reason: "ln -f can overwrite existing files"
+
+  - id: cp-force
+    level: high
+    match:
+      command: cp
+      flags:
+        any_of: ["-f", "--force", "-rf", "-fr"]
+    decision: ask
+    reason: "cp -f overwrites without prompting"
+
+  - id: mv-force
+    level: high
+    match:
+      command: mv
+      flags:
+        any_of: ["-f", "--force"]
+    decision: ask
+    reason: "mv -f overwrites without prompting"
+
+  - id: tar-extract
+    level: high
+    match:
+      command: tar
+      flags:
+        starts_with: ["-x", "--extract"]
+    decision: ask
+    reason: "tar extraction can overwrite files"
+
+  - id: unzip-extract
+    level: high
+    match:
+      command: unzip
+      flags:
+        none_of: ["-l", "-t", "-Z", "-v"]
+    decision: ask
+    reason: "unzip extraction can overwrite files"
+
+  - id: sed-inplace
+    level: high
+    match:
+      command: sed
+      flags:
+        starts_with: ["-i", "--in-place"]
+    decision: ask
+    reason: "sed -i modifies files in place"
+
+  - id: patch-apply
+    level: high
+    match:
+      command: patch
+      flags:
+        none_of: ["--dry-run", "-C", "--check"]
+    decision: ask
+    reason: "patch modifies files"
+
+  - id: gzip-no-keep
+    level: high
+    match:
+      command: gzip
+      flags:
+        none_of: ["-k", "--keep", "-c", "--stdout", "-t", "--test", "-l", "--list"]
+    decision: ask
+    reason: "gzip removes original file by default"
+
+  - id: gunzip-no-keep
+    level: high
+    match:
+      command: gunzip
+      flags:
+        none_of: ["-k", "--keep", "-c", "--stdout", "-t", "--test", "-l", "--list"]
+    decision: ask
+    reason: "gunzip removes original file by default"
+
+  - id: tee-system-files
+    level: high
+    match:
+      command: tee
+      args:
+        any_of: ["/etc/*", "/usr/*", "/var/*", "/bin/*", "/sbin/*", "/lib/*"]
+    decision: ask
+    reason: "Writing to system directory"
+
+  # ============================================================
   # STRICT: Cautionary
   # ============================================================
   - id: git-force-push-any
