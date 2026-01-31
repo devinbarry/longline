@@ -3,6 +3,6 @@
 # Rustrover files
 .idea/
 
-# Local Claude settings (user-specific)
-.claude/settings.local.json
+# Claude settings (user-specific)
+.claude/
 
