@@ -5,6 +5,7 @@ safety_level: high
 allowlists:
   commands:
     # ── Always safe: read-only / output-only ──────────────────────
+    - cd
     - ls
     - echo
     - pwd

@@ -1,4 +1,31 @@
 tests:
+  # cd + command chains (common Claude Code pattern)
+  - id: cd-and-ls
+    command: "cd /tmp && ls"
+    expected:
+      decision: allow
+  - id: cd-and-git-branch
+    command: "cd /path && git branch -a"
+    expected:
+      decision: allow
+  - id: cd-and-git-status
+    command: "cd project && git status"
+    expected:
+      decision: allow
+  - id: cd-and-cargo-build
+    command: "cd /home/user/project && cargo build"
+    expected:
+      decision: allow
+  - id: cd-and-deny
+    command: "cd /tmp && rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: cd-and-ask
+    command: "cd /tmp && curl http://example.com"
+    expected:
+      decision: ask
+
   # && chains
   - id: and-safe-safe
     command: "echo hello && echo world"

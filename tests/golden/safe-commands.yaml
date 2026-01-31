@@ -1,4 +1,21 @@
 tests:
+  # ── cd safe invocations ───────────────────────────────────────
+  - id: cd-safe
+    command: "cd /tmp"
+    expected:
+      decision: allow
+  - id: cd-home-safe
+    command: "cd ~"
+    expected:
+      decision: allow
+  - id: cd-relative-safe
+    command: "cd src/lib"
+    expected:
+      decision: allow
+  - id: cd-parent-safe
+    command: "cd .."
+    expected:
+      decision: allow
   - id: ls-safe
     command: "ls -la /tmp"
     expected:
