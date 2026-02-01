@@ -9,7 +9,7 @@ longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands be
 **Key features:**
 - Structured parsing of pipelines, redirects, command substitutions, and complex shell constructs
 - Configurable safety levels (critical, high, strict)
-- 300+ golden test cases for accuracy
+- 800+ golden test cases for accuracy
 - JSONL audit logging
 - Fail-closed design: unknown/unparseable constructs default to `ask`
 
