@@ -35,6 +35,7 @@ allowlists:
     - grep
     - rg
     - find
+    - tree
     - xargs
     - fd
     - sort
@@ -45,6 +46,51 @@ allowlists:
     - jq
     - yq
     - test
+    - column
+    - nl
+    - tac
+    - rev
+    - paste
+    - join
+    - comm
+    - cmp
+    - strings
+    - xxd
+    - hexdump
+    - od
+    - base64
+    - time
+    # ── System info: read-only ───────────────────────────────────────
+    - env
+    - printenv
+    - uname
+    - hostname
+    - id
+    - groups
+    - df
+    - ps
+    - pgrep
+    - lsof
+    - nproc
+    - getconf
+    - locale
+    - uptime
+    # ── Pagers and viewers ───────────────────────────────────────────
+    - less
+    - more
+    - man
+    - info
+    # ── Modern CLI alternatives ──────────────────────────────────────
+    - bat
+    - exa
+    - eza
+    - delta
+    - tokei
+    - cloc
+    - scc
+    - hyperfine
+    - ag
+    - ack
     # ── Always safe: dev tools (no publish risk) ──────────────────
     - make
     - cmake
@@ -105,6 +151,21 @@ allowlists:
     - "glab mr view"
     - "glab --version"
     - "glab --help"
+    # ── gh (GitHub CLI): read-only invocations ───────────────────────
+    - "gh pr list"
+    - "gh pr view"
+    - "gh pr status"
+    - "gh pr diff"
+    - "gh pr checks"
+    - "gh issue list"
+    - "gh issue view"
+    - "gh issue status"
+    - "gh repo list"
+    - "gh repo view"
+    - "gh auth status"
+    - "gh --version"
+    - "gh --help"
+    - "gh -h"
     # ── git-cliff: stdout-only invocations ────────────────────────
     - "git-cliff --unreleased"
     - "git-cliff --latest"
@@ -161,6 +222,15 @@ allowlists:
     - "git ls-files"
     - "git ls-tree"
     - "git cat-file"
+    - "git grep"
+    - "git archive"
+    # ── Git: safe file operations ────────────────────────────────────
+    - "git mv"
+    - "git rm"
+    - "git revert"
+    # ── Git: stash operations ────────────────────────────────────────
+    - "git stash pop"
+    - "git stash apply"
     # ── Git: info/help commands ───────────────────────────────────
     - "git --version"
     - "git -v"

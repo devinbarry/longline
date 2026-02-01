@@ -440,3 +440,24 @@ tests:
     command: "gem list"
     expected:
       decision: allow
+  # ── tree safe invocations ───────────────────────────────────────
+  - id: tree-safe
+    command: "tree"
+    expected:
+      decision: allow
+  - id: tree-depth-safe
+    command: "tree -L 3"
+    expected:
+      decision: allow
+  - id: tree-ignore-safe
+    command: "tree -I 'target|.git'"
+    expected:
+      decision: allow
+  - id: tree-path-safe
+    command: "tree /tmp"
+    expected:
+      decision: allow
+  - id: tree-combined-safe
+    command: "tree -L 3 -I 'target|.git' /path"
+    expected:
+      decision: allow

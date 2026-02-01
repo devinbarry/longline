@@ -203,3 +203,61 @@ tests:
     command: "git cat-file -p HEAD"
     expected:
       decision: allow
+  # ── git mv safe invocations ─────────────────────────────────────
+  - id: git-mv-safe
+    command: "git mv old.txt new.txt"
+    expected:
+      decision: allow
+  - id: git-mv-dir-safe
+    command: "git mv src/old src/new"
+    expected:
+      decision: allow
+  # ── git rm safe invocations ─────────────────────────────────────
+  - id: git-rm-safe
+    command: "git rm file.txt"
+    expected:
+      decision: allow
+  - id: git-rm-cached-safe
+    command: "git rm --cached file.txt"
+    expected:
+      decision: allow
+  # ── git grep safe invocations ───────────────────────────────────
+  - id: git-grep-safe
+    command: "git grep 'pattern'"
+    expected:
+      decision: allow
+  - id: git-grep-files-safe
+    command: "git grep -l 'TODO'"
+    expected:
+      decision: allow
+  # ── git revert safe invocations ─────────────────────────────────
+  - id: git-revert-safe
+    command: "git revert HEAD"
+    expected:
+      decision: allow
+  - id: git-revert-commit-safe
+    command: "git revert abc123"
+    expected:
+      decision: allow
+  # ── git archive safe invocations ────────────────────────────────
+  - id: git-archive-safe
+    command: "git archive HEAD"
+    expected:
+      decision: allow
+  - id: git-archive-output-safe
+    command: "git archive --format=tar HEAD -o archive.tar"
+    expected:
+      decision: allow
+  # ── git stash pop/apply safe invocations ────────────────────────
+  - id: git-stash-pop-safe
+    command: "git stash pop"
+    expected:
+      decision: allow
+  - id: git-stash-apply-safe
+    command: "git stash apply"
+    expected:
+      decision: allow
+  - id: git-stash-apply-index-safe
+    command: "git stash apply stash@{0}"
+    expected:
+      decision: allow

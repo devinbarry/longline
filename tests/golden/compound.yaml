@@ -168,3 +168,9 @@ tests:
     expected:
       decision: deny
       rule_id: rm-recursive-root
+
+  # Tree fallback pattern (common for directory exploration)
+  - id: tree-or-find-fallback-safe
+    command: "tree -L 3 /path 2>/dev/null || find /path -type d | head -20"
+    expected:
+      decision: allow
