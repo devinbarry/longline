@@ -97,14 +97,10 @@ fn test_e2e_dangerous_command_denies() {
 fn test_e2e_non_bash_tool_passes_through() {
     let (code, stdout) = run_hook("Read", "");
     assert_eq!(code, 0);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
-    assert!(
-        parsed["hookSpecificOutput"]["permissionDecisionReason"]
-            .as_str()
-            .unwrap()
-            .contains("non-Bash"),
-        "Reason should mention non-Bash tool"
+    assert_eq!(
+        stdout.trim(),
+        "{}",
+        "Non-Bash tools should passthrough with empty object"
     );
 }
 
@@ -397,21 +393,6 @@ fn test_e2e_allow_has_hook_event_name() {
     assert_eq!(
         parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse",
         "Allow decisions must include hookEventName: {stdout}"
-    );
-}
-
-#[test]
-fn test_e2e_non_bash_explicit_allow_with_reason() {
-    let (code, stdout) = run_hook("Read", "");
-    assert_eq!(code, 0);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
-    assert!(
-        parsed["hookSpecificOutput"]["permissionDecisionReason"]
-            .as_str()
-            .unwrap()
-            .contains("non-Bash"),
-        "Reason should mention non-Bash: {stdout}"
     );
 }
 

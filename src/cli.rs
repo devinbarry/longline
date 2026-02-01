@@ -137,10 +137,9 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
         }
     };
 
-    // Only handle Bash tool in MVP
+    // Only handle Bash tool - passthrough for everything else
     if hook_input.tool_name != "Bash" {
-        let output = HookOutput::decision(Decision::Allow, "longline: non-Bash tool");
-        print_json(&output);
+        println!("{{}}");
         return 0;
     }
 
