@@ -1,0 +1,267 @@
+//! Configuration types for policy rules.
+
+use serde::Deserialize;
+use std::fs;
+use std::path::Path;
+
+use crate::types::Decision;
+
+/// Top-level rules configuration loaded from YAML.
+#[derive(Debug, Deserialize)]
+pub struct RulesConfig {
+    #[allow(dead_code)]
+    pub version: u32,
+    #[serde(default = "default_decision")]
+    pub default_decision: Decision,
+    #[serde(default = "default_safety_level")]
+    pub safety_level: SafetyLevel,
+    #[serde(default)]
+    pub allowlists: Allowlists,
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+}
+
+pub(crate) fn default_decision() -> Decision {
+    Decision::Ask
+}
+
+pub(crate) fn default_safety_level() -> SafetyLevel {
+    SafetyLevel::High
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SafetyLevel {
+    Critical,
+    High,
+    Strict,
+}
+
+impl std::fmt::Display for SafetyLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(match self {
+            SafetyLevel::Critical => "critical",
+            SafetyLevel::High => "high",
+            SafetyLevel::Strict => "strict",
+        })
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct Allowlists {
+    #[serde(default)]
+    pub commands: Vec<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Rule {
+    pub id: String,
+    pub level: SafetyLevel,
+    #[serde(rename = "match")]
+    pub matcher: Matcher,
+    pub decision: Decision,
+    pub reason: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum Matcher {
+    Pipeline {
+        pipeline: PipelineMatcher,
+    },
+    Redirect {
+        redirect: RedirectMatcher,
+    },
+    Command {
+        command: StringOrList,
+        #[serde(default)]
+        flags: Option<FlagsMatcher>,
+        #[serde(default)]
+        args: Option<ArgsMatcher>,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PipelineMatcher {
+    pub stages: Vec<StageMatcher>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StageMatcher {
+    pub command: StringOrList,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RedirectMatcher {
+    #[serde(default)]
+    pub op: Option<StringOrList>,
+    #[serde(default)]
+    pub target: Option<StringOrList>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FlagsMatcher {
+    #[serde(default)]
+    pub any_of: Vec<String>,
+    #[serde(default)]
+    pub all_of: Vec<String>,
+    #[serde(default)]
+    pub none_of: Vec<String>,
+    /// Match if any argument starts with any of these prefixes.
+    /// Useful for combined short flags like -xf, -xvf matching "-x".
+    #[serde(default)]
+    pub starts_with: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ArgsMatcher {
+    #[serde(default)]
+    pub any_of: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum StringOrList {
+    Single(String),
+    List { any_of: Vec<String> },
+}
+
+impl StringOrList {
+    pub fn matches(&self, value: &str) -> bool {
+        match self {
+            StringOrList::Single(s) => s == value,
+            StringOrList::List { any_of } => any_of.iter().any(|s| s == value),
+        }
+    }
+}
+
+/// Load rules from a YAML file.
+pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
+    let config: RulesConfig = serde_yaml::from_str(&content)
+        .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_rules_yaml() {
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - "git status"
+    - "git diff"
+  paths:
+    - "/tmp/**"
+rules:
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting critical system path"
+  - id: curl-pipe-shell
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [sh, bash, zsh]
+    decision: deny
+    reason: "Remote code execution: piping download to shell"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.version, 1);
+        assert_eq!(config.default_decision, Decision::Ask);
+        assert_eq!(config.safety_level, SafetyLevel::High);
+        assert_eq!(config.allowlists.commands.len(), 2);
+        assert_eq!(config.rules.len(), 2);
+        assert_eq!(config.rules[0].id, "rm-recursive-root");
+        assert_eq!(config.rules[0].decision, Decision::Deny);
+        assert_eq!(config.rules[1].id, "curl-pipe-shell");
+    }
+
+    #[test]
+    fn test_string_or_list_single() {
+        let s = StringOrList::Single("rm".to_string());
+        assert!(s.matches("rm"));
+        assert!(!s.matches("ls"));
+    }
+
+    #[test]
+    fn test_string_or_list_any_of() {
+        let s = StringOrList::List {
+            any_of: vec!["curl".into(), "wget".into()],
+        };
+        assert!(s.matches("curl"));
+        assert!(s.matches("wget"));
+        assert!(!s.matches("git"));
+    }
+
+    #[test]
+    fn test_safety_level_ordering() {
+        assert!(SafetyLevel::Strict > SafetyLevel::High);
+        assert!(SafetyLevel::High > SafetyLevel::Critical);
+    }
+
+    #[test]
+    fn test_minimal_rules_config() {
+        let yaml = "version: 1\nrules: []\n";
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.default_decision, Decision::Ask);
+        assert_eq!(config.safety_level, SafetyLevel::High);
+        assert!(config.rules.is_empty());
+    }
+
+    #[test]
+    fn test_redirect_matcher_deserialization() {
+        let yaml = r#"
+version: 1
+rules:
+  - id: write-to-dev
+    level: critical
+    match:
+      redirect:
+        op:
+          any_of: [">", ">>"]
+        target:
+          any_of: ["/dev/sda", "/dev/nvme0n1"]
+    decision: deny
+    reason: "Writing directly to disk device"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "write-to-dev");
+    }
+
+    #[test]
+    fn test_load_default_rules_file() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("rules")
+            .join("default-rules.yaml");
+        let config = load_rules(&path).expect("Default rules should parse");
+        assert!(
+            config.rules.len() > 30,
+            "Should have many rules, got {}",
+            config.rules.len()
+        );
+        assert_eq!(config.version, 1);
+        assert_eq!(config.default_decision, Decision::Ask);
+    }
+}
