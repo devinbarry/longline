@@ -2,7 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2026-02-01
+
+
+### Added
+
+- add cd to allowlist for compound commands
+- add GitLab CI pipeline and README for public release
+- add dev tool allowlist entries for sleep, just, glp, glab, git-cliff
+- expand allowlist with common safe commands
+
+
+### Changed
+
+- ignore .claude directory and remove settings.json
+- add module refactoring design plan
+- add module refactoring implementation plan
+- convert parser to directory module
+- extract parser helper functions
+- extract parser convert functions
+- convert policy to directory module
+- extract policy config types
+- extract policy matching functions
+- extract policy allowlist logic
+
+
+### Fixed
+
+- use docker tag for CI runners
+- install rustfmt and clippy in CI before_script
+- disable cargo-husky hook installation in CI
+
 ## [0.1.2] - 2026-01-30
+
+
+### Changed
+
+- release v0.1.2
 
 
 ### Fixed
