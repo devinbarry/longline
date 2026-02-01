@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.4] - 2026-02-01
+
+
+### Changed
+
+- add release command to CLAUDE.md
+
+
+### Fixed
+
+- restore filter-repo replacement rule in CI
+- return passthrough for non-Bash tools instead of allow decision
+
 ## [0.1.3] - 2026-02-01
 
 
@@ -25,6 +38,7 @@ All notable changes to this project will be documented in this file.
 - extract policy config types
 - extract policy matching functions
 - extract policy allowlist logic
+- release v0.1.3
 
 
 ### Fixed
@@ -143,7 +157,6 @@ All notable changes to this project will be documented in this file.
 - apply cargo fmt formatting
 - add git hooks design plan
 - apply cargo fmt to ai_judge and output modules
-- add longline hook to Claude Code settings
 - add design plans for diagnostics, table formatting, and ai-judge
 - add bypass attempt golden tests for security audit
 - add command substitution golden tests
