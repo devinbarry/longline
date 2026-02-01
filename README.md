@@ -71,17 +71,16 @@ Rules are defined in YAML with three matcher types:
 
 Example rule:
 ```yaml
-- id: rm-rf-root
+- id: rm-recursive-root
   level: critical
-  decision: deny
-  reason: "Catastrophic: would delete entire filesystem"
   match:
-    command:
-      name: rm
-      flags:
-        all_of: ["-r", "-f"]
-      args:
-        any_of: ["/", "/*"]
+    command: rm
+    flags:
+      any_of: ["-r", "-rf", "-fr", "--recursive"]
+    args:
+      any_of: ["/", "/*"]
+  decision: deny
+  reason: "Recursive delete targeting root filesystem"
 ```
 
 ## Safety levels
