@@ -127,12 +127,13 @@ fn test_e2e_missing_config_exits_2() {
         .spawn()
         .expect("Failed to spawn longline");
 
-    child
+    // Write may fail with BrokenPipe if process exits before reading stdin
+    // (expected when config is missing and process exits with code 2)
+    let _ = child
         .stdin
         .take()
         .unwrap()
-        .write_all(input.to_string().as_bytes())
-        .unwrap();
+        .write_all(input.to_string().as_bytes());
 
     let output = child.wait_with_output().unwrap();
     assert_eq!(output.status.code(), Some(2));
