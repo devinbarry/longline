@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.6] - 2026-02-01
+
+
+### Fixed
+
+- handle BrokenPipe in missing config test
+
 ## [0.1.5] - 2026-02-01
 
 
@@ -9,6 +16,7 @@ All notable changes to this project will be documented in this file.
 
 - update module names and test case count
 - fix rule example structure and add missing modules
+- release v0.1.5
 
 ## [0.1.4] - 2026-02-01
 
