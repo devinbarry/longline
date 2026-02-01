@@ -1,0 +1,549 @@
+tests:
+  # ============================================================
+  # SAFE: Django read-only/informational commands (expect: allow)
+  # ============================================================
+
+  # ── Direct python invocation ──────────────────────────────────
+  - id: django-check
+    command: "python manage.py check"
+    expected:
+      decision: allow
+  - id: django-check-deploy
+    command: "python manage.py check --deploy"
+    expected:
+      decision: allow
+  - id: django-showmigrations
+    command: "python manage.py showmigrations"
+    expected:
+      decision: allow
+  - id: django-showmigrations-app
+    command: "python manage.py showmigrations myapp"
+    expected:
+      decision: allow
+  - id: django-diffsettings
+    command: "python manage.py diffsettings"
+    expected:
+      decision: allow
+  - id: django-sqlmigrate
+    command: "python manage.py sqlmigrate myapp 0001"
+    expected:
+      decision: allow
+  - id: django-sqlflush
+    command: "python manage.py sqlflush"
+    expected:
+      decision: allow
+  - id: django-sqlsequencereset
+    command: "python manage.py sqlsequencereset myapp"
+    expected:
+      decision: allow
+  - id: django-inspectdb
+    command: "python manage.py inspectdb"
+    expected:
+      decision: allow
+  - id: django-test
+    command: "python manage.py test"
+    expected:
+      decision: allow
+  - id: django-test-app
+    command: "python manage.py test myapp.tests"
+    expected:
+      decision: allow
+  - id: django-test-verbose
+    command: "python manage.py test myapp.tests -v 2"
+    expected:
+      decision: allow
+  - id: django-test-keepdb
+    command: "python manage.py test --keepdb"
+    expected:
+      decision: allow
+  - id: django-makemigrations
+    command: "python manage.py makemigrations"
+    expected:
+      decision: allow
+  - id: django-makemigrations-app
+    command: "python manage.py makemigrations myapp"
+    expected:
+      decision: allow
+  - id: django-makemigrations-dry-run
+    command: "python manage.py makemigrations --dry-run"
+    expected:
+      decision: allow
+  - id: django-runserver
+    command: "python manage.py runserver"
+    expected:
+      decision: allow
+  - id: django-runserver-port
+    command: "python manage.py runserver 8080"
+    expected:
+      decision: allow
+  - id: django-runserver-bind
+    command: "python manage.py runserver 0.0.0.0:8000"
+    expected:
+      decision: allow
+  - id: django-startapp
+    command: "python manage.py startapp newapp"
+    expected:
+      decision: allow
+  - id: django-startproject
+    command: "python manage.py startproject myproject"
+    expected:
+      decision: allow
+  - id: django-dumpdata
+    command: "python manage.py dumpdata"
+    expected:
+      decision: allow
+  - id: django-dumpdata-app
+    command: "python manage.py dumpdata myapp"
+    expected:
+      decision: allow
+  - id: django-dumpdata-output
+    command: "python manage.py dumpdata myapp --output fixtures.json"
+    expected:
+      decision: allow
+  - id: django-makemessages
+    command: "python manage.py makemessages -l es"
+    expected:
+      decision: allow
+  - id: django-compilemessages
+    command: "python manage.py compilemessages"
+    expected:
+      decision: allow
+
+  # ── python3 variants ──────────────────────────────────────────
+  - id: django-check-python3
+    command: "python3 manage.py check"
+    expected:
+      decision: allow
+  - id: django-test-python3
+    command: "python3 manage.py test"
+    expected:
+      decision: allow
+  - id: django-makemigrations-python3
+    command: "python3 manage.py makemigrations"
+    expected:
+      decision: allow
+  - id: django-runserver-python3
+    command: "python3 manage.py runserver"
+    expected:
+      decision: allow
+  - id: django-dumpdata-python3
+    command: "python3 manage.py dumpdata myapp"
+    expected:
+      decision: allow
+
+  # ── uv run variants ───────────────────────────────────────────
+  - id: django-check-uv
+    command: "uv run python manage.py check"
+    expected:
+      decision: allow
+  - id: django-test-uv
+    command: "uv run python manage.py test"
+    expected:
+      decision: allow
+  - id: django-test-verbose-uv
+    command: "uv run python manage.py test myapp.tests -v 2"
+    expected:
+      decision: allow
+  - id: django-makemigrations-uv
+    command: "uv run python manage.py makemigrations"
+    expected:
+      decision: allow
+  - id: django-runserver-uv
+    command: "uv run python manage.py runserver"
+    expected:
+      decision: allow
+  - id: django-showmigrations-uv
+    command: "uv run python manage.py showmigrations"
+    expected:
+      decision: allow
+  - id: django-dumpdata-uv
+    command: "uv run python manage.py dumpdata"
+    expected:
+      decision: allow
+  - id: django-check-uv-python3
+    command: "uv run python3 manage.py check"
+    expected:
+      decision: allow
+  - id: django-test-uv-python3
+    command: "uv run python3 manage.py test"
+    expected:
+      decision: allow
+
+  # ── Path variations (ask - not in allowlist, treated as script) ─
+  # Note: Only the standard "python manage.py <cmd>" form is allowlisted.
+  # Path variants like ./manage.py are treated as arbitrary scripts.
+  - id: django-check-relative-path
+    command: "python ./manage.py check"
+    expected:
+      decision: ask
+  - id: django-test-relative-path
+    command: "python ./manage.py test"
+    expected:
+      decision: ask
+  - id: django-check-subdir-path
+    command: "python server/manage.py check"
+    expected:
+      decision: ask
+  - id: django-test-subdir-path
+    command: "python server/manage.py test"
+    expected:
+      decision: ask
+  - id: django-check-absolute-path
+    command: "python /home/user/project/manage.py check"
+    expected:
+      decision: ask
+  - id: django-test-absolute-path
+    command: "python /home/user/project/manage.py test"
+    expected:
+      decision: ask
+
+  # ============================================================
+  # DESTRUCTIVE: Django commands that modify data (expect: ask)
+  # ============================================================
+
+  # ── migrate ───────────────────────────────────────────────────
+  - id: django-migrate
+    command: "python manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-app
+    command: "python manage.py migrate myapp"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-specific
+    command: "python manage.py migrate myapp 0001"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-fake
+    command: "python manage.py migrate --fake"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-fake-initial
+    command: "python manage.py migrate --fake-initial"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-python3
+    command: "python3 manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-uv
+    command: "uv run python manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: uv-django-migrate
+  - id: django-migrate-uv-python3
+    command: "uv run python3 manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: uv-django-migrate
+  - id: django-migrate-path
+    command: "python ./manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-migrate-subdir
+    command: "python server/manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+
+  # ── flush ─────────────────────────────────────────────────────
+  - id: django-flush
+    command: "python manage.py flush"
+    expected:
+      decision: ask
+      rule_id: django-flush
+  - id: django-flush-no-input
+    command: "python manage.py flush --no-input"
+    expected:
+      decision: ask
+      rule_id: django-flush
+  - id: django-flush-python3
+    command: "python3 manage.py flush"
+    expected:
+      decision: ask
+      rule_id: django-flush
+  - id: django-flush-uv
+    command: "uv run python manage.py flush"
+    expected:
+      decision: ask
+      rule_id: uv-django-flush
+
+  # ── loaddata ──────────────────────────────────────────────────
+  - id: django-loaddata
+    command: "python manage.py loaddata fixtures.json"
+    expected:
+      decision: ask
+      rule_id: django-loaddata
+  - id: django-loaddata-path
+    command: "python manage.py loaddata myapp/fixtures/initial.json"
+    expected:
+      decision: ask
+      rule_id: django-loaddata
+  - id: django-loaddata-python3
+    command: "python3 manage.py loaddata fixtures.json"
+    expected:
+      decision: ask
+      rule_id: django-loaddata
+  - id: django-loaddata-uv
+    command: "uv run python manage.py loaddata fixtures.json"
+    expected:
+      decision: ask
+      rule_id: uv-django-loaddata
+
+  # ── createsuperuser ───────────────────────────────────────────
+  - id: django-createsuperuser
+    command: "python manage.py createsuperuser"
+    expected:
+      decision: ask
+      rule_id: django-createsuperuser
+  - id: django-createsuperuser-username
+    command: "python manage.py createsuperuser --username admin"
+    expected:
+      decision: ask
+      rule_id: django-createsuperuser
+  - id: django-createsuperuser-python3
+    command: "python3 manage.py createsuperuser"
+    expected:
+      decision: ask
+      rule_id: django-createsuperuser
+  - id: django-createsuperuser-uv
+    command: "uv run python manage.py createsuperuser"
+    expected:
+      decision: ask
+      rule_id: uv-django-createsuperuser
+
+  # ── changepassword ────────────────────────────────────────────
+  - id: django-changepassword
+    command: "python manage.py changepassword admin"
+    expected:
+      decision: ask
+      rule_id: django-changepassword
+  - id: django-changepassword-python3
+    command: "python3 manage.py changepassword admin"
+    expected:
+      decision: ask
+      rule_id: django-changepassword
+  - id: django-changepassword-uv
+    command: "uv run python manage.py changepassword admin"
+    expected:
+      decision: ask
+      rule_id: uv-django-changepassword
+
+  # ── clearsessions ─────────────────────────────────────────────
+  - id: django-clearsessions
+    command: "python manage.py clearsessions"
+    expected:
+      decision: ask
+      rule_id: django-clearsessions
+  - id: django-clearsessions-python3
+    command: "python3 manage.py clearsessions"
+    expected:
+      decision: ask
+      rule_id: django-clearsessions
+  - id: django-clearsessions-uv
+    command: "uv run python manage.py clearsessions"
+    expected:
+      decision: ask
+      rule_id: uv-django-clearsessions
+
+  # ── dbshell ───────────────────────────────────────────────────
+  - id: django-dbshell
+    command: "python manage.py dbshell"
+    expected:
+      decision: ask
+      rule_id: django-dbshell
+  - id: django-dbshell-python3
+    command: "python3 manage.py dbshell"
+    expected:
+      decision: ask
+      rule_id: django-dbshell
+  - id: django-dbshell-uv
+    command: "uv run python manage.py dbshell"
+    expected:
+      decision: ask
+      rule_id: uv-django-dbshell
+
+  # ── shell / shell_plus ────────────────────────────────────────
+  - id: django-shell
+    command: "python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-plus
+    command: "python manage.py shell_plus"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-python3
+    command: "python3 manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-plus-python3
+    command: "python3 manage.py shell_plus"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-uv
+    command: "uv run python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: uv-django-shell
+  - id: django-shell-plus-uv
+    command: "uv run python manage.py shell_plus"
+    expected:
+      decision: ask
+      rule_id: uv-django-shell
+  - id: django-shell-relative-path
+    command: "python ./manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-subdir-path
+    command: "python server/manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+
+  # ============================================================
+  # PIPELINES: Code piped into shell (expect: ask)
+  # ============================================================
+  - id: django-shell-pipe-echo
+    command: "echo 'User.objects.all().delete()' | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-echo-import
+    command: "echo 'from myapp.models import *' | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-echo-uv
+    command: "echo 'code' | uv run python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: uv-django-shell
+  - id: django-shell-pipe-echo-python3
+    command: "echo 'code' | python3 manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-cat
+    command: "cat script.py | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-cat-path
+    command: "cat /tmp/commands.py | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-cat-uv
+    command: "cat commands.txt | uv run python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: uv-django-shell
+  - id: django-shell-pipe-printf
+    command: "printf 'User.objects.count()' | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-multi-stage
+    command: "cat file.py | grep -v comment | python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: django-shell
+  - id: django-shell-pipe-tee-output
+    command: "echo 'code' | python manage.py shell | tee output.txt"
+    expected:
+      decision: ask
+      rule_id: django-shell
+
+  # ============================================================
+  # SAFE PIPELINES: No destructive stage (expect: allow)
+  # ============================================================
+  - id: django-test-pipe-grep
+    command: "python manage.py test | grep PASSED"
+    expected:
+      decision: allow
+  - id: django-showmigrations-pipe-head
+    command: "python manage.py showmigrations | head -20"
+    expected:
+      decision: allow
+  - id: django-check-pipe-tee
+    command: "python manage.py check | tee check_output.txt"
+    expected:
+      decision: allow
+  - id: django-dumpdata-pipe-jq
+    command: "python manage.py dumpdata myapp | jq '.'"
+    expected:
+      decision: allow
+  - id: django-test-uv-pipe-tail
+    command: "uv run python manage.py test 2>&1 | tail -50"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # EDGE CASES
+  # ============================================================
+
+  # ── Bare manage.py (no subcommand) ────────────────────────────
+  - id: django-bare-manage
+    command: "python manage.py"
+    expected:
+      decision: ask
+  - id: django-bare-manage-uv
+    command: "uv run python manage.py"
+    expected:
+      decision: ask
+
+  # ── Compound commands with cd ─────────────────────────────────
+  - id: django-cd-migrate
+    command: "cd /project && python manage.py migrate"
+    expected:
+      decision: ask
+      rule_id: django-migrate
+  - id: django-cd-check
+    command: "cd /project && python manage.py check"
+    expected:
+      decision: allow
+  - id: django-cd-shell-uv
+    command: "cd /project && uv run python manage.py shell"
+    expected:
+      decision: ask
+      rule_id: uv-django-shell
+
+  # ── NOT Django (should not match Django rules) ────────────────
+  - id: not-django-script-manage
+    command: "python script.py manage"
+    expected:
+      decision: ask
+  - id: not-django-import-manage
+    command: "python -c 'import manage'"
+    expected:
+      decision: ask
+  - id: not-django-manage-something
+    command: "python manage_something.py"
+    expected:
+      decision: ask
+  - id: not-django-my-manage
+    command: "python my_manage.py shell"
+    expected:
+      decision: ask
+
+  # ── Bare script execution (no python prefix) ──────────────────
+  - id: django-bare-script-check
+    command: "./manage.py check"
+    expected:
+      decision: ask
+  - id: django-bare-script-migrate
+    command: "./manage.py migrate"
+    expected:
+      decision: ask

@@ -186,3 +186,8 @@ fn golden_allowlist_bypass() {
 fn golden_dev_tools() {
     run_golden_suite("dev-tools.yaml");
 }
+
+#[test]
+fn golden_django() {
+    run_golden_suite("django.yaml");
+}
