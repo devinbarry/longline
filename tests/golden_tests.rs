@@ -181,3 +181,8 @@ fn golden_missing_allowlist() {
 fn golden_allowlist_bypass() {
     run_golden_suite("allowlist-bypass.yaml");
 }
+
+#[test]
+fn golden_dev_tools() {
+    run_golden_suite("dev-tools.yaml");
+}

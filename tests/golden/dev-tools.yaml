@@ -1,0 +1,324 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # sleep: always safe (just waits)
+  # ════════════════════════════════════════════════════════════════
+  - id: sleep-safe
+    command: "sleep 5"
+    expected:
+      decision: allow
+  - id: sleep-long-safe
+    command: "sleep 60"
+    expected:
+      decision: allow
+  - id: sleep-fractional-safe
+    command: "sleep 0.5"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # just: only read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: just-list-safe
+    command: "just --list"
+    expected:
+      decision: allow
+  - id: just-list-short-safe
+    command: "just -l"
+    expected:
+      decision: allow
+  - id: just-version-safe
+    command: "just --version"
+    expected:
+      decision: allow
+  - id: just-help-safe
+    command: "just --help"
+    expected:
+      decision: allow
+  - id: just-help-short-safe
+    command: "just -h"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - runs arbitrary recipes)
+  - id: just-bare-ask
+    command: "just"
+    expected:
+      decision: ask
+  - id: just-recipe-ask
+    command: "just build"
+    expected:
+      decision: ask
+  - id: just-recipe-test-ask
+    command: "just test"
+    expected:
+      decision: ask
+  - id: just-recipe-release-ask
+    command: "just release patch"
+    expected:
+      decision: ask
+  - id: just-recipe-clean-ask
+    command: "just clean"
+    expected:
+      decision: ask
+  - id: just-unknown-recipe-ask
+    command: "just foobar"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # glp (GitLab Pipeline CLI): read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: glp-status-safe
+    command: "glp status"
+    expected:
+      decision: allow
+  - id: glp-status-json-safe
+    command: "glp status --json"
+    expected:
+      decision: allow
+  - id: glp-jobs-safe
+    command: "glp jobs"
+    expected:
+      decision: allow
+  - id: glp-jobs-id-safe
+    command: "glp jobs 742"
+    expected:
+      decision: allow
+  - id: glp-log-safe
+    command: "glp log 123"
+    expected:
+      decision: allow
+  - id: glp-log-tail-safe
+    command: "glp log 2661 --tail 50"
+    expected:
+      decision: allow
+  - id: glp-version-safe
+    command: "glp --version"
+    expected:
+      decision: allow
+  - id: glp-help-safe
+    command: "glp --help"
+    expected:
+      decision: allow
+  - id: glp-help-short-safe
+    command: "glp -h"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - not allowlisted)
+  - id: glp-bare-ask
+    command: "glp"
+    expected:
+      decision: ask
+  - id: glp-retry-ask
+    command: "glp retry 123"
+    expected:
+      decision: ask
+  - id: glp-cancel-ask
+    command: "glp cancel 123"
+    expected:
+      decision: ask
+  - id: glp-unknown-ask
+    command: "glp unknown-command"
+    expected:
+      decision: ask
+  - id: glp-blowup-ask
+    command: "glp blowup server"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # glab (GitLab CLI): read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: glab-auth-status-safe
+    command: "glab auth status"
+    expected:
+      decision: allow
+  - id: glab-ci-status-safe
+    command: "glab ci status"
+    expected:
+      decision: allow
+  - id: glab-ci-status-repo-safe
+    command: "glab ci status --repo tools/longline"
+    expected:
+      decision: allow
+  - id: glab-ci-view-safe
+    command: "glab ci view"
+    expected:
+      decision: allow
+  - id: glab-ci-list-safe
+    command: "glab ci list"
+    expected:
+      decision: allow
+  - id: glab-repo-list-safe
+    command: "glab repo list"
+    expected:
+      decision: allow
+  - id: glab-repo-view-safe
+    command: "glab repo view"
+    expected:
+      decision: allow
+  - id: glab-group-list-safe
+    command: "glab group list"
+    expected:
+      decision: allow
+  - id: glab-issue-list-safe
+    command: "glab issue list"
+    expected:
+      decision: allow
+  - id: glab-issue-view-safe
+    command: "glab issue view 42"
+    expected:
+      decision: allow
+  - id: glab-mr-list-safe
+    command: "glab mr list"
+    expected:
+      decision: allow
+  - id: glab-mr-view-safe
+    command: "glab mr view 123"
+    expected:
+      decision: allow
+  - id: glab-version-safe
+    command: "glab --version"
+    expected:
+      decision: allow
+  - id: glab-help-safe
+    command: "glab --help"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - not allowlisted or potentially destructive)
+  - id: glab-bare-ask
+    command: "glab"
+    expected:
+      decision: ask
+  - id: glab-api-ask
+    command: "glab api projects"
+    expected:
+      decision: ask
+  - id: glab-api-post-ask
+    command: "glab api -X POST projects"
+    expected:
+      decision: ask
+  - id: glab-repo-create-ask
+    command: "glab repo create myrepo"
+    expected:
+      decision: ask
+  - id: glab-repo-delete-ask
+    command: "glab repo delete myrepo"
+    expected:
+      decision: ask
+  - id: glab-repo-fork-ask
+    command: "glab repo fork"
+    expected:
+      decision: ask
+  - id: glab-mr-create-ask
+    command: "glab mr create"
+    expected:
+      decision: ask
+  - id: glab-mr-merge-ask
+    command: "glab mr merge 123"
+    expected:
+      decision: ask
+  - id: glab-issue-create-ask
+    command: "glab issue create"
+    expected:
+      decision: ask
+  - id: glab-ci-run-ask
+    command: "glab ci run"
+    expected:
+      decision: ask
+  - id: glab-ci-retry-ask
+    command: "glab ci retry"
+    expected:
+      decision: ask
+  - id: glab-auth-login-ask
+    command: "glab auth login"
+    expected:
+      decision: ask
+  - id: glab-config-set-ask
+    command: "glab config set editor vim"
+    expected:
+      decision: ask
+  - id: glab-blowup-server-ask
+    command: "glab blowup server"
+    expected:
+      decision: ask
+  - id: glab-unknown-ask
+    command: "glab unknown-command"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # git-cliff: stdout-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow - output to stdout)
+  - id: git-cliff-unreleased-safe
+    command: "git-cliff --unreleased"
+    expected:
+      decision: allow
+  - id: git-cliff-latest-safe
+    command: "git-cliff --latest"
+    expected:
+      decision: allow
+  - id: git-cliff-current-safe
+    command: "git-cliff --current"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - writes files or other operations)
+  - id: git-cliff-bare-ask
+    command: "git-cliff"
+    expected:
+      decision: ask
+  - id: git-cliff-output-ask
+    command: "git-cliff -o CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-long-ask
+    command: "git-cliff --output CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-tag-ask
+    command: "git-cliff --tag v1.0.0"
+    expected:
+      decision: ask
+  - id: git-cliff-init-ask
+    command: "git-cliff --init"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # cargo install: should always ask (downloads/runs arbitrary code)
+  # ════════════════════════════════════════════════════════════════
+  - id: cargo-install-ask
+    command: "cargo install ripgrep"
+    expected:
+      decision: ask
+  - id: cargo-install-path-ask
+    command: "cargo install --path ."
+    expected:
+      decision: ask
+  - id: cargo-install-git-ask
+    command: "cargo install --git https://github.com/user/repo"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # chmod: should always ask (modifies permissions)
+  # ════════════════════════════════════════════════════════════════
+  - id: chmod-executable-ask
+    command: "chmod +x script.sh"
+    expected:
+      decision: ask
+  - id: chmod-755-ask
+    command: "chmod 755 script.sh"
+    expected:
+      decision: ask
+  - id: chmod-recursive-ask
+    command: "chmod -R +x scripts/"
+    expected:
+      decision: ask

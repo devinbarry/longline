@@ -31,6 +31,7 @@ allowlists:
     - cksum
     - "true"
     - "false"
+    - sleep
     - grep
     - rg
     - find
@@ -77,6 +78,37 @@ allowlists:
     - "uv run pyright"
     - "uv run bandit"
     - "uv run coverage"
+    # ── just: read-only invocations ───────────────────────────────
+    - "just --list"
+    - "just -l"
+    - "just --version"
+    - "just --help"
+    - "just -h"
+    # ── glp (GitLab Pipeline CLI): read-only invocations ──────────
+    - "glp status"
+    - "glp jobs"
+    - "glp log"
+    - "glp --version"
+    - "glp --help"
+    - "glp -h"
+    # ── glab (GitLab CLI): read-only invocations ──────────────────
+    - "glab auth status"
+    - "glab ci status"
+    - "glab ci view"
+    - "glab ci list"
+    - "glab repo list"
+    - "glab repo view"
+    - "glab group list"
+    - "glab issue list"
+    - "glab issue view"
+    - "glab mr list"
+    - "glab mr view"
+    - "glab --version"
+    - "glab --help"
+    # ── git-cliff: stdout-only invocations ────────────────────────
+    - "git-cliff --unreleased"
+    - "git-cliff --latest"
+    - "git-cliff --current"
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
     - mkdir
     - touch
