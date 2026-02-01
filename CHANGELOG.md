@@ -2,12 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.5] - 2026-02-01
+
+
+### Changed
+
+- update module names and test case count
+- fix rule example structure and add missing modules
+
 ## [0.1.4] - 2026-02-01
 
 
 ### Changed
 
 - add release command to CLAUDE.md
+- release v0.1.4
 
 
 ### Fixed
