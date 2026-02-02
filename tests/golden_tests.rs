@@ -213,11 +213,6 @@ fn golden_allowlist_bypass_filesystem() {
 }
 
 #[test]
-fn golden_allowlist_bypass_git() {
-    run_golden_suite("allowlist-bypass-git.yaml");
-}
-
-#[test]
 fn golden_allowlist_bypass_package_managers() {
     run_golden_suite("allowlist-bypass-package-managers.yaml");
 }

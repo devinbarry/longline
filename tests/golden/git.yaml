@@ -1,4 +1,36 @@
+# ============================================================
+# GIT GOLDEN TESTS - Comprehensive git command coverage
+# ============================================================
+#
+# Organization:
+#   1. Core read-only commands (always safe)
+#   2. Staging and committing
+#   3. Branch operations
+#   4. Remote operations
+#   5. Tag operations
+#   6. Stash operations
+#   7. History rewriting (reset, clean, revert)
+#   8. Config modification
+#   9. Worktree operations
+#   10. Reflog operations
+#   11. GC operations
+#   12. Bisect operations
+#   13. File operations (mv, rm, grep)
+#   14. Archive operations
+#   15. Repository setup (clone, init)
+#   16. Merge and cherry-pick
+#   17. Force push (deny)
+#   18. Rebase (representative tests - see git-rebase.yaml for comprehensive coverage)
+#   19. Special cases (symbolic-ref)
+#
+# ============================================================
+
 tests:
+
+  # ============================================================
+  # 1. CORE READ-ONLY COMMANDS (always safe)
+  # ============================================================
+
   - id: git-status-safe
     command: "git status"
     expected:
@@ -7,48 +39,59 @@ tests:
     command: "git diff"
     expected:
       decision: allow
+  - id: git-diff-staged
+    command: "git diff --staged"
+    expected:
+      decision: allow
   - id: git-log-safe
     command: "git log"
     expected:
       decision: allow
-  - id: git-branch-safe
-    command: "git branch"
+  - id: git-log-oneline
+    command: "git log --oneline -10"
     expected:
       decision: allow
   - id: git-show-safe
     command: "git show"
     expected:
       decision: allow
-  - id: git-force-push-main
-    command: "git push --force origin main"
+  - id: git-show-commit
+    command: "git show abc1234"
     expected:
-      decision: deny
-      rule_id: git-force-push-main
-  - id: git-force-push-master
-    command: "git push -f origin master"
+      decision: allow
+  - id: git-rev-parse-safe
+    command: "git rev-parse HEAD"
     expected:
-      decision: deny
-      rule_id: git-force-push-main
-  - id: git-reset-hard
-    command: "git reset --hard HEAD~1"
+      decision: allow
+  - id: git-blame-safe
+    command: "git blame src/main.rs"
     expected:
-      decision: ask
-      rule_id: git-reset-hard
-  - id: git-clean-f
-    command: "git clean -f"
+      decision: allow
+  - id: git-describe-safe
+    command: "git describe --tags"
     expected:
-      decision: ask
-      rule_id: git-clean-force
-  - id: git-clean-fd
-    command: "git clean -fd"
+      decision: allow
+  - id: git-shortlog-safe
+    command: "git shortlog -sn"
     expected:
-      decision: ask
-      rule_id: git-clean-force
-  - id: git-branch-D-ask
-    command: "git branch -D feature-branch"
+      decision: allow
+  - id: git-ls-files-safe
+    command: "git ls-files"
     expected:
-      decision: ask
-      rule_id: git-branch-delete-force
+      decision: allow
+  - id: git-ls-tree-safe
+    command: "git ls-tree HEAD"
+    expected:
+      decision: allow
+  - id: git-cat-file-safe
+    command: "git cat-file -p HEAD"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 2. STAGING AND COMMITTING
+  # ============================================================
+
   - id: git-add
     command: "git add ."
     expected:
@@ -67,91 +110,30 @@ tests:
     expected:
       decision: ask
       rule_id: git-commit-amend
-  - id: git-push
-    command: "git push origin feature-branch"
+
+  # ============================================================
+  # 3. BRANCH OPERATIONS
+  # ============================================================
+
+  - id: git-branch-safe
+    command: "git branch"
     expected:
       decision: allow
-  - id: git-stash-list-safe
-    command: "git stash list"
-    expected:
-      decision: allow
-  - id: git-remote-safe
-    command: "git remote -v"
-    expected:
-      decision: allow
-  - id: git-tag-safe
-    command: "git tag"
-    expected:
-      decision: allow
-  - id: git-rev-parse-safe
-    command: "git rev-parse HEAD"
-    expected:
-      decision: allow
-  - id: git-config-safe
-    command: "git config user.email"
-    expected:
-      decision: allow
-  - id: git-diff-staged
-    command: "git diff --staged"
-    expected:
-      decision: allow
-  - id: git-log-oneline
-    command: "git log --oneline -10"
-    expected:
-      decision: allow
-  - id: git-show-commit
-    command: "git show abc1234"
-    expected:
-      decision: allow
-  - id: git-branch-list
+  - id: git-branch-list-safe
     command: "git branch -a"
     expected:
       decision: allow
-  - id: git-force-push-main-long
-    command: "git push --force origin main"
+  - id: git-branch-delete-safe
+    command: "git branch -d feature"
     expected:
-      decision: deny
-      rule_id: git-force-push-main
-  - id: git-clean-fx
-    command: "git clean -fx"
+      decision: allow
+    # Safe delete (fails if not merged)
+  - id: git-branch-force-delete
+    command: "git branch -D feature"
     expected:
       decision: ask
-      rule_id: git-clean-force
-  - id: git-clean-fxd
-    command: "git clean -fxd"
-    expected:
-      decision: ask
-      rule_id: git-clean-force
-  - id: git-reset-hard-head
-    command: "git reset --hard"
-    expected:
-      decision: ask
-      rule_id: git-reset-hard
-  - id: git-stash-push
-    command: "git stash push"
-    expected:
-      decision: allow
-  - id: git-merge
-    command: "git merge feature-branch"
-    expected:
-      decision: allow
-  - id: git-rebase-asks
-    command: "git rebase main"
-    expected:
-      decision: ask
-      rule_id: git-rebase
-  - id: git-cherry-pick
-    command: "git cherry-pick abc1234"
-    expected:
-      decision: allow
-  - id: git-fetch
-    command: "git fetch origin"
-    expected:
-      decision: allow
-  - id: git-pull
-    command: "git pull origin main"
-    expected:
-      decision: allow
+      rule_id: git-branch-delete-force
+    # Force delete can lose unmerged work
   - id: git-switch-safe
     command: "git switch feature-branch"
     expected:
@@ -160,96 +142,99 @@ tests:
     command: "git restore file.txt"
     expected:
       decision: allow
-  - id: git-worktree-safe
-    command: "git worktree add ../feature feature-branch"
+
+  # ============================================================
+  # 4. REMOTE OPERATIONS
+  # ============================================================
+
+  - id: git-remote-list-safe
+    command: "git remote -v"
     expected:
       decision: allow
-  - id: git-clone-safe
-    command: "git clone https://github.com/user/repo.git"
+  - id: git-remote-show-safe
+    command: "git remote show origin"
     expected:
       decision: allow
-  - id: git-init-safe
-    command: "git init"
+  - id: git-remote-add
+    command: "git remote add upstream https://github.com/foo/bar"
+    expected:
+      decision: ask
+    # Modifies remote configuration
+  - id: git-remote-remove
+    command: "git remote remove origin"
+    expected:
+      decision: ask
+    # Removes remote
+  - id: git-remote-set-url
+    command: "git remote set-url origin https://evil.com/repo"
+    expected:
+      decision: ask
+    # Could redirect to malicious repo
+  - id: git-fetch
+    command: "git fetch origin"
     expected:
       decision: allow
-  - id: git-blame-safe
-    command: "git blame src/main.rs"
+  - id: git-pull-safe
+    command: "git pull"
     expected:
       decision: allow
-  - id: git-bisect-safe
-    command: "git bisect start"
+  - id: git-pull-origin
+    command: "git pull origin main"
     expected:
       decision: allow
-  - id: git-describe-safe
-    command: "git describe --tags"
+  - id: git-pull-rebase-safe
+    command: "git pull --rebase"
     expected:
       decision: allow
-  - id: git-shortlog-safe
-    command: "git shortlog -sn"
+  - id: git-pull-force-dangerous
+    command: "git pull --force"
+    expected:
+      decision: ask
+    # Can overwrite local changes
+  - id: git-push
+    command: "git push origin feature-branch"
     expected:
       decision: allow
-  - id: git-reflog-safe
-    command: "git reflog"
+
+  # ============================================================
+  # 5. TAG OPERATIONS
+  # ============================================================
+
+  - id: git-tag-list-safe
+    command: "git tag -l"
     expected:
       decision: allow
-  - id: git-ls-files-safe
-    command: "git ls-files"
+  - id: git-tag-create-safe
+    command: "git tag v1.0.0"
     expected:
       decision: allow
-  - id: git-ls-tree-safe
-    command: "git ls-tree HEAD"
+  - id: git-tag-delete
+    command: "git tag -d v1.0.0"
+    expected:
+      decision: ask
+    # Deletes tag
+  - id: git-tag-delete-remote
+    command: "git push origin --delete v1.0.0"
+    expected:
+      decision: ask
+    # Deletes remote tag
+
+  # ============================================================
+  # 6. STASH OPERATIONS
+  # ============================================================
+
+  - id: git-stash-save-safe
+    command: "git stash"
     expected:
       decision: allow
-  - id: git-cat-file-safe
-    command: "git cat-file -p HEAD"
+  - id: git-stash-push
+    command: "git stash push"
     expected:
       decision: allow
-  # ── git mv safe invocations ─────────────────────────────────────
-  - id: git-mv-safe
-    command: "git mv old.txt new.txt"
+  - id: git-stash-list-safe
+    command: "git stash list"
     expected:
       decision: allow
-  - id: git-mv-dir-safe
-    command: "git mv src/old src/new"
-    expected:
-      decision: allow
-  # ── git rm safe invocations ─────────────────────────────────────
-  - id: git-rm-safe
-    command: "git rm file.txt"
-    expected:
-      decision: allow
-  - id: git-rm-cached-safe
-    command: "git rm --cached file.txt"
-    expected:
-      decision: allow
-  # ── git grep safe invocations ───────────────────────────────────
-  - id: git-grep-safe
-    command: "git grep 'pattern'"
-    expected:
-      decision: allow
-  - id: git-grep-files-safe
-    command: "git grep -l 'TODO'"
-    expected:
-      decision: allow
-  # ── git revert safe invocations ─────────────────────────────────
-  - id: git-revert-safe
-    command: "git revert HEAD"
-    expected:
-      decision: allow
-  - id: git-revert-commit-safe
-    command: "git revert abc123"
-    expected:
-      decision: allow
-  # ── git archive safe invocations ────────────────────────────────
-  - id: git-archive-safe
-    command: "git archive HEAD"
-    expected:
-      decision: allow
-  - id: git-archive-output-safe
-    command: "git archive --format=tar HEAD -o archive.tar"
-    expected:
-      decision: allow
-  # ── git stash pop/apply safe invocations ────────────────────────
   - id: git-stash-pop-safe
     command: "git stash pop"
     expected:
@@ -262,3 +247,309 @@ tests:
     command: "git stash apply stash@{0}"
     expected:
       decision: allow
+  - id: git-stash-drop-dangerous
+    command: "git stash drop"
+    expected:
+      decision: ask
+    # Loses stashed work
+  - id: git-stash-drop-specific
+    command: "git stash drop stash@{0}"
+    expected:
+      decision: ask
+    # Loses stashed work
+  - id: git-stash-clear-dangerous
+    command: "git stash clear"
+    expected:
+      decision: ask
+    # Loses ALL stashed work
+
+  # ============================================================
+  # 7. HISTORY REWRITING (dangerous)
+  # ============================================================
+
+  # --- git reset ---
+  - id: git-reset-hard
+    command: "git reset --hard HEAD~1"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+  - id: git-reset-hard-head
+    command: "git reset --hard"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+
+  # --- git clean ---
+  - id: git-clean-f
+    command: "git clean -f"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-clean-fd
+    command: "git clean -fd"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-clean-fx
+    command: "git clean -fx"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+  - id: git-clean-fxd
+    command: "git clean -fxd"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+
+  # --- git revert (safe - creates new commit) ---
+  - id: git-revert-safe
+    command: "git revert HEAD"
+    expected:
+      decision: allow
+  - id: git-revert-commit-safe
+    command: "git revert abc123"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 8. CONFIG MODIFICATION
+  # ============================================================
+
+  - id: git-config-read-safe
+    command: "git config user.name"
+    expected:
+      decision: allow
+  - id: git-config-local-safe
+    command: "git config user.email foo@bar.com"
+    expected:
+      decision: allow
+    # Local config is relatively safe
+  - id: git-config-global-dangerous
+    command: "git config --global user.email foo@bar.com"
+    expected:
+      decision: ask
+    # Modifies global git config
+  - id: git-config-system-dangerous
+    command: "git config --system core.editor vim"
+    expected:
+      decision: ask
+    # Modifies system-wide config
+
+  # ============================================================
+  # 9. WORKTREE OPERATIONS
+  # ============================================================
+
+  - id: git-worktree-list-safe
+    command: "git worktree list"
+    expected:
+      decision: allow
+  - id: git-worktree-add-safe
+    command: "git worktree add ../feature feature-branch"
+    expected:
+      decision: allow
+  - id: git-worktree-remove-dangerous
+    command: "git worktree remove ../feature"
+    expected:
+      decision: ask
+    # Removes worktree directory
+  - id: git-worktree-prune-dangerous
+    command: "git worktree prune"
+    expected:
+      decision: ask
+    # Removes stale worktree info
+
+  # ============================================================
+  # 10. REFLOG OPERATIONS
+  # ============================================================
+
+  - id: git-reflog-show-safe
+    command: "git reflog"
+    expected:
+      decision: allow
+  - id: git-reflog-show-branch-safe
+    command: "git reflog show main"
+    expected:
+      decision: allow
+  - id: git-reflog-delete-dangerous
+    command: "git reflog delete HEAD@{0}"
+    expected:
+      decision: ask
+    # Loses reflog history
+  - id: git-reflog-expire-dangerous
+    command: "git reflog expire --expire=now --all"
+    expected:
+      decision: ask
+    # Expires all reflog entries
+
+  # ============================================================
+  # 11. GC OPERATIONS
+  # ============================================================
+
+  - id: git-gc-safe
+    command: "git gc"
+    expected:
+      decision: allow
+  - id: git-gc-auto-safe
+    command: "git gc --auto"
+    expected:
+      decision: allow
+  - id: git-gc-prune-now-dangerous
+    command: "git gc --prune=now"
+    expected:
+      decision: ask
+    # Immediately removes unreachable objects
+  - id: git-gc-aggressive-dangerous
+    command: "git gc --aggressive --prune=now"
+    expected:
+      decision: ask
+    # Aggressive pruning can lose data
+
+  # ============================================================
+  # 12. BISECT OPERATIONS
+  # ============================================================
+
+  - id: git-bisect-start-safe
+    command: "git bisect start"
+    expected:
+      decision: allow
+  - id: git-bisect-good-safe
+    command: "git bisect good"
+    expected:
+      decision: allow
+  - id: git-bisect-reset-dangerous
+    command: "git bisect reset"
+    expected:
+      decision: ask
+    # Exits bisect, changes HEAD
+
+  # ============================================================
+  # 13. FILE OPERATIONS (mv, rm, grep)
+  # ============================================================
+
+  # --- git mv ---
+  - id: git-mv-safe
+    command: "git mv old.txt new.txt"
+    expected:
+      decision: allow
+  - id: git-mv-dir-safe
+    command: "git mv src/old src/new"
+    expected:
+      decision: allow
+
+  # --- git rm ---
+  - id: git-rm-safe
+    command: "git rm file.txt"
+    expected:
+      decision: allow
+  - id: git-rm-cached-safe
+    command: "git rm --cached file.txt"
+    expected:
+      decision: allow
+
+  # --- git grep ---
+  - id: git-grep-safe
+    command: "git grep 'pattern'"
+    expected:
+      decision: allow
+  - id: git-grep-files-safe
+    command: "git grep -l 'TODO'"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 14. ARCHIVE OPERATIONS
+  # ============================================================
+
+  - id: git-archive-safe
+    command: "git archive HEAD"
+    expected:
+      decision: allow
+  - id: git-archive-output-safe
+    command: "git archive --format=tar HEAD -o archive.tar"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 15. REPOSITORY SETUP (clone, init)
+  # ============================================================
+
+  - id: git-clone-safe
+    command: "git clone https://github.com/user/repo.git"
+    expected:
+      decision: allow
+  - id: git-init-safe
+    command: "git init"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 16. MERGE AND CHERRY-PICK
+  # ============================================================
+
+  - id: git-merge
+    command: "git merge feature-branch"
+    expected:
+      decision: allow
+  - id: git-cherry-pick
+    command: "git cherry-pick abc1234"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # 17. FORCE PUSH (deny)
+  # ============================================================
+
+  - id: git-force-push-main
+    command: "git push --force origin main"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+  - id: git-force-push-master
+    command: "git push -f origin master"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+
+  # ============================================================
+  # 18. REBASE
+  # ============================================================
+  # For comprehensive rebase tests (48 cases), see: git-rebase.yaml
+  # These are representative tests only
+
+  - id: git-rebase-basic-asks
+    command: "git rebase main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-abort-asks
+    command: "git rebase --abort"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-skip-asks
+    command: "git rebase --skip"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # ============================================================
+  # 19. SPECIAL CASES
+  # ============================================================
+
+  # --- git symbolic-ref ---
+  # Removed from allowlist due to potential for destructive use
+  - id: git-symbolic-ref-read-safe
+    command: "git symbolic-ref HEAD"
+    expected:
+      decision: ask
+    # Currently asks because removed from allowlist
+  - id: git-symbolic-ref-delete-dangerous
+    command: "git symbolic-ref --delete HEAD"
+    expected:
+      decision: ask
+    # Must always ask - destructive operation
+  - id: git-symbolic-ref-short-safe
+    command: "git symbolic-ref --short HEAD"
+    expected:
+      decision: ask
+    # Currently asks because removed from allowlist
