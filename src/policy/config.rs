@@ -19,6 +19,16 @@ pub struct ManifestConfig {
     pub include: Vec<String>,
 }
 
+/// Partial rules config for individual files (no version/default_decision/safety_level).
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct PartialRulesConfig {
+    #[serde(default)]
+    pub allowlists: Allowlists,
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+}
+
 /// Top-level rules configuration loaded from YAML.
 #[derive(Debug, Deserialize)]
 pub struct RulesConfig {
@@ -291,5 +301,25 @@ include:
         let config: ManifestConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.include.len(), 2);
         assert_eq!(config.include[0], "core.yaml");
+    }
+
+    #[test]
+    fn test_partial_rules_config_no_version() {
+        let yaml = r#"
+allowlists:
+  commands:
+    - ls
+    - cat
+rules:
+  - id: test-rule
+    level: high
+    match:
+      command: rm
+    decision: ask
+    reason: "Test rule"
+"#;
+        let config: PartialRulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.allowlists.commands.len(), 2);
+        assert_eq!(config.rules.len(), 1);
     }
 }
