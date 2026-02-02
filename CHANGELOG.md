@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.9] - 2026-02-02
+
+
+### Added
+
+- add comprehensive package installation security rules
+- expand package installation rules with explicit coverage
+- add ManifestConfig type for multi-file rule loading
+- add PartialRulesConfig for individual rule files
+- add is_manifest detection function
+- implement manifest-based multi-file rule loading
+- add load_rules_with_info to track source files
+- export LoadedConfig and LoadedFileInfo from policy module
+- add files subcommand to show loaded rule files
+- create manifest and core-allowlist.yaml
+- split rules into domain files
+
+
+### Changed
+
+- add design for splitting rules and tests into domain files
+- add detailed implementation plan for splitting rules
+- add test for missing included file error
+- verify backwards compatibility with monolithic rules file
+- add integration test for files subcommand
+- record baseline rule counts before splitting
+- add integration test verifying manifest produces same decisions
+- update CLAUDE.md with new rules structure
+- split large golden test files by domain
+- merge allowlist-bypass-git.yaml into git.yaml
+- update allowlist-bypass-filesystem tests to expect ask for dangerous commands
+
+
+### Fixed
+
+- require ask for ALL git rebase commands
+
 ## [0.1.8] - 2026-02-02
 
 
@@ -13,6 +50,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - lock allowlist path matching design after security review
+- release v0.1.8
 
 
 ### Fixed
