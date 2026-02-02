@@ -478,3 +478,19 @@ fn test_e2e_xargs_rm_asks() {
         "Reason should mention xargs-rm: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_files_shows_totals() {
+    let (code, stdout, _) = run_subcommand(&["files", "--config", &rules_path()]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Safety level:"),
+        "Should show safety level: {stdout}"
+    );
+    assert!(stdout.contains("Total:"), "Should show totals: {stdout}");
+    assert!(
+        stdout.contains("allowlist entries"),
+        "Should mention allowlist: {stdout}"
+    );
+    assert!(stdout.contains("rules"), "Should mention rules: {stdout}");
+}
