@@ -4,205 +4,226 @@ tests:
   # ============================================================
 
   # --- ln: symbolic link attacks ---
-  - id: ln-safe-symlink
+  - id: ln-symlink
     command: "ln -s source.txt link.txt"
     expected:
-      decision: allow
+      decision: ask
+    # ln creates/modifies filesystem
   - id: ln-force-overwrite
     command: "ln -sf malicious.sh /usr/local/bin/safe"
     expected:
       decision: ask
-    # EXPECTED FAIL: ln -sf can overwrite files/binaries
+    # ln -sf can overwrite files/binaries
 
   # --- tar: extraction attacks ---
   - id: tar-list-safe
     command: "tar -tf archive.tar"
     expected:
       decision: allow
-  - id: tar-extract-dangerous
+    # -t just lists contents, read-only
+  - id: tar-extract
     command: "tar -xf archive.tar"
     expected:
       decision: ask
-    # EXPECTED FAIL: tar -xf can overwrite files, path traversal
+    # tar -xf can overwrite files, path traversal
   - id: tar-extract-overwrite
     command: "tar -xvf archive.tar --overwrite"
     expected:
       decision: ask
-    # EXPECTED FAIL: explicit overwrite flag
+    # explicit overwrite flag
 
   # --- unzip: extraction attacks ---
   - id: unzip-list-safe
     command: "unzip -l archive.zip"
     expected:
       decision: allow
-  - id: unzip-extract-dangerous
+    # -l just lists contents, read-only
+  - id: unzip-extract
     command: "unzip archive.zip"
     expected:
       decision: ask
-    # EXPECTED FAIL: unzip can overwrite files
+    # unzip can overwrite files
   - id: unzip-overwrite-force
     command: "unzip -o archive.zip"
     expected:
       decision: ask
-    # EXPECTED FAIL: -o forces overwrite without prompting
+    # -o forces overwrite without prompting
 
   # --- sed: in-place modification ---
   - id: sed-stdout-safe
     command: "sed 's/foo/bar/' file.txt"
     expected:
       decision: allow
-  - id: sed-inplace-dangerous
+    # outputs to stdout, read-only
+  - id: sed-inplace
     command: "sed -i 's/foo/bar/' file.txt"
     expected:
       decision: ask
-    # EXPECTED FAIL: -i modifies files in place
+    # -i modifies files in place
   - id: sed-inplace-backup
     command: "sed -i.bak 's/foo/bar/' file.txt"
     expected:
       decision: ask
-    # EXPECTED FAIL: still modifies original
+    # still modifies original
 
   # --- patch: file modification ---
   - id: patch-dryrun-safe
     command: "patch --dry-run < changes.patch"
     expected:
       decision: allow
-  - id: patch-apply-dangerous
+    # --dry-run doesn't modify anything
+  - id: patch-apply
     command: "patch < changes.patch"
     expected:
       decision: ask
-    # EXPECTED FAIL: patch modifies files
-  - id: patch-apply-file
+    # patch modifies files
+  - id: patch-apply-strip
     command: "patch -p1 < changes.patch"
     expected:
       decision: ask
-    # EXPECTED FAIL: patch modifies files
+    # patch modifies files
 
   # --- gzip/gunzip: removes original ---
   - id: gzip-keep-safe
     command: "gzip -k file.txt"
     expected:
       decision: allow
+    # -k keeps original
   - id: gzip-remove-original
     command: "gzip file.txt"
     expected:
       decision: ask
-    # EXPECTED FAIL: gzip removes original by default
+    # gzip removes original by default
   - id: gunzip-keep-safe
     command: "gunzip -k file.txt.gz"
     expected:
       decision: allow
+    # -k keeps original
   - id: gunzip-remove-original
     command: "gunzip file.txt.gz"
     expected:
       decision: ask
-    # EXPECTED FAIL: gunzip removes original by default
+    # gunzip removes original by default
 
   # --- npx: arbitrary code execution ---
-  - id: npx-known-safe
+  - id: npx-known-package
     command: "npx prettier --check ."
     expected:
       decision: ask
       rule_id: npx-run
+    # npx downloads and executes arbitrary code
   - id: npx-arbitrary-package
     command: "npx some-random-package"
     expected:
       decision: ask
-    # EXPECTED FAIL: npx can run arbitrary npm packages
+    # npx can run arbitrary npm packages
   - id: npx-typosquat-risk
     command: "npx loadash"
     expected:
       decision: ask
-    # EXPECTED FAIL: typosquatting risk (lodash vs loadash)
+    # typosquatting risk (lodash vs loadash)
 
   # --- find: file deletion ---
   - id: find-name-safe
     command: "find . -name '*.rs'"
     expected:
       decision: allow
+    # just lists files, read-only
   - id: find-type-safe
     command: "find . -type f"
     expected:
       decision: allow
-  - id: find-delete-dangerous
+    # just lists files, read-only
+  - id: find-delete
     command: "find . -delete"
     expected:
       decision: ask
       rule_id: find-delete
-  - id: find-exec-rm-dangerous
+    # deletes files
+  - id: find-exec-rm
     command: "find . -exec rm {} \\;"
     expected:
       decision: ask
       rule_id: find-exec-rm
+    # deletes files via exec
 
   # --- xargs: command execution ---
   - id: xargs-echo-safe
     command: "xargs echo"
     expected:
       decision: allow
+    # echo is read-only
   - id: xargs-cat-safe
     command: "xargs cat"
     expected:
       decision: allow
-  - id: xargs-rm-dangerous
+    # cat is read-only
+  - id: xargs-rm
     command: "xargs rm"
     expected:
       decision: ask
       rule_id: xargs-rm
-  - id: xargs-rm-rf-dangerous
+    # deletes files
+  - id: xargs-rm-rf
     command: "xargs rm -rf"
     expected:
       decision: ask
       rule_id: xargs-rm
+    # deletes files recursively
 
-  # --- cp: force overwrite ---
-  - id: cp-safe
+  # --- cp: can overwrite destination ---
+  - id: cp-basic
     command: "cp a.txt b.txt"
     expected:
-      decision: allow
-  - id: cp-recursive-safe
+      decision: ask
+    # cp can silently overwrite b.txt
+  - id: cp-recursive
     command: "cp -r src/ dest/"
     expected:
-      decision: allow
-  - id: cp-force-dangerous
+      decision: ask
+    # cp -r can overwrite dest/
+  - id: cp-force
     command: "cp -f sensitive.txt /tmp/exfil"
     expected:
       decision: ask
-    # EXPECTED FAIL: -f forces overwrite without prompting
-  - id: cp-force-recursive-dangerous
+    # -f forces overwrite without prompting
+  - id: cp-force-recursive
     command: "cp -rf /important /tmp/backup"
     expected:
       decision: ask
-    # EXPECTED FAIL: -rf can overwrite directories
+    # -rf can overwrite directories
 
-  # --- mv: force overwrite ---
-  - id: mv-safe
+  # --- mv: removes source, can overwrite destination ---
+  - id: mv-basic
     command: "mv a.txt b.txt"
     expected:
-      decision: allow
-  - id: mv-force-dangerous
+      decision: ask
+    # mv removes a.txt and can overwrite b.txt
+  - id: mv-force
     command: "mv -f important.txt /dev/null"
     expected:
       decision: ask
-    # EXPECTED FAIL: -f forces overwrite without prompting
+    # -f forces overwrite without prompting
 
-  # --- tee: write to sensitive locations ---
-  - id: tee-safe
+  # --- tee: writes/overwrites files ---
+  - id: tee-basic
     command: "tee output.txt"
     expected:
-      decision: allow
-  - id: tee-etc-passwd-dangerous
+      decision: ask
+    # tee can overwrite output.txt
+  - id: tee-etc-passwd
     command: "tee /etc/passwd"
     expected:
       decision: ask
-    # EXPECTED FAIL: writing to system file
-  - id: tee-etc-shadow-dangerous
+    # writing to system file
+  - id: tee-etc-shadow
     command: "tee /etc/shadow"
     expected:
       decision: ask
-    # EXPECTED FAIL: writing to system file
-  - id: tee-append-bashrc-dangerous
+    # writing to system file
+  - id: tee-append-bashrc
     command: "tee -a ~/.bashrc"
     expected:
       decision: deny
       rule_id: edit-shell-profile
+    # modifying shell profile
