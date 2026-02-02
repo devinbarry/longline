@@ -7,10 +7,8 @@ use std::path::Path;
 use crate::types::Decision;
 
 /// Manifest configuration that lists files to include.
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ManifestConfig {
-    #[allow(dead_code)]
     pub version: u32,
     #[serde(default = "default_decision")]
     pub default_decision: Decision,
@@ -20,7 +18,6 @@ pub struct ManifestConfig {
 }
 
 /// Partial rules config for individual files (no version/default_decision/safety_level).
-#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct PartialRulesConfig {
     #[serde(default)]
@@ -30,7 +27,6 @@ pub struct PartialRulesConfig {
 }
 
 /// Check if YAML content is a manifest (has `include:` key).
-#[allow(dead_code)]
 fn is_manifest(content: &str) -> bool {
     // Quick check without full parse - look for include: at start of line
     content.lines().any(|line| {
@@ -171,13 +167,52 @@ impl StringOrList {
     }
 }
 
-/// Load rules from a YAML file.
+/// Load rules from a YAML file (manifest or monolithic).
 pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
-    let config: RulesConfig = serde_yaml::from_str(&content)
-        .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
-    Ok(config)
+
+    if is_manifest(&content) {
+        load_manifest(path, &content)
+    } else {
+        let config: RulesConfig = serde_yaml::from_str(&content)
+            .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
+        Ok(config)
+    }
+}
+
+/// Load a manifest file and merge all included files.
+fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, String> {
+    let manifest: ManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
+
+    let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
+
+    let mut merged_allowlists: Vec<String> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_path = manifest_dir.join(file_name);
+        let file_content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read included file {}: {e}", file_path.display()))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(&file_content)
+            .map_err(|e| format!("Failed to parse included file {}: {e}", file_path.display()))?;
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(RulesConfig {
+        version: manifest.version,
+        default_decision: manifest.default_decision,
+        safety_level: manifest.safety_level,
+        allowlists: Allowlists {
+            commands: merged_allowlists,
+            paths: Vec::new(),
+        },
+        rules: merged_rules,
+    })
 }
 
 #[cfg(test)]
@@ -350,5 +385,65 @@ version: 1
 rules: []
 "#;
         assert!(!is_manifest(yaml));
+    }
+
+    #[test]
+    fn test_load_manifest_merges_files() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+
+        // Create manifest
+        let manifest_path = dir.path().join("manifest.yaml");
+        std::fs::write(
+            &manifest_path,
+            r#"
+version: 1
+default_decision: ask
+safety_level: high
+include:
+  - core.yaml
+  - git.yaml
+"#,
+        )
+        .unwrap();
+
+        // Create core.yaml
+        std::fs::write(
+            dir.path().join("core.yaml"),
+            r#"
+allowlists:
+  commands:
+    - ls
+    - cat
+rules: []
+"#,
+        )
+        .unwrap();
+
+        // Create git.yaml
+        std::fs::write(
+            dir.path().join("git.yaml"),
+            r#"
+allowlists:
+  commands:
+    - "git status"
+rules:
+  - id: git-force-push
+    level: high
+    match:
+      command: git
+      flags:
+        any_of: ["--force"]
+    decision: ask
+    reason: "Force push"
+"#,
+        )
+        .unwrap();
+
+        let config = load_rules(&manifest_path).unwrap();
+        assert_eq!(config.allowlists.commands.len(), 3); // ls, cat, git status
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "git-force-push");
     }
 }
