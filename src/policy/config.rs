@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::types::Decision;
 
@@ -24,6 +24,25 @@ pub struct PartialRulesConfig {
     pub allowlists: Allowlists,
     #[serde(default)]
     pub rules: Vec<Rule>,
+}
+
+/// Information about a loaded rule file.
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Will be exported in Task 8
+pub struct LoadedFileInfo {
+    pub name: String,
+    pub allowlist_count: usize,
+    pub rule_count: usize,
+}
+
+/// Extended config with loading metadata.
+#[derive(Debug)]
+#[allow(dead_code)] // Will be exported in Task 8
+pub struct LoadedConfig {
+    pub config: RulesConfig,
+    pub is_manifest: bool,
+    pub manifest_path: Option<PathBuf>,
+    pub files: Vec<LoadedFileInfo>,
 }
 
 /// Check if YAML content is a manifest (has `include:` key).
@@ -212,6 +231,80 @@ fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, Str
             paths: Vec::new(),
         },
         rules: merged_rules,
+    })
+}
+
+/// Load rules with additional metadata about source files.
+#[allow(dead_code)] // Will be exported in Task 8
+pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
+    let content = fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
+
+    if is_manifest(&content) {
+        load_manifest_with_info(path, &content)
+    } else {
+        let config: RulesConfig = serde_yaml::from_str(&content)
+            .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
+        Ok(LoadedConfig {
+            is_manifest: false,
+            manifest_path: None,
+            files: vec![LoadedFileInfo {
+                name: path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+                allowlist_count: config.allowlists.commands.len(),
+                rule_count: config.rules.len(),
+            }],
+            config,
+        })
+    }
+}
+
+#[allow(dead_code)] // Used by load_rules_with_info
+fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<LoadedConfig, String> {
+    let manifest: ManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
+
+    let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
+
+    let mut merged_allowlists: Vec<String> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+    let mut files: Vec<LoadedFileInfo> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_path = manifest_dir.join(file_name);
+        let file_content = fs::read_to_string(&file_path)
+            .map_err(|e| format!("Failed to read included file {}: {e}", file_path.display()))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(&file_content)
+            .map_err(|e| format!("Failed to parse included file {}: {e}", file_path.display()))?;
+
+        files.push(LoadedFileInfo {
+            name: file_name.clone(),
+            allowlist_count: partial.allowlists.commands.len(),
+            rule_count: partial.rules.len(),
+        });
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(LoadedConfig {
+        config: RulesConfig {
+            version: manifest.version,
+            default_decision: manifest.default_decision,
+            safety_level: manifest.safety_level,
+            allowlists: Allowlists {
+                commands: merged_allowlists,
+                paths: Vec::new(),
+            },
+            rules: merged_rules,
+        },
+        is_manifest: true,
+        manifest_path: Some(manifest_path.to_path_buf()),
+        files,
     })
 }
 
@@ -481,5 +574,42 @@ include:
             config.allowlists.commands.len() > 100,
             "Should have many allowlist entries"
         );
+    }
+
+    #[test]
+    fn test_loaded_config_tracks_files() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+
+        let manifest_path = dir.path().join("manifest.yaml");
+        std::fs::write(
+            &manifest_path,
+            r#"
+version: 1
+default_decision: ask
+safety_level: high
+include:
+  - core.yaml
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            dir.path().join("core.yaml"),
+            r#"
+allowlists:
+  commands: [ls]
+rules: []
+"#,
+        )
+        .unwrap();
+
+        let loaded = load_rules_with_info(&manifest_path).unwrap();
+        assert!(loaded.is_manifest);
+        assert_eq!(loaded.files.len(), 1);
+        assert_eq!(loaded.files[0].name, "core.yaml");
+        assert_eq!(loaded.files[0].allowlist_count, 1);
+        assert_eq!(loaded.files[0].rule_count, 0);
     }
 }
