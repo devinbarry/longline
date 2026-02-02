@@ -2,7 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.7] - 2026-02-02
+
+
+### Added
+
+- add Django manage.py command safety rules
+
+
+### Changed
+
+- add allowlist path matching design exploration
+- add subdirectory-only constraint and security analysis
+- add constraint to only normalize path-like arguments
+
 ## [0.1.6] - 2026-02-01
+
+
+### Changed
+
+- release v0.1.6
 
 
 ### Fixed
