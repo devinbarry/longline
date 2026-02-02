@@ -40,17 +40,31 @@ tests:
     expected:
       decision: allow
 
-  # Negative tests (should ask - runs arbitrary recipes)
-  - id: just-bare-ask
-    command: "just"
-    expected:
-      decision: ask
-  - id: just-recipe-ask
+  # Standard dev recipes (should allow)
+  - id: just-build-safe
     command: "just build"
     expected:
-      decision: ask
-  - id: just-recipe-test-ask
+      decision: allow
+  - id: just-test-safe
     command: "just test"
+    expected:
+      decision: allow
+  - id: just-check-safe
+    command: "just check"
+    expected:
+      decision: allow
+  - id: just-fmt-safe
+    command: "just fmt"
+    expected:
+      decision: allow
+  - id: just-lint-safe
+    command: "just lint"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - runs arbitrary recipes or bare command)
+  - id: just-bare-ask
+    command: "just"
     expected:
       decision: ask
   - id: just-recipe-release-ask
@@ -189,18 +203,61 @@ tests:
     command: "glab --help"
     expected:
       decision: allow
+  # glab ci trace and get (should allow)
+  - id: glab-ci-trace-safe
+    command: "glab ci trace"
+    expected:
+      decision: allow
+  - id: glab-ci-trace-job-safe
+    command: "glab ci trace build_job"
+    expected:
+      decision: allow
+  - id: glab-ci-get-safe
+    command: "glab ci get"
+    expected:
+      decision: allow
+  # glab api read operations (should allow - GET is default)
+  - id: glab-api-bare-safe
+    command: "glab api"
+    expected:
+      decision: allow
+  - id: glab-api-read-safe
+    command: "glab api projects"
+    expected:
+      decision: allow
+  - id: glab-api-pipelines-safe
+    command: "glab api projects/tools%2Flongline/pipelines"
+    expected:
+      decision: allow
+  - id: glab-api-jobs-safe
+    command: "glab api projects/tools%2Flongline/pipelines/123/jobs"
+    expected:
+      decision: allow
 
   # Negative tests (should ask - not allowlisted or potentially destructive)
   - id: glab-bare-ask
     command: "glab"
     expected:
       decision: ask
-  - id: glab-api-ask
-    command: "glab api projects"
-    expected:
-      decision: ask
+  # glab api mutating operations (should ask - caught by rule)
   - id: glab-api-post-ask
     command: "glab api -X POST projects"
+    expected:
+      decision: ask
+  - id: glab-api-method-post-ask
+    command: "glab api projects/foo/pipeline --method POST"
+    expected:
+      decision: ask
+  - id: glab-api-delete-ask
+    command: "glab api projects/foo -X DELETE"
+    expected:
+      decision: ask
+  - id: glab-api-put-ask
+    command: "glab api projects/foo --method PUT"
+    expected:
+      decision: ask
+  - id: glab-api-patch-ask
+    command: "glab api projects/foo -X PATCH"
     expected:
       decision: ask
   - id: glab-repo-create-ask
@@ -383,6 +440,52 @@ tests:
     command: "gh -h"
     expected:
       decision: allow
+  # gh run and workflow commands (should allow)
+  - id: gh-run-list-safe
+    command: "gh run list"
+    expected:
+      decision: allow
+  - id: gh-run-list-repo-safe
+    command: "gh run list --repo owner/repo"
+    expected:
+      decision: allow
+  - id: gh-run-view-safe
+    command: "gh run view 123"
+    expected:
+      decision: allow
+  - id: gh-run-view-log-safe
+    command: "gh run view 123 --log"
+    expected:
+      decision: allow
+  - id: gh-run-watch-safe
+    command: "gh run watch 123"
+    expected:
+      decision: allow
+  - id: gh-workflow-list-safe
+    command: "gh workflow list"
+    expected:
+      decision: allow
+  - id: gh-workflow-view-safe
+    command: "gh workflow view CI"
+    expected:
+      decision: allow
+  # gh api read operations (should allow - GET is default)
+  - id: gh-api-bare-safe
+    command: "gh api"
+    expected:
+      decision: allow
+  - id: gh-api-read-safe
+    command: "gh api repos/owner/repo"
+    expected:
+      decision: allow
+  - id: gh-api-contents-safe
+    command: "gh api repos/owner/repo/contents"
+    expected:
+      decision: allow
+  - id: gh-api-jq-safe
+    command: "gh api repos/owner/repo --jq '.name'"
+    expected:
+      decision: allow
 
   # Negative tests (should ask - not allowlisted or potentially destructive)
   - id: gh-bare-ask
@@ -417,8 +520,25 @@ tests:
     command: "gh repo delete myrepo"
     expected:
       decision: ask
-  - id: gh-api-ask
-    command: "gh api repos/owner/repo"
+  # gh api mutating operations (should ask - caught by rule)
+  - id: gh-api-post-ask
+    command: "gh api repos/owner/repo -X POST"
+    expected:
+      decision: ask
+  - id: gh-api-method-post-ask
+    command: "gh api repos/owner/repo --method POST"
+    expected:
+      decision: ask
+  - id: gh-api-delete-ask
+    command: "gh api repos/owner/repo -X DELETE"
+    expected:
+      decision: ask
+  - id: gh-api-patch-ask
+    command: "gh api repos/owner/repo --method PATCH"
+    expected:
+      decision: ask
+  - id: gh-api-put-ask
+    command: "gh api repos/owner/repo -X PUT"
     expected:
       decision: ask
   - id: gh-auth-login-ask
@@ -429,3 +549,138 @@ tests:
     command: "gh unknown-command"
     expected:
       decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # uv: additional safe operations
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: uv-sync-safe
+    command: "uv sync"
+    expected:
+      decision: allow
+  - id: uv-sync-frozen-safe
+    command: "uv sync --frozen"
+    expected:
+      decision: allow
+  - id: uv-lock-safe
+    command: "uv lock"
+    expected:
+      decision: allow
+  - id: uv-lock-upgrade-safe
+    command: "uv lock --upgrade"
+    expected:
+      decision: allow
+  - id: uv-venv-safe
+    command: "uv venv"
+    expected:
+      decision: allow
+  - id: uv-venv-path-safe
+    command: "uv venv .venv"
+    expected:
+      decision: allow
+  - id: uv-pip-safe
+    command: "uv pip"
+    expected:
+      decision: allow
+  - id: uv-pip-list-safe
+    command: "uv pip list"
+    expected:
+      decision: allow
+  - id: uv-pip-install-safe
+    command: "uv pip install requests"
+    expected:
+      decision: allow
+  - id: uv-run-precommit-safe
+    command: "uv run pre-commit"
+    expected:
+      decision: allow
+  - id: uv-run-precommit-all-safe
+    command: "uv run pre-commit run --all-files"
+    expected:
+      decision: allow
+  - id: uv-run-precommit-install-safe
+    command: "uv run pre-commit install"
+    expected:
+      decision: allow
+  - id: uv-version-safe
+    command: "uv --version"
+    expected:
+      decision: allow
+  - id: uv-version-short-safe
+    command: "uv -V"
+    expected:
+      decision: allow
+  - id: uv-help-safe
+    command: "uv --help"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # cargo: additional safe subcommands
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: cargo-release-safe
+    command: "cargo release"
+    expected:
+      decision: allow
+  - id: cargo-release-patch-safe
+    command: "cargo release patch"
+    expected:
+      decision: allow
+  - id: cargo-release-dry-run-safe
+    command: "cargo release --dry-run"
+    expected:
+      decision: allow
+  - id: cargo-deny-safe
+    command: "cargo deny"
+    expected:
+      decision: allow
+  - id: cargo-deny-check-safe
+    command: "cargo deny check"
+    expected:
+      decision: allow
+  - id: cargo-audit-safe
+    command: "cargo audit"
+    expected:
+      decision: allow
+  - id: cargo-outdated-safe
+    command: "cargo outdated"
+    expected:
+      decision: allow
+  - id: cargo-expand-safe
+    command: "cargo expand"
+    expected:
+      decision: allow
+  - id: cargo-expand-mod-safe
+    command: "cargo expand parser"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # python: pytest as module
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: python-m-pytest-safe
+    command: "python -m pytest"
+    expected:
+      decision: allow
+  - id: python-m-pytest-verbose-safe
+    command: "python -m pytest -v"
+    expected:
+      decision: allow
+  - id: python-m-pytest-path-safe
+    command: "python -m pytest tests/"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-safe
+    command: "python3 -m pytest"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-verbose-safe
+    command: "python3 -m pytest -v"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-path-safe
+    command: "python3 -m pytest tests/unit/"
+    expected:
+      decision: allow

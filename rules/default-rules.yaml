@@ -113,6 +113,8 @@ allowlists:
     - "node -v"
     - "ruby --version"
     - "ruby -v"
+    - "python -m pytest"
+    - "python3 -m pytest"
     # ── uv: safe tool invocations ───────────────────────────────
     - "uv run pytest"
     - "uv run mypy"
@@ -124,6 +126,14 @@ allowlists:
     - "uv run pyright"
     - "uv run bandit"
     - "uv run coverage"
+    - "uv run pre-commit"
+    - "uv sync"
+    - "uv lock"
+    - "uv venv"
+    - "uv pip"
+    - "uv --version"
+    - "uv --help"
+    - "uv -V"
     # ── Django: safe manage.py commands ─────────────────────────────
     - "python manage.py check"
     - "python manage.py showmigrations"
@@ -187,12 +197,17 @@ allowlists:
     - "uv run python3 manage.py dumpdata"
     - "uv run python3 manage.py makemessages"
     - "uv run python3 manage.py compilemessages"
-    # ── just: read-only invocations ───────────────────────────────
+    # ── just: safe invocations ───────────────────────────────────
     - "just --list"
     - "just -l"
     - "just --version"
     - "just --help"
     - "just -h"
+    - "just test"
+    - "just build"
+    - "just check"
+    - "just fmt"
+    - "just lint"
     # ── glp (GitLab Pipeline CLI): read-only invocations ──────────
     - "glp status"
     - "glp jobs"
@@ -201,10 +216,14 @@ allowlists:
     - "glp --help"
     - "glp -h"
     # ── glab (GitLab CLI): read-only invocations ──────────────────
+    # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by glab-api-mutating rule
+    - "glab api"
     - "glab auth status"
     - "glab ci status"
     - "glab ci view"
     - "glab ci list"
+    - "glab ci trace"
+    - "glab ci get"
     - "glab repo list"
     - "glab repo view"
     - "glab group list"
@@ -215,6 +234,8 @@ allowlists:
     - "glab --version"
     - "glab --help"
     # ── gh (GitHub CLI): read-only invocations ───────────────────────
+    # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by gh-api-mutating rule
+    - "gh api"
     - "gh pr list"
     - "gh pr view"
     - "gh pr status"
@@ -225,6 +246,11 @@ allowlists:
     - "gh issue status"
     - "gh repo list"
     - "gh repo view"
+    - "gh run list"
+    - "gh run view"
+    - "gh run watch"
+    - "gh workflow list"
+    - "gh workflow view"
     - "gh auth status"
     - "gh --version"
     - "gh --help"
@@ -326,6 +352,11 @@ allowlists:
     - "cargo tree"
     - "cargo metadata"
     - "cargo vendor"
+    - "cargo release"
+    - "cargo deny"
+    - "cargo audit"
+    - "cargo outdated"
+    - "cargo expand"
     # ── npm: safe invocations ─────────────────────────────────────
     - "npm install"
     - "npm ci"
@@ -739,6 +770,27 @@ rules:
         any_of: ["--abort", "--skip"]
     decision: ask
     reason: "Aborting or skipping rebase (may lose changes)"
+
+  # ============================================================
+  # HIGH: CLI tool mutating operations
+  # ============================================================
+  - id: glab-api-mutating
+    level: high
+    match:
+      command: glab
+      args:
+        any_of: ["POST", "PUT", "DELETE", "PATCH"]
+    decision: ask
+    reason: "GitLab API mutating operation (POST/PUT/DELETE/PATCH)"
+
+  - id: gh-api-mutating
+    level: high
+    match:
+      command: gh
+      args:
+        any_of: ["POST", "PUT", "DELETE", "PATCH"]
+    decision: ask
+    reason: "GitHub API mutating operation (POST/PUT/DELETE/PATCH)"
 
   # ============================================================
   # HIGH: Exfiltration
