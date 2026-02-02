@@ -1,0 +1,136 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # sleep: always safe (just waits)
+  # ════════════════════════════════════════════════════════════════
+  - id: sleep-safe
+    command: "sleep 5"
+    expected:
+      decision: allow
+  - id: sleep-long-safe
+    command: "sleep 60"
+    expected:
+      decision: allow
+  - id: sleep-fractional-safe
+    command: "sleep 0.5"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # just: only read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: just-list-safe
+    command: "just --list"
+    expected:
+      decision: allow
+  - id: just-list-short-safe
+    command: "just -l"
+    expected:
+      decision: allow
+  - id: just-version-safe
+    command: "just --version"
+    expected:
+      decision: allow
+  - id: just-help-safe
+    command: "just --help"
+    expected:
+      decision: allow
+  - id: just-help-short-safe
+    command: "just -h"
+    expected:
+      decision: allow
+
+  # Standard dev recipes (should allow)
+  - id: just-build-safe
+    command: "just build"
+    expected:
+      decision: allow
+  - id: just-test-safe
+    command: "just test"
+    expected:
+      decision: allow
+  - id: just-check-safe
+    command: "just check"
+    expected:
+      decision: allow
+  - id: just-fmt-safe
+    command: "just fmt"
+    expected:
+      decision: allow
+  - id: just-lint-safe
+    command: "just lint"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - runs arbitrary recipes or bare command)
+  - id: just-bare-ask
+    command: "just"
+    expected:
+      decision: ask
+  - id: just-recipe-release-ask
+    command: "just release patch"
+    expected:
+      decision: ask
+  - id: just-recipe-clean-ask
+    command: "just clean"
+    expected:
+      decision: ask
+  - id: just-unknown-recipe-ask
+    command: "just foobar"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # git-cliff: stdout-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow - output to stdout)
+  - id: git-cliff-unreleased-safe
+    command: "git-cliff --unreleased"
+    expected:
+      decision: allow
+  - id: git-cliff-latest-safe
+    command: "git-cliff --latest"
+    expected:
+      decision: allow
+  - id: git-cliff-current-safe
+    command: "git-cliff --current"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - writes files or other operations)
+  - id: git-cliff-bare-ask
+    command: "git-cliff"
+    expected:
+      decision: ask
+  - id: git-cliff-output-ask
+    command: "git-cliff -o CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-long-ask
+    command: "git-cliff --output CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-tag-ask
+    command: "git-cliff --tag v1.0.0"
+    expected:
+      decision: ask
+  - id: git-cliff-init-ask
+    command: "git-cliff --init"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # chmod: should always ask (modifies permissions)
+  # ════════════════════════════════════════════════════════════════
+  - id: chmod-executable-ask
+    command: "chmod +x script.sh"
+    expected:
+      decision: ask
+  - id: chmod-755-ask
+    command: "chmod 755 script.sh"
+    expected:
+      decision: ask
+  - id: chmod-recursive-ask
+    command: "chmod -R +x scripts/"
+    expected:
+      decision: ask

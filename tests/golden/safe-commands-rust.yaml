@@ -1,0 +1,47 @@
+tests:
+  # ── Cargo safe invocations ──────────────────────────────────────
+  - id: cargo-build-safe
+    command: "cargo build"
+    expected:
+      decision: allow
+  - id: cargo-test-safe
+    command: "cargo test"
+    expected:
+      decision: allow
+  - id: cargo-clippy
+    command: "cargo clippy"
+    expected:
+      decision: allow
+  - id: cargo-check-safe
+    command: "cargo check"
+    expected:
+      decision: allow
+  - id: cargo-fmt-safe
+    command: "cargo fmt"
+    expected:
+      decision: allow
+  - id: cargo-run-safe
+    command: "cargo run -- --arg"
+    expected:
+      decision: allow
+  - id: cargo-doc-safe
+    command: "cargo doc --open"
+    expected:
+      decision: allow
+  - id: cargo-clean-safe
+    command: "cargo clean"
+    expected:
+      decision: allow
+  - id: cargo-add-safe
+    command: "cargo add serde"
+    expected:
+      decision: ask
+      rule_id: cargo-add
+  - id: cargo-tree-safe
+    command: "cargo tree"
+    expected:
+      decision: allow
+  - id: rustc-safe
+    command: "rustc --version"
+    expected:
+      decision: allow

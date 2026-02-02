@@ -1,0 +1,170 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # gh (GitHub CLI): read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: gh-pr-list-safe
+    command: "gh pr list"
+    expected:
+      decision: allow
+  - id: gh-pr-view-safe
+    command: "gh pr view 123"
+    expected:
+      decision: allow
+  - id: gh-pr-status-safe
+    command: "gh pr status"
+    expected:
+      decision: allow
+  - id: gh-pr-diff-safe
+    command: "gh pr diff 123"
+    expected:
+      decision: allow
+  - id: gh-pr-checks-safe
+    command: "gh pr checks 123"
+    expected:
+      decision: allow
+  - id: gh-issue-list-safe
+    command: "gh issue list"
+    expected:
+      decision: allow
+  - id: gh-issue-view-safe
+    command: "gh issue view 42"
+    expected:
+      decision: allow
+  - id: gh-issue-status-safe
+    command: "gh issue status"
+    expected:
+      decision: allow
+  - id: gh-repo-list-safe
+    command: "gh repo list"
+    expected:
+      decision: allow
+  - id: gh-repo-view-safe
+    command: "gh repo view"
+    expected:
+      decision: allow
+  - id: gh-auth-status-safe
+    command: "gh auth status"
+    expected:
+      decision: allow
+  - id: gh-version-safe
+    command: "gh --version"
+    expected:
+      decision: allow
+  - id: gh-help-safe
+    command: "gh --help"
+    expected:
+      decision: allow
+  - id: gh-help-short-safe
+    command: "gh -h"
+    expected:
+      decision: allow
+  # gh run and workflow commands (should allow)
+  - id: gh-run-list-safe
+    command: "gh run list"
+    expected:
+      decision: allow
+  - id: gh-run-list-repo-safe
+    command: "gh run list --repo owner/repo"
+    expected:
+      decision: allow
+  - id: gh-run-view-safe
+    command: "gh run view 123"
+    expected:
+      decision: allow
+  - id: gh-run-view-log-safe
+    command: "gh run view 123 --log"
+    expected:
+      decision: allow
+  - id: gh-run-watch-safe
+    command: "gh run watch 123"
+    expected:
+      decision: allow
+  - id: gh-workflow-list-safe
+    command: "gh workflow list"
+    expected:
+      decision: allow
+  - id: gh-workflow-view-safe
+    command: "gh workflow view CI"
+    expected:
+      decision: allow
+  # gh api read operations (should allow - GET is default)
+  - id: gh-api-bare-safe
+    command: "gh api"
+    expected:
+      decision: allow
+  - id: gh-api-read-safe
+    command: "gh api repos/owner/repo"
+    expected:
+      decision: allow
+  - id: gh-api-contents-safe
+    command: "gh api repos/owner/repo/contents"
+    expected:
+      decision: allow
+  - id: gh-api-jq-safe
+    command: "gh api repos/owner/repo --jq '.name'"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - not allowlisted or potentially destructive)
+  - id: gh-bare-ask
+    command: "gh"
+    expected:
+      decision: ask
+  - id: gh-pr-create-ask
+    command: "gh pr create"
+    expected:
+      decision: ask
+  - id: gh-pr-merge-ask
+    command: "gh pr merge 123"
+    expected:
+      decision: ask
+  - id: gh-pr-close-ask
+    command: "gh pr close 123"
+    expected:
+      decision: ask
+  - id: gh-issue-create-ask
+    command: "gh issue create"
+    expected:
+      decision: ask
+  - id: gh-issue-close-ask
+    command: "gh issue close 42"
+    expected:
+      decision: ask
+  - id: gh-repo-create-ask
+    command: "gh repo create myrepo"
+    expected:
+      decision: ask
+  - id: gh-repo-delete-ask
+    command: "gh repo delete myrepo"
+    expected:
+      decision: ask
+  # gh api mutating operations (should ask - caught by rule)
+  - id: gh-api-post-ask
+    command: "gh api repos/owner/repo -X POST"
+    expected:
+      decision: ask
+  - id: gh-api-method-post-ask
+    command: "gh api repos/owner/repo --method POST"
+    expected:
+      decision: ask
+  - id: gh-api-delete-ask
+    command: "gh api repos/owner/repo -X DELETE"
+    expected:
+      decision: ask
+  - id: gh-api-patch-ask
+    command: "gh api repos/owner/repo --method PATCH"
+    expected:
+      decision: ask
+  - id: gh-api-put-ask
+    command: "gh api repos/owner/repo -X PUT"
+    expected:
+      decision: ask
+  - id: gh-auth-login-ask
+    command: "gh auth login"
+    expected:
+      decision: ask
+  - id: gh-unknown-ask
+    command: "gh unknown-command"
+    expected:
+      decision: ask

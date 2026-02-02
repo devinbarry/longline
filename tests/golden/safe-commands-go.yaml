@@ -1,0 +1,34 @@
+tests:
+  # ── go safe invocations ─────────────────────────────────────────
+  - id: go-safe
+    command: "go build ./..."
+    expected:
+      decision: allow
+  - id: go-test-safe
+    command: "go test ./..."
+    expected:
+      decision: allow
+  - id: go-run-safe
+    command: "go run main.go"
+    expected:
+      decision: allow
+  - id: go-vet-safe
+    command: "go vet ./..."
+    expected:
+      decision: allow
+  - id: go-fmt-safe
+    command: "go fmt ./..."
+    expected:
+      decision: allow
+  - id: go-mod-safe
+    command: "go mod tidy"
+    expected:
+      decision: allow
+  - id: go-env-safe
+    command: "go env"
+    expected:
+      decision: allow
+  - id: go-version-safe
+    command: "go version"
+    expected:
+      decision: allow

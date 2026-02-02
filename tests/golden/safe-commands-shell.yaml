@@ -1,0 +1,297 @@
+tests:
+  # ── cd safe invocations ───────────────────────────────────────
+  - id: cd-safe
+    command: "cd /tmp"
+    expected:
+      decision: allow
+  - id: cd-home-safe
+    command: "cd ~"
+    expected:
+      decision: allow
+  - id: cd-relative-safe
+    command: "cd src/lib"
+    expected:
+      decision: allow
+  - id: cd-parent-safe
+    command: "cd .."
+    expected:
+      decision: allow
+  - id: ls-safe
+    command: "ls -la /tmp"
+    expected:
+      decision: allow
+  - id: echo-safe
+    command: "echo hello world"
+    expected:
+      decision: allow
+  - id: pwd-safe
+    command: "pwd"
+    expected:
+      decision: allow
+  - id: whoami-safe
+    command: "whoami"
+    expected:
+      decision: allow
+  - id: cat-readme-safe
+    command: "cat README.md"
+    expected:
+      decision: allow
+  - id: grep-safe
+    command: "grep -r 'function' src/"
+    expected:
+      decision: allow
+  - id: make-safe
+    command: "make build"
+    expected:
+      decision: allow
+  - id: mkdir-safe
+    command: "mkdir -p /tmp/build"
+    expected:
+      decision: allow
+  - id: touch-safe
+    command: "touch newfile.txt"
+    expected:
+      decision: allow
+  - id: cp-safe
+    command: "cp src/main.rs src/main.rs.bak"
+    expected:
+      decision: allow
+  - id: mv-safe
+    command: "mv old.txt new.txt"
+    expected:
+      decision: allow
+  - id: date-safe
+    command: "date"
+    expected:
+      decision: allow
+  - id: sort-safe
+    command: "sort file.txt"
+    expected:
+      decision: allow
+  - id: jq-safe
+    command: "jq '.name' package.json"
+    expected:
+      decision: allow
+  - id: tar-safe
+    command: "tar -czf archive.tar.gz src/"
+    expected:
+      decision: allow
+  - id: wc-safe
+    command: "wc -l src/main.rs"
+    expected:
+      decision: allow
+  - id: file-safe
+    command: "file binary.out"
+    expected:
+      decision: allow
+  - id: which-safe
+    command: "which cargo"
+    expected:
+      decision: allow
+  - id: type-safe
+    command: "type ls"
+    expected:
+      decision: allow
+  - id: basename-safe
+    command: "basename /path/to/file.txt"
+    expected:
+      decision: allow
+  - id: dirname-safe
+    command: "dirname /path/to/file.txt"
+    expected:
+      decision: allow
+  - id: realpath-safe
+    command: "realpath ./src"
+    expected:
+      decision: allow
+  - id: readlink-safe
+    command: "readlink -f /usr/bin/python3"
+    expected:
+      decision: allow
+  - id: head-safe
+    command: "head -n 10 file.txt"
+    expected:
+      decision: allow
+  - id: tail-safe
+    command: "tail -f /var/log/syslog"
+    expected:
+      decision: allow
+  - id: uniq-safe
+    command: "uniq -c file.txt"
+    expected:
+      decision: allow
+  - id: tr-safe
+    command: "tr '[:lower:]' '[:upper:]'"
+    expected:
+      decision: allow
+  - id: cut-safe
+    command: "cut -d: -f1 /etc/passwd"
+    expected:
+      decision: allow
+  - id: diff-safe
+    command: "diff file1.txt file2.txt"
+    expected:
+      decision: allow
+  - id: sed-safe
+    command: "sed 's/old/new/g' file.txt"
+    expected:
+      decision: allow
+  - id: sed-print-lines-safe
+    command: "sed -n '1,10p' file.txt"
+    expected:
+      decision: allow
+  - id: awk-safe
+    command: "awk '{print $1}' file.txt"
+    expected:
+      decision: allow
+  - id: ln-safe
+    command: "ln -s source target"
+    expected:
+      decision: allow
+  - id: gzip-safe
+    command: "gzip file.txt"
+    expected:
+      decision: ask
+      rule_id: gzip-no-keep
+  - id: gunzip-safe
+    command: "gunzip file.txt.gz"
+    expected:
+      decision: ask
+      rule_id: gunzip-no-keep
+  - id: zip-safe
+    command: "zip archive.zip file.txt"
+    expected:
+      decision: allow
+  - id: unzip-safe
+    command: "unzip archive.zip"
+    expected:
+      decision: ask
+      rule_id: unzip-extract
+  - id: test-safe
+    command: "test -f file.txt"
+    expected:
+      decision: allow
+  - id: true-safe
+    command: "true"
+    expected:
+      decision: allow
+  - id: false-safe
+    command: "false"
+    expected:
+      decision: allow
+  - id: cat-plain-file
+    command: "cat /etc/passwd"
+    expected:
+      decision: allow
+  - id: echo-empty
+    command: "echo"
+    expected:
+      decision: allow
+  - id: ls-no-args
+    command: "ls"
+    expected:
+      decision: allow
+  - id: grep-count
+    command: "grep -c 'TODO' src/main.rs"
+    expected:
+      decision: allow
+  - id: make-clean
+    command: "make clean"
+    expected:
+      decision: allow
+  - id: mv-rename
+    command: "mv src/old.rs src/new.rs"
+    expected:
+      decision: allow
+  - id: cp-recursive
+    command: "cp -r src/ backup/"
+    expected:
+      decision: allow
+  - id: mkdir-nested
+    command: "mkdir -p a/b/c/d"
+    expected:
+      decision: allow
+  - id: touch-multiple
+    command: "touch a.txt b.txt c.txt"
+    expected:
+      decision: allow
+  - id: sort-reverse
+    command: "sort -r file.txt"
+    expected:
+      decision: allow
+  - id: tar-extract
+    command: "tar -xzf archive.tar.gz"
+    expected:
+      decision: ask
+      rule_id: tar-extract
+  - id: stat-safe
+    command: "stat file.txt"
+    expected:
+      decision: allow
+  - id: du-safe
+    command: "du -sh src/"
+    expected:
+      decision: allow
+  - id: printf-safe
+    command: "printf '%s\\n' hello"
+    expected:
+      decision: allow
+  - id: md5sum-safe
+    command: "md5sum file.txt"
+    expected:
+      decision: allow
+  - id: sha256sum-safe
+    command: "sha256sum file.txt"
+    expected:
+      decision: allow
+  - id: sha1sum-safe
+    command: "sha1sum file.txt"
+    expected:
+      decision: allow
+  - id: cksum-safe
+    command: "cksum file.txt"
+    expected:
+      decision: allow
+  - id: patch-safe
+    command: "patch -p1 < fix.patch"
+    expected:
+      decision: ask
+      rule_id: patch-apply
+  - id: rg-safe
+    command: "rg 'pattern' src/"
+    expected:
+      decision: allow
+  - id: fd-safe
+    command: "fd -e rs"
+    expected:
+      decision: allow
+  - id: yq-safe
+    command: "yq '.name' config.yaml"
+    expected:
+      decision: allow
+  - id: cmake-safe
+    command: "cmake .."
+    expected:
+      decision: allow
+
+  # ── tree safe invocations ───────────────────────────────────────
+  - id: tree-safe
+    command: "tree"
+    expected:
+      decision: allow
+  - id: tree-depth-safe
+    command: "tree -L 3"
+    expected:
+      decision: allow
+  - id: tree-ignore-safe
+    command: "tree -I 'target|.git'"
+    expected:
+      decision: allow
+  - id: tree-path-safe
+    command: "tree /tmp"
+    expected:
+      decision: allow
+  - id: tree-combined-safe
+    command: "tree -L 3 -I 'target|.git' /path"
+    expected:
+      decision: allow

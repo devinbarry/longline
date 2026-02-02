@@ -1,0 +1,65 @@
+tests:
+  # ── Java safe invocations ───────────────────────────────────────
+  - id: java-safe
+    command: "java -jar app.jar"
+    expected:
+      decision: allow
+  - id: javac-safe
+    command: "javac Main.java"
+    expected:
+      decision: allow
+
+  # ── Ruby safe invocations ───────────────────────────────────────
+  - id: ruby-script-ask
+    command: "ruby script.rb"
+    expected:
+      decision: ask
+  - id: gem-safe
+    command: "gem install bundler"
+    expected:
+      decision: ask
+      rule_id: gem-install
+  - id: gem-list-safe
+    command: "gem list"
+    expected:
+      decision: allow
+  - id: gem-version-safe
+    command: "gem --version"
+    expected:
+      decision: allow
+  - id: bundle-version-safe
+    command: "bundle --version"
+    expected:
+      decision: allow
+
+  # ── Other package manager version checks ─────────────────────────
+  - id: composer-version-safe
+    command: "composer --version"
+    expected:
+      decision: allow
+  - id: brew-version-safe
+    command: "brew --version"
+    expected:
+      decision: allow
+  - id: dotnet-version-safe
+    command: "dotnet --version"
+    expected:
+      decision: allow
+  - id: cabal-version-safe
+    command: "cabal --version"
+    expected:
+      decision: allow
+  - id: stack-version-safe
+    command: "stack --version"
+    expected:
+      decision: allow
+
+  # ── Other package manager read-only commands ─────────────────────
+  - id: brew-list-safe
+    command: "brew list"
+    expected:
+      decision: allow
+  - id: dotnet-list-safe
+    command: "dotnet list"
+    expected:
+      decision: allow

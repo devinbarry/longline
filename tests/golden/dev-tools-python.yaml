@@ -1,0 +1,95 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # uv: additional safe operations
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: uv-sync-safe
+    command: "uv sync"
+    expected:
+      decision: allow
+  - id: uv-sync-frozen-safe
+    command: "uv sync --frozen"
+    expected:
+      decision: allow
+  - id: uv-lock-safe
+    command: "uv lock"
+    expected:
+      decision: allow
+  - id: uv-lock-upgrade-safe
+    command: "uv lock --upgrade"
+    expected:
+      decision: allow
+  - id: uv-venv-safe
+    command: "uv venv"
+    expected:
+      decision: allow
+  - id: uv-venv-path-safe
+    command: "uv venv .venv"
+    expected:
+      decision: allow
+  - id: uv-pip-safe
+    command: "uv pip"
+    expected:
+      decision: allow
+  - id: uv-pip-list-safe
+    command: "uv pip list"
+    expected:
+      decision: allow
+  - id: uv-pip-install-safe
+    command: "uv pip install requests"
+    expected:
+      decision: ask
+      rule_id: uv-pip-install
+  - id: uv-run-precommit-safe
+    command: "uv run pre-commit"
+    expected:
+      decision: allow
+  - id: uv-run-precommit-all-safe
+    command: "uv run pre-commit run --all-files"
+    expected:
+      decision: allow
+  - id: uv-run-precommit-install-safe
+    command: "uv run pre-commit install"
+    expected:
+      decision: allow
+  - id: uv-version-safe
+    command: "uv --version"
+    expected:
+      decision: allow
+  - id: uv-version-short-safe
+    command: "uv -V"
+    expected:
+      decision: allow
+  - id: uv-help-safe
+    command: "uv --help"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # python: pytest as module
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: python-m-pytest-safe
+    command: "python -m pytest"
+    expected:
+      decision: allow
+  - id: python-m-pytest-verbose-safe
+    command: "python -m pytest -v"
+    expected:
+      decision: allow
+  - id: python-m-pytest-path-safe
+    command: "python -m pytest tests/"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-safe
+    command: "python3 -m pytest"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-verbose-safe
+    command: "python3 -m pytest -v"
+    expected:
+      decision: allow
+  - id: python3-m-pytest-path-safe
+    command: "python3 -m pytest tests/unit/"
+    expected:
+      decision: allow

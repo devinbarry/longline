@@ -103,8 +103,33 @@ fn golden_git() {
 }
 
 #[test]
-fn golden_safe_commands() {
-    run_golden_suite("safe-commands.yaml");
+fn golden_safe_commands_shell() {
+    run_golden_suite("safe-commands-shell.yaml");
+}
+
+#[test]
+fn golden_safe_commands_rust() {
+    run_golden_suite("safe-commands-rust.yaml");
+}
+
+#[test]
+fn golden_safe_commands_node() {
+    run_golden_suite("safe-commands-node.yaml");
+}
+
+#[test]
+fn golden_safe_commands_python() {
+    run_golden_suite("safe-commands-python.yaml");
+}
+
+#[test]
+fn golden_safe_commands_go() {
+    run_golden_suite("safe-commands-go.yaml");
+}
+
+#[test]
+fn golden_safe_commands_other() {
+    run_golden_suite("safe-commands-other.yaml");
 }
 
 #[test]
@@ -178,13 +203,43 @@ fn golden_missing_allowlist() {
 }
 
 #[test]
-fn golden_allowlist_bypass() {
-    run_golden_suite("allowlist-bypass.yaml");
+fn golden_allowlist_bypass_filesystem() {
+    run_golden_suite("allowlist-bypass-filesystem.yaml");
 }
 
 #[test]
-fn golden_dev_tools() {
-    run_golden_suite("dev-tools.yaml");
+fn golden_allowlist_bypass_git() {
+    run_golden_suite("allowlist-bypass-git.yaml");
+}
+
+#[test]
+fn golden_allowlist_bypass_package_managers() {
+    run_golden_suite("allowlist-bypass-package-managers.yaml");
+}
+
+#[test]
+fn golden_dev_tools_misc() {
+    run_golden_suite("dev-tools-misc.yaml");
+}
+
+#[test]
+fn golden_dev_tools_gitlab() {
+    run_golden_suite("dev-tools-gitlab.yaml");
+}
+
+#[test]
+fn golden_dev_tools_github() {
+    run_golden_suite("dev-tools-github.yaml");
+}
+
+#[test]
+fn golden_dev_tools_cargo() {
+    run_golden_suite("dev-tools-cargo.yaml");
+}
+
+#[test]
+fn golden_dev_tools_python() {
+    run_golden_suite("dev-tools-python.yaml");
 }
 
 #[test]

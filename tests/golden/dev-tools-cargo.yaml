@@ -1,0 +1,57 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # cargo install: should always ask (downloads/runs arbitrary code)
+  # ════════════════════════════════════════════════════════════════
+  - id: cargo-install-ask
+    command: "cargo install ripgrep"
+    expected:
+      decision: ask
+  - id: cargo-install-path-ask
+    command: "cargo install --path ."
+    expected:
+      decision: ask
+  - id: cargo-install-git-ask
+    command: "cargo install --git https://github.com/user/repo"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # cargo: additional safe subcommands
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: cargo-release-safe
+    command: "cargo release"
+    expected:
+      decision: allow
+  - id: cargo-release-patch-safe
+    command: "cargo release patch"
+    expected:
+      decision: allow
+  - id: cargo-release-dry-run-safe
+    command: "cargo release --dry-run"
+    expected:
+      decision: allow
+  - id: cargo-deny-safe
+    command: "cargo deny"
+    expected:
+      decision: allow
+  - id: cargo-deny-check-safe
+    command: "cargo deny check"
+    expected:
+      decision: allow
+  - id: cargo-audit-safe
+    command: "cargo audit"
+    expected:
+      decision: allow
+  - id: cargo-outdated-safe
+    command: "cargo outdated"
+    expected:
+      decision: allow
+  - id: cargo-expand-safe
+    command: "cargo expand"
+    expected:
+      decision: allow
+  - id: cargo-expand-mod-safe
+    command: "cargo expand parser"
+    expected:
+      decision: allow

@@ -1,0 +1,241 @@
+tests:
+  # ============================================================
+  # GIT COMMAND BYPASSES
+  # ============================================================
+
+  # --- git branch: force delete ---
+  - id: git-branch-list-safe
+    command: "git branch -a"
+    expected:
+      decision: allow
+  - id: git-branch-delete-safe
+    command: "git branch -d feature"
+    expected:
+      decision: allow
+    # Safe delete (fails if not merged)
+  - id: git-branch-force-delete
+    command: "git branch -D feature"
+    expected:
+      decision: ask
+      rule_id: git-branch-delete-force
+
+  # --- git remote: modification ---
+  - id: git-remote-list-safe
+    command: "git remote -v"
+    expected:
+      decision: allow
+  - id: git-remote-show-safe
+    command: "git remote show origin"
+    expected:
+      decision: allow
+  - id: git-remote-add
+    command: "git remote add upstream https://github.com/foo/bar"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: modifies remote configuration
+  - id: git-remote-remove
+    command: "git remote remove origin"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes remote
+  - id: git-remote-set-url
+    command: "git remote set-url origin https://evil.com/repo"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: could redirect to malicious repo
+
+  # --- git tag: deletion ---
+  - id: git-tag-list-safe
+    command: "git tag -l"
+    expected:
+      decision: allow
+  - id: git-tag-create-safe
+    command: "git tag v1.0.0"
+    expected:
+      decision: allow
+  - id: git-tag-delete
+    command: "git tag -d v1.0.0"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: deletes tag
+  - id: git-tag-delete-remote
+    command: "git push origin --delete v1.0.0"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: deletes remote tag
+
+  # --- git config: global modification ---
+  - id: git-config-read-safe
+    command: "git config user.name"
+    expected:
+      decision: allow
+  - id: git-config-local-safe
+    command: "git config user.email foo@bar.com"
+    expected:
+      decision: allow
+    # Local config is relatively safe
+  - id: git-config-global-dangerous
+    command: "git config --global user.email foo@bar.com"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: modifies global git config
+  - id: git-config-system-dangerous
+    command: "git config --system core.editor vim"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: modifies system-wide config
+
+  # --- git stash: data loss ---
+  - id: git-stash-save-safe
+    command: "git stash"
+    expected:
+      decision: allow
+  - id: git-stash-list-safe
+    command: "git stash list"
+    expected:
+      decision: allow
+  - id: git-stash-pop-safe
+    command: "git stash pop"
+    expected:
+      decision: allow
+  - id: git-stash-drop-dangerous
+    command: "git stash drop"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: loses stashed work
+  - id: git-stash-drop-specific
+    command: "git stash drop stash@{0}"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: loses stashed work
+  - id: git-stash-clear-dangerous
+    command: "git stash clear"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: loses ALL stashed work
+
+  # --- git reflog: history manipulation ---
+  - id: git-reflog-show-safe
+    command: "git reflog"
+    expected:
+      decision: allow
+  - id: git-reflog-show-branch-safe
+    command: "git reflog show main"
+    expected:
+      decision: allow
+  - id: git-reflog-delete-dangerous
+    command: "git reflog delete HEAD@{0}"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: loses reflog history
+  - id: git-reflog-expire-dangerous
+    command: "git reflog expire --expire=now --all"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: expires all reflog entries
+
+  # --- git gc: aggressive pruning ---
+  - id: git-gc-safe
+    command: "git gc"
+    expected:
+      decision: allow
+  - id: git-gc-auto-safe
+    command: "git gc --auto"
+    expected:
+      decision: allow
+  - id: git-gc-prune-now-dangerous
+    command: "git gc --prune=now"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: immediately removes unreachable objects
+  - id: git-gc-aggressive-dangerous
+    command: "git gc --aggressive --prune=now"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: aggressive pruning can lose data
+
+  # --- git worktree: removal ---
+  - id: git-worktree-list-safe
+    command: "git worktree list"
+    expected:
+      decision: allow
+  - id: git-worktree-add-safe
+    command: "git worktree add ../feature feature-branch"
+    expected:
+      decision: allow
+  - id: git-worktree-remove-dangerous
+    command: "git worktree remove ../feature"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes worktree directory
+  - id: git-worktree-prune-dangerous
+    command: "git worktree prune"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes stale worktree info
+
+  # --- git bisect: state modification ---
+  - id: git-bisect-start-safe
+    command: "git bisect start"
+    expected:
+      decision: allow
+  - id: git-bisect-good-safe
+    command: "git bisect good"
+    expected:
+      decision: allow
+  - id: git-bisect-reset-dangerous
+    command: "git bisect reset"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: exits bisect, changes HEAD
+
+  # --- git pull: force ---
+  - id: git-pull-safe
+    command: "git pull"
+    expected:
+      decision: allow
+  - id: git-pull-rebase-safe
+    command: "git pull --rebase"
+    expected:
+      decision: allow
+  - id: git-pull-force-dangerous
+    command: "git pull --force"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: can overwrite local changes
+
+  # --- git rebase: abort/skip ---
+  - id: git-rebase-safe
+    command: "git rebase main"
+    expected:
+      decision: allow
+  - id: git-rebase-abort-dangerous
+    command: "git rebase --abort"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: discards rebase progress
+  - id: git-rebase-skip-dangerous
+    command: "git rebase --skip"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: skips commit, can lose changes
+
+  # ============================================================
+  # SPECIAL CASES - git symbolic-ref (the original issue)
+  # ============================================================
+
+  - id: git-symbolic-ref-read-safe
+    command: "git symbolic-ref HEAD"
+    expected:
+      decision: ask
+    # Currently asks because removed from allowlist
+  - id: git-symbolic-ref-delete-dangerous
+    command: "git symbolic-ref --delete HEAD"
+    expected:
+      decision: ask
+    # Must always ask - destructive operation
+  - id: git-symbolic-ref-short-safe
+    command: "git symbolic-ref --short HEAD"
+    expected:
+      decision: ask
+    # Currently asks because removed from allowlist

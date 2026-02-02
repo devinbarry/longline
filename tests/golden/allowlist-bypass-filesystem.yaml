@@ -1,0 +1,208 @@
+tests:
+  # ============================================================
+  # BARE COMMAND BYPASSES - Dangerous flags on allowlisted commands
+  # ============================================================
+
+  # --- ln: symbolic link attacks ---
+  - id: ln-safe-symlink
+    command: "ln -s source.txt link.txt"
+    expected:
+      decision: allow
+  - id: ln-force-overwrite
+    command: "ln -sf malicious.sh /usr/local/bin/safe"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: ln -sf can overwrite files/binaries
+
+  # --- tar: extraction attacks ---
+  - id: tar-list-safe
+    command: "tar -tf archive.tar"
+    expected:
+      decision: allow
+  - id: tar-extract-dangerous
+    command: "tar -xf archive.tar"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: tar -xf can overwrite files, path traversal
+  - id: tar-extract-overwrite
+    command: "tar -xvf archive.tar --overwrite"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: explicit overwrite flag
+
+  # --- unzip: extraction attacks ---
+  - id: unzip-list-safe
+    command: "unzip -l archive.zip"
+    expected:
+      decision: allow
+  - id: unzip-extract-dangerous
+    command: "unzip archive.zip"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: unzip can overwrite files
+  - id: unzip-overwrite-force
+    command: "unzip -o archive.zip"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: -o forces overwrite without prompting
+
+  # --- sed: in-place modification ---
+  - id: sed-stdout-safe
+    command: "sed 's/foo/bar/' file.txt"
+    expected:
+      decision: allow
+  - id: sed-inplace-dangerous
+    command: "sed -i 's/foo/bar/' file.txt"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: -i modifies files in place
+  - id: sed-inplace-backup
+    command: "sed -i.bak 's/foo/bar/' file.txt"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: still modifies original
+
+  # --- patch: file modification ---
+  - id: patch-dryrun-safe
+    command: "patch --dry-run < changes.patch"
+    expected:
+      decision: allow
+  - id: patch-apply-dangerous
+    command: "patch < changes.patch"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: patch modifies files
+  - id: patch-apply-file
+    command: "patch -p1 < changes.patch"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: patch modifies files
+
+  # --- gzip/gunzip: removes original ---
+  - id: gzip-keep-safe
+    command: "gzip -k file.txt"
+    expected:
+      decision: allow
+  - id: gzip-remove-original
+    command: "gzip file.txt"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: gzip removes original by default
+  - id: gunzip-keep-safe
+    command: "gunzip -k file.txt.gz"
+    expected:
+      decision: allow
+  - id: gunzip-remove-original
+    command: "gunzip file.txt.gz"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: gunzip removes original by default
+
+  # --- npx: arbitrary code execution ---
+  - id: npx-known-safe
+    command: "npx prettier --check ."
+    expected:
+      decision: ask
+      rule_id: npx-run
+  - id: npx-arbitrary-package
+    command: "npx some-random-package"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: npx can run arbitrary npm packages
+  - id: npx-typosquat-risk
+    command: "npx loadash"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: typosquatting risk (lodash vs loadash)
+
+  # --- find: file deletion ---
+  - id: find-name-safe
+    command: "find . -name '*.rs'"
+    expected:
+      decision: allow
+  - id: find-type-safe
+    command: "find . -type f"
+    expected:
+      decision: allow
+  - id: find-delete-dangerous
+    command: "find . -delete"
+    expected:
+      decision: ask
+      rule_id: find-delete
+  - id: find-exec-rm-dangerous
+    command: "find . -exec rm {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
+  # --- xargs: command execution ---
+  - id: xargs-echo-safe
+    command: "xargs echo"
+    expected:
+      decision: allow
+  - id: xargs-cat-safe
+    command: "xargs cat"
+    expected:
+      decision: allow
+  - id: xargs-rm-dangerous
+    command: "xargs rm"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+  - id: xargs-rm-rf-dangerous
+    command: "xargs rm -rf"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+
+  # --- cp: force overwrite ---
+  - id: cp-safe
+    command: "cp a.txt b.txt"
+    expected:
+      decision: allow
+  - id: cp-recursive-safe
+    command: "cp -r src/ dest/"
+    expected:
+      decision: allow
+  - id: cp-force-dangerous
+    command: "cp -f sensitive.txt /tmp/exfil"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: -f forces overwrite without prompting
+  - id: cp-force-recursive-dangerous
+    command: "cp -rf /important /tmp/backup"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: -rf can overwrite directories
+
+  # --- mv: force overwrite ---
+  - id: mv-safe
+    command: "mv a.txt b.txt"
+    expected:
+      decision: allow
+  - id: mv-force-dangerous
+    command: "mv -f important.txt /dev/null"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: -f forces overwrite without prompting
+
+  # --- tee: write to sensitive locations ---
+  - id: tee-safe
+    command: "tee output.txt"
+    expected:
+      decision: allow
+  - id: tee-etc-passwd-dangerous
+    command: "tee /etc/passwd"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: writing to system file
+  - id: tee-etc-shadow-dangerous
+    command: "tee /etc/shadow"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: writing to system file
+  - id: tee-append-bashrc-dangerous
+    command: "tee -a ~/.bashrc"
+    expected:
+      decision: deny
+      rule_id: edit-shell-profile

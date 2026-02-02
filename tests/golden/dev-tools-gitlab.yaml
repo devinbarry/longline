@@ -1,0 +1,229 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # glp (GitLab Pipeline CLI): read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: glp-status-safe
+    command: "glp status"
+    expected:
+      decision: allow
+  - id: glp-status-json-safe
+    command: "glp status --json"
+    expected:
+      decision: allow
+  - id: glp-jobs-safe
+    command: "glp jobs"
+    expected:
+      decision: allow
+  - id: glp-jobs-id-safe
+    command: "glp jobs 742"
+    expected:
+      decision: allow
+  - id: glp-log-safe
+    command: "glp log 123"
+    expected:
+      decision: allow
+  - id: glp-log-tail-safe
+    command: "glp log 2661 --tail 50"
+    expected:
+      decision: allow
+  - id: glp-version-safe
+    command: "glp --version"
+    expected:
+      decision: allow
+  - id: glp-help-safe
+    command: "glp --help"
+    expected:
+      decision: allow
+  - id: glp-help-short-safe
+    command: "glp -h"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - not allowlisted)
+  - id: glp-bare-ask
+    command: "glp"
+    expected:
+      decision: ask
+  - id: glp-retry-ask
+    command: "glp retry 123"
+    expected:
+      decision: ask
+  - id: glp-cancel-ask
+    command: "glp cancel 123"
+    expected:
+      decision: ask
+  - id: glp-unknown-ask
+    command: "glp unknown-command"
+    expected:
+      decision: ask
+  - id: glp-blowup-ask
+    command: "glp blowup server"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # glab (GitLab CLI): read-only invocations allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: glab-auth-status-safe
+    command: "glab auth status"
+    expected:
+      decision: allow
+  - id: glab-ci-status-safe
+    command: "glab ci status"
+    expected:
+      decision: allow
+  - id: glab-ci-status-repo-safe
+    command: "glab ci status --repo tools/longline"
+    expected:
+      decision: allow
+  - id: glab-ci-view-safe
+    command: "glab ci view"
+    expected:
+      decision: allow
+  - id: glab-ci-list-safe
+    command: "glab ci list"
+    expected:
+      decision: allow
+  - id: glab-repo-list-safe
+    command: "glab repo list"
+    expected:
+      decision: allow
+  - id: glab-repo-view-safe
+    command: "glab repo view"
+    expected:
+      decision: allow
+  - id: glab-group-list-safe
+    command: "glab group list"
+    expected:
+      decision: allow
+  - id: glab-issue-list-safe
+    command: "glab issue list"
+    expected:
+      decision: allow
+  - id: glab-issue-view-safe
+    command: "glab issue view 42"
+    expected:
+      decision: allow
+  - id: glab-mr-list-safe
+    command: "glab mr list"
+    expected:
+      decision: allow
+  - id: glab-mr-view-safe
+    command: "glab mr view 123"
+    expected:
+      decision: allow
+  - id: glab-version-safe
+    command: "glab --version"
+    expected:
+      decision: allow
+  - id: glab-help-safe
+    command: "glab --help"
+    expected:
+      decision: allow
+  # glab ci trace and get (should allow)
+  - id: glab-ci-trace-safe
+    command: "glab ci trace"
+    expected:
+      decision: allow
+  - id: glab-ci-trace-job-safe
+    command: "glab ci trace build_job"
+    expected:
+      decision: allow
+  - id: glab-ci-get-safe
+    command: "glab ci get"
+    expected:
+      decision: allow
+  # glab api read operations (should allow - GET is default)
+  - id: glab-api-bare-safe
+    command: "glab api"
+    expected:
+      decision: allow
+  - id: glab-api-read-safe
+    command: "glab api projects"
+    expected:
+      decision: allow
+  - id: glab-api-pipelines-safe
+    command: "glab api projects/tools%2Flongline/pipelines"
+    expected:
+      decision: allow
+  - id: glab-api-jobs-safe
+    command: "glab api projects/tools%2Flongline/pipelines/123/jobs"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - not allowlisted or potentially destructive)
+  - id: glab-bare-ask
+    command: "glab"
+    expected:
+      decision: ask
+  # glab api mutating operations (should ask - caught by rule)
+  - id: glab-api-post-ask
+    command: "glab api -X POST projects"
+    expected:
+      decision: ask
+  - id: glab-api-method-post-ask
+    command: "glab api projects/foo/pipeline --method POST"
+    expected:
+      decision: ask
+  - id: glab-api-delete-ask
+    command: "glab api projects/foo -X DELETE"
+    expected:
+      decision: ask
+  - id: glab-api-put-ask
+    command: "glab api projects/foo --method PUT"
+    expected:
+      decision: ask
+  - id: glab-api-patch-ask
+    command: "glab api projects/foo -X PATCH"
+    expected:
+      decision: ask
+  - id: glab-repo-create-ask
+    command: "glab repo create myrepo"
+    expected:
+      decision: ask
+  - id: glab-repo-delete-ask
+    command: "glab repo delete myrepo"
+    expected:
+      decision: ask
+  - id: glab-repo-fork-ask
+    command: "glab repo fork"
+    expected:
+      decision: ask
+  - id: glab-mr-create-ask
+    command: "glab mr create"
+    expected:
+      decision: ask
+  - id: glab-mr-merge-ask
+    command: "glab mr merge 123"
+    expected:
+      decision: ask
+  - id: glab-issue-create-ask
+    command: "glab issue create"
+    expected:
+      decision: ask
+  - id: glab-ci-run-ask
+    command: "glab ci run"
+    expected:
+      decision: ask
+  - id: glab-ci-retry-ask
+    command: "glab ci retry"
+    expected:
+      decision: ask
+  - id: glab-auth-login-ask
+    command: "glab auth login"
+    expected:
+      decision: ask
+  - id: glab-config-set-ask
+    command: "glab config set editor vim"
+    expected:
+      decision: ask
+  - id: glab-blowup-server-ask
+    command: "glab blowup server"
+    expected:
+      decision: ask
+  - id: glab-unknown-ask
+    command: "glab unknown-command"
+    expected:
+      decision: ask

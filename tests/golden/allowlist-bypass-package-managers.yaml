@@ -1,0 +1,428 @@
+tests:
+  # ============================================================
+  # PACKAGE MANAGER BYPASSES
+  # ============================================================
+
+  # --- npm run: arbitrary script execution ---
+  - id: npm-run-test-safe
+    command: "npm run test"
+    expected:
+      decision: allow
+  - id: npm-run-build-safe
+    command: "npm run build"
+    expected:
+      decision: allow
+  - id: npm-run-arbitrary-dangerous
+    command: "npm run evil-script"
+    expected:
+      decision: allow
+    # npm run is allowlisted for dev tasks
+
+  # --- npm start: inherent code execution risk ---
+  - id: npm-start-dangerous
+    command: "npm start"
+    expected:
+      decision: allow
+    # npm start is allowlisted for dev tasks
+
+  # --- npm audit: fix modifies packages ---
+  - id: npm-audit-safe
+    command: "npm audit"
+    expected:
+      decision: allow
+  - id: npm-audit-fix-dangerous
+    command: "npm audit fix"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: modifies package.json and node_modules
+  - id: npm-audit-fix-force
+    command: "npm audit fix --force"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: forces potentially breaking changes
+
+  # --- npm exec: arbitrary code ---
+  - id: npm-exec-dangerous
+    command: "npm exec -- some-package"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: runs arbitrary package code
+
+  # --- npm uninstall: removes packages ---
+  - id: npm-uninstall-dangerous
+    command: "npm uninstall lodash"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: modifies project dependencies
+
+  # --- pip install: can install malicious packages ---
+  - id: pip-install-known-safe
+    command: "pip install requests"
+    expected:
+      decision: ask
+      rule_id: pip-install
+  - id: pip-install-arbitrary-dangerous
+    command: "pip install evil-malicious-pkg"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: pip install can fetch and run arbitrary code
+  - id: pip3-install-arbitrary-dangerous
+    command: "pip3 install typosquatted-package"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: typosquatting risk
+
+  # --- pip uninstall: removes packages ---
+  - id: pip-uninstall-dangerous
+    command: "pip uninstall requests"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes installed package
+  - id: pip3-uninstall-dangerous
+    command: "pip3 uninstall -y requests"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes without confirmation
+
+  # --- gem install: can install malicious gems ---
+  - id: gem-install-known-safe
+    command: "gem install rails"
+    expected:
+      decision: ask
+      rule_id: gem-install
+  - id: gem-install-arbitrary-dangerous
+    command: "gem install evil-malicious-gem"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: gem install can fetch and run arbitrary code
+
+  # --- gem uninstall: removes packages ---
+  - id: gem-uninstall-dangerous
+    command: "gem uninstall rails"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: removes installed gem
+
+  # --- cargo run: inherent code execution risk ---
+  - id: cargo-run-safe
+    command: "cargo run"
+    expected:
+      decision: allow
+  - id: cargo-run-release-safe
+    command: "cargo run --release"
+    expected:
+      decision: allow
+    # Note: cargo run is in allowlist, but executes arbitrary code from Cargo.toml
+
+  # --- cargo publish: publishes to crates.io ---
+  - id: cargo-publish-dangerous
+    command: "cargo publish"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: publishes to public registry
+
+  # --- npm publish: publishes to npm ---
+  - id: npm-publish-dangerous
+    command: "npm publish"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: publishes to public registry
+
+  # --- gem push: publishes to rubygems ---
+  - id: gem-push-dangerous
+    command: "gem push pkg.gem"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: publishes to public registry
+
+  # --- twine/pip upload: publishes to PyPI ---
+  - id: twine-upload-dangerous
+    command: "twine upload dist/*"
+    expected:
+      decision: ask
+    # EXPECTED FAIL: publishes to public registry
+  - id: pip-upload-dangerous
+    command: "pip upload dist/*"
+    expected:
+      decision: ask
+    # Note: pip upload is not a real command but tests the pattern
+
+  # ============================================================
+  # PACKAGE INSTALLATION - comprehensive coverage
+  # ============================================================
+  # All package installation commands should ask for confirmation
+  # due to supply chain attack risk (typosquatting, malicious packages).
+
+  # --- Go package installation ---
+  - id: go-get-asks
+    command: "go get github.com/spf13/cobra"
+    expected:
+      decision: ask
+      rule_id: go-get
+  - id: go-install-asks
+    command: "go install github.com/golangci/golangci-lint@latest"
+    expected:
+      decision: ask
+      rule_id: go-install
+
+  # --- Cargo (Rust) package installation ---
+  - id: cargo-add-asks
+    command: "cargo add tokio"
+    expected:
+      decision: ask
+      rule_id: cargo-add
+  - id: cargo-install-asks
+    command: "cargo install ripgrep"
+    expected:
+      decision: ask
+      rule_id: cargo-install
+
+  # --- Yarn package installation ---
+  - id: yarn-add-asks
+    command: "yarn add lodash"
+    expected:
+      decision: ask
+      rule_id: yarn-add
+  - id: yarn-install-asks
+    command: "yarn install"
+    expected:
+      decision: ask
+      rule_id: yarn-install
+
+  # --- pnpm package installation ---
+  - id: pnpm-add-asks
+    command: "pnpm add express"
+    expected:
+      decision: ask
+      rule_id: pnpm-add
+  - id: pnpm-install-asks
+    command: "pnpm install"
+    expected:
+      decision: ask
+      rule_id: pnpm-install
+  - id: pnpm-i-asks
+    command: "pnpm i"
+    expected:
+      decision: ask
+      rule_id: pnpm-install
+
+  # --- Bun package installation ---
+  - id: bun-add-asks
+    command: "bun add react"
+    expected:
+      decision: ask
+      rule_id: bun-add
+  - id: bun-install-asks
+    command: "bun install"
+    expected:
+      decision: ask
+      rule_id: bun-install
+
+  # --- Poetry (Python) package installation ---
+  - id: poetry-add-asks
+    command: "poetry add requests"
+    expected:
+      decision: ask
+      rule_id: poetry-add
+  - id: poetry-install-asks
+    command: "poetry install"
+    expected:
+      decision: ask
+      rule_id: poetry-install
+
+  # --- uv (Python) package installation ---
+  - id: uv-add-asks
+    command: "uv add httpx"
+    expected:
+      decision: ask
+      rule_id: uv-add
+  - id: uv-pip-install-asks
+    command: "uv pip install pandas"
+    expected:
+      decision: ask
+      rule_id: uv-pip-install
+
+  # --- pipx (Python apps) package installation ---
+  - id: pipx-install-asks
+    command: "pipx install black"
+    expected:
+      decision: ask
+      rule_id: pipx-install
+
+  # --- Bundler (Ruby) package installation ---
+  - id: bundle-install-asks
+    command: "bundle install"
+    expected:
+      decision: ask
+      rule_id: bundle-install
+  - id: bundle-add-asks
+    command: "bundle add rspec"
+    expected:
+      decision: ask
+      rule_id: bundle-add
+
+  # --- Composer (PHP) package installation ---
+  - id: composer-require-asks
+    command: "composer require laravel/framework"
+    expected:
+      decision: ask
+      rule_id: composer-require
+  - id: composer-install-asks
+    command: "composer install"
+    expected:
+      decision: ask
+      rule_id: composer-install
+
+  # --- System package managers ---
+  - id: brew-install-asks
+    command: "brew install wget"
+    expected:
+      decision: ask
+      rule_id: brew-install
+  - id: apt-install-asks
+    command: "apt install nginx"
+    expected:
+      decision: ask
+      rule_id: apt-install
+  - id: apt-get-install-asks
+    command: "apt-get install curl"
+    expected:
+      decision: ask
+      rule_id: apt-install
+
+  # --- Conda/Mamba package installation ---
+  - id: conda-install-asks
+    command: "conda install numpy"
+    expected:
+      decision: ask
+      rule_id: conda-install
+  - id: mamba-install-asks
+    command: "mamba install scipy"
+    expected:
+      decision: ask
+      rule_id: conda-install
+
+  # --- npx (runs arbitrary packages) ---
+  - id: npx-create-react-app-asks
+    command: "npx create-react-app my-app"
+    expected:
+      decision: ask
+      rule_id: npx-run
+
+  # --- python -m pip (explicit rule) ---
+  - id: python-m-pip-install-asks
+    command: "python -m pip install requests"
+    expected:
+      decision: ask
+      rule_id: python-m-pip-install
+  - id: python3-m-pip-install-asks
+    command: "python3 -m pip install numpy"
+    expected:
+      decision: ask
+      rule_id: python-m-pip-install
+
+  # --- pip download (explicit rule) ---
+  - id: pip-download-asks
+    command: "pip download requests"
+    expected:
+      decision: ask
+      rule_id: pip-download
+
+  # --- Deno package installation ---
+  - id: deno-install-asks
+    command: "deno install https://deno.land/std/examples/welcome.ts"
+    expected:
+      decision: ask
+      rule_id: deno-install
+  - id: deno-add-asks
+    command: "deno add @std/path"
+    expected:
+      decision: ask
+      rule_id: deno-add
+
+  # --- .NET package installation ---
+  - id: dotnet-add-package-asks
+    command: "dotnet add package Newtonsoft.Json"
+    expected:
+      decision: ask
+      rule_id: dotnet-add-package
+  - id: nuget-install-asks
+    command: "nuget install Newtonsoft.Json"
+    expected:
+      decision: ask
+      rule_id: nuget-install
+
+  # --- Elixir package installation ---
+  - id: mix-deps-get-asks
+    command: "mix deps.get"
+    expected:
+      decision: ask
+      rule_id: mix-deps-get
+  - id: mix-archive-install-asks
+    command: "mix archive.install hex phx_new"
+    expected:
+      decision: ask
+      rule_id: mix-archive-install
+
+  # --- Dart/Flutter package installation ---
+  - id: dart-pub-get-asks
+    command: "dart pub get"
+    expected:
+      decision: ask
+      rule_id: dart-pub-get
+  - id: dart-pub-add-asks
+    command: "dart pub add http"
+    expected:
+      decision: ask
+      rule_id: dart-pub-get
+  - id: flutter-pub-get-asks
+    command: "flutter pub get"
+    expected:
+      decision: ask
+      rule_id: flutter-pub-get
+  - id: pub-get-asks
+    command: "pub get"
+    expected:
+      decision: ask
+      rule_id: pub-get
+
+  # --- Haskell package installation ---
+  - id: cabal-install-asks
+    command: "cabal install pandoc"
+    expected:
+      decision: ask
+      rule_id: cabal-install
+  - id: stack-install-asks
+    command: "stack install hlint"
+    expected:
+      decision: ask
+      rule_id: stack-install
+
+  # --- Lua package installation ---
+  - id: luarocks-install-asks
+    command: "luarocks install luasocket"
+    expected:
+      decision: ask
+      rule_id: luarocks-install
+
+  # --- sudo/doas wrappers (explicit rules) ---
+  - id: sudo-pip-install-asks
+    command: "sudo pip install requests"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: sudo-apt-install-asks
+    command: "sudo apt install nginx"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: sudo-npm-install-asks
+    command: "sudo npm install -g typescript"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: doas-pip-install-asks
+    command: "doas pip install requests"
+    expected:
+      decision: ask
+      rule_id: doas-package-install

@@ -1,0 +1,56 @@
+tests:
+  # ── pip safe invocations ────────────────────────────────────────
+  - id: pip-safe
+    command: "pip install requests"
+    expected:
+      decision: ask
+      rule_id: pip-install
+  - id: pip3-safe
+    command: "pip3 install flask"
+    expected:
+      decision: ask
+      rule_id: pip-install
+  - id: pip-list-safe
+    command: "pip list"
+    expected:
+      decision: allow
+  - id: pip-freeze-safe
+    command: "pip freeze"
+    expected:
+      decision: allow
+  - id: python-script-ask
+    command: "python3 script.py"
+    expected:
+      decision: ask
+  - id: python-version
+    command: "python --version"
+    expected:
+      decision: allow
+
+  # ── Python package manager version checks ────────────────────────
+  - id: poetry-version-safe
+    command: "poetry --version"
+    expected:
+      decision: allow
+  - id: pipx-version-safe
+    command: "pipx --version"
+    expected:
+      decision: allow
+  - id: pdm-version-safe
+    command: "pdm --version"
+    expected:
+      decision: allow
+  - id: rye-version-safe
+    command: "rye --version"
+    expected:
+      decision: allow
+  - id: conda-version-safe
+    command: "conda --version"
+    expected:
+      decision: allow
+
+  # ── Python package manager read-only commands ────────────────────
+  - id: poetry-show-safe
+    command: "poetry show"
+    expected:
+      decision: allow
