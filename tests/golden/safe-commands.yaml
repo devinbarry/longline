@@ -462,3 +462,95 @@ tests:
     command: "tree -L 3 -I 'target|.git' /path"
     expected:
       decision: allow
+
+  # ── Package manager version checks ────────────────────────────────
+  - id: yarn-version-safe
+    command: "yarn --version"
+    expected:
+      decision: allow
+  - id: pnpm-version-safe
+    command: "pnpm --version"
+    expected:
+      decision: allow
+  - id: bun-version-safe
+    command: "bun --version"
+    expected:
+      decision: allow
+  - id: poetry-version-safe
+    command: "poetry --version"
+    expected:
+      decision: allow
+  - id: pipx-version-safe
+    command: "pipx --version"
+    expected:
+      decision: allow
+  - id: pdm-version-safe
+    command: "pdm --version"
+    expected:
+      decision: allow
+  - id: rye-version-safe
+    command: "rye --version"
+    expected:
+      decision: allow
+  - id: conda-version-safe
+    command: "conda --version"
+    expected:
+      decision: allow
+  - id: composer-version-safe
+    command: "composer --version"
+    expected:
+      decision: allow
+  - id: brew-version-safe
+    command: "brew --version"
+    expected:
+      decision: allow
+  - id: deno-version-safe
+    command: "deno --version"
+    expected:
+      decision: allow
+  - id: dotnet-version-safe
+    command: "dotnet --version"
+    expected:
+      decision: allow
+  - id: cabal-version-safe
+    command: "cabal --version"
+    expected:
+      decision: allow
+  - id: stack-version-safe
+    command: "stack --version"
+    expected:
+      decision: allow
+  - id: gem-version-safe
+    command: "gem --version"
+    expected:
+      decision: allow
+  - id: bundle-version-safe
+    command: "bundle --version"
+    expected:
+      decision: allow
+
+  # ── Package manager read-only commands ────────────────────────────
+  - id: yarn-list-safe
+    command: "yarn list"
+    expected:
+      decision: allow
+  - id: pnpm-list-safe
+    command: "pnpm list"
+    expected:
+      decision: allow
+  - id: poetry-show-safe
+    command: "poetry show"
+    expected:
+      decision: allow
+  - id: brew-list-safe
+    command: "brew list"
+    expected:
+      decision: allow
+  - id: deno-info-safe
+    command: "deno info"
+    expected:
+      decision: allow
+  - id: dotnet-list-safe
+    command: "dotnet list"
+    expected:
+      decision: allow

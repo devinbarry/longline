@@ -757,3 +757,121 @@ tests:
     expected:
       decision: ask
       rule_id: npx-run
+
+  # --- python -m pip (explicit rule) ---
+  - id: python-m-pip-install-asks
+    command: "python -m pip install requests"
+    expected:
+      decision: ask
+      rule_id: python-m-pip-install
+  - id: python3-m-pip-install-asks
+    command: "python3 -m pip install numpy"
+    expected:
+      decision: ask
+      rule_id: python-m-pip-install
+
+  # --- pip download (explicit rule) ---
+  - id: pip-download-asks
+    command: "pip download requests"
+    expected:
+      decision: ask
+      rule_id: pip-download
+
+  # --- Deno package installation ---
+  - id: deno-install-asks
+    command: "deno install https://deno.land/std/examples/welcome.ts"
+    expected:
+      decision: ask
+      rule_id: deno-install
+  - id: deno-add-asks
+    command: "deno add @std/path"
+    expected:
+      decision: ask
+      rule_id: deno-add
+
+  # --- .NET package installation ---
+  - id: dotnet-add-package-asks
+    command: "dotnet add package Newtonsoft.Json"
+    expected:
+      decision: ask
+      rule_id: dotnet-add-package
+  - id: nuget-install-asks
+    command: "nuget install Newtonsoft.Json"
+    expected:
+      decision: ask
+      rule_id: nuget-install
+
+  # --- Elixir package installation ---
+  - id: mix-deps-get-asks
+    command: "mix deps.get"
+    expected:
+      decision: ask
+      rule_id: mix-deps-get
+  - id: mix-archive-install-asks
+    command: "mix archive.install hex phx_new"
+    expected:
+      decision: ask
+      rule_id: mix-archive-install
+
+  # --- Dart/Flutter package installation ---
+  - id: dart-pub-get-asks
+    command: "dart pub get"
+    expected:
+      decision: ask
+      rule_id: dart-pub-get
+  - id: dart-pub-add-asks
+    command: "dart pub add http"
+    expected:
+      decision: ask
+      rule_id: dart-pub-get
+  - id: flutter-pub-get-asks
+    command: "flutter pub get"
+    expected:
+      decision: ask
+      rule_id: flutter-pub-get
+  - id: pub-get-asks
+    command: "pub get"
+    expected:
+      decision: ask
+      rule_id: pub-get
+
+  # --- Haskell package installation ---
+  - id: cabal-install-asks
+    command: "cabal install pandoc"
+    expected:
+      decision: ask
+      rule_id: cabal-install
+  - id: stack-install-asks
+    command: "stack install hlint"
+    expected:
+      decision: ask
+      rule_id: stack-install
+
+  # --- Lua package installation ---
+  - id: luarocks-install-asks
+    command: "luarocks install luasocket"
+    expected:
+      decision: ask
+      rule_id: luarocks-install
+
+  # --- sudo/doas wrappers (explicit rules) ---
+  - id: sudo-pip-install-asks
+    command: "sudo pip install requests"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: sudo-apt-install-asks
+    command: "sudo apt install nginx"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: sudo-npm-install-asks
+    command: "sudo npm install -g typescript"
+    expected:
+      decision: ask
+      rule_id: sudo-package-install
+  - id: doas-pip-install-asks
+    command: "doas pip install requests"
+    expected:
+      decision: ask
+      rule_id: doas-package-install

@@ -8,13 +8,21 @@ Known gaps and future hardening opportunities.
 
 All package installation commands now require user confirmation (`ask`). Comprehensive rules cover:
 
-- **Python**: pip, pip3, uv pip, uv add, poetry, pipx, pdm, rye, conda, mamba
-- **JavaScript**: npm, yarn, pnpm, bun, npx
+- **Python**: pip, pip3, python -m pip, uv pip, uv add, poetry, pipx, pdm, rye, conda, mamba
+- **JavaScript**: npm, yarn, pnpm, bun, npx, deno
 - **Ruby**: gem, bundle/bundler
 - **Rust**: cargo add, cargo install
 - **Go**: go get, go install
 - **PHP**: composer require, composer install
+- **Elixir**: mix deps.get, mix archive.install
+- **Dart/Flutter**: dart pub, flutter pub, pub
+- **Haskell**: cabal install, stack install
+- **.NET**: dotnet add, nuget install
+- **Lua**: luarocks install
 - **System**: brew, apt, apt-get, dnf, yum, pacman, apk, snap, flatpak, nix-env
+- **Privilege escalation**: sudo/doas wrappers for package managers
+
+All package manager version checks (`--version`) and read-only commands (list, info, show) remain allowed.
 
 Future enhancement: `--allow-package-install` flag could bypass this section for trusted workflows.
 
