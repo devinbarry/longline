@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.8] - 2026-02-02
+
+
+### Added
+
+- expand allowlist for CI/CD tooling and add API mutation rules
+
+
+### Changed
+
+- lock allowlist path matching design after security review
+
+
+### Fixed
+
+- secure allowlist matching with positional args and path normalization
+
 ## [0.1.7] - 2026-02-02
 
 
@@ -15,6 +32,7 @@ All notable changes to this project will be documented in this file.
 - add allowlist path matching design exploration
 - add subdirectory-only constraint and security analysis
 - add constraint to only normalize path-like arguments
+- release v0.1.7
 
 ## [0.1.6] - 2026-02-01
 
