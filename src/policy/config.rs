@@ -468,4 +468,18 @@ include:
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("nonexistent.yaml"));
     }
+
+    #[test]
+    fn test_load_rules_backwards_compat_monolithic() {
+        // Ensure existing monolithic files still work
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("rules")
+            .join("default-rules.yaml");
+        let config = load_rules(&path).expect("Monolithic rules should still load");
+        assert!(config.rules.len() > 100, "Should have many rules");
+        assert!(
+            config.allowlists.commands.len() > 100,
+            "Should have many allowlist entries"
+        );
+    }
 }
