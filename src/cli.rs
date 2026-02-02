@@ -57,6 +57,8 @@ enum Commands {
         #[arg(short, long)]
         group_by: Option<GroupBy>,
     },
+    /// Show loaded rule files and their contents
+    Files,
 }
 
 #[derive(Clone, clap::ValueEnum)]
@@ -94,7 +96,13 @@ pub fn run() -> i32 {
 
     let cli = Cli::parse();
 
-    // Load rules config
+    // Handle Files command early (needs path before loading)
+    if let Some(Commands::Files) = &cli.command {
+        let config_path = cli.config.clone().unwrap_or_else(default_config_path);
+        return run_files(&config_path);
+    }
+
+    // Load rules config for other commands
     let config_path = cli.config.unwrap_or_else(default_config_path);
     let rules_config = match policy::load_rules(&config_path) {
         Ok(c) => c,
@@ -112,6 +120,7 @@ pub fn run() -> i32 {
             level,
             group_by,
         }) => run_rules(&rules_config, verbose, filter, level, group_by),
+        Some(Commands::Files) => unreachable!(), // handled above
         None => run_hook(&rules_config, cli.ask_on_deny, cli.ask_ai),
     }
 }
@@ -384,6 +393,44 @@ fn run_rules(
     println!(
         "Safety level: {} | Default decision: {}",
         config.safety_level, config.default_decision
+    );
+
+    0
+}
+
+fn run_files(config_path: &std::path::Path) -> i32 {
+    let loaded = match policy::load_rules_with_info(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    };
+
+    if loaded.is_manifest {
+        println!("Manifest: {}", config_path.display());
+    } else {
+        println!("Config: {}", config_path.display());
+    }
+    println!("Safety level: {}", loaded.config.safety_level);
+    println!();
+
+    if loaded.is_manifest {
+        println!("Included files:");
+        for file in &loaded.files {
+            println!(
+                "  {:<30} ({} allowlist entries, {} rules)",
+                file.name, file.allowlist_count, file.rule_count
+            );
+        }
+        println!();
+    }
+
+    let total_allowlist: usize = loaded.files.iter().map(|f| f.allowlist_count).sum();
+    let total_rules: usize = loaded.files.iter().map(|f| f.rule_count).sum();
+    println!(
+        "Total: {} allowlist entries, {} rules",
+        total_allowlist, total_rules
     );
 
     0
