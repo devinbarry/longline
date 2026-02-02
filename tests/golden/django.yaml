@@ -169,31 +169,49 @@ tests:
     expected:
       decision: allow
 
-  # ── Path variations (ask - not in allowlist, treated as script) ─
-  # Note: Only the standard "python manage.py <cmd>" form is allowlisted.
-  # Path variants like ./manage.py are treated as arbitrary scripts.
+  # ── Path variations: safe relative paths (normalized, expect: allow) ─
+  # Relative paths without traversal are normalized to basename for matching.
   - id: django-check-relative-path
     command: "python ./manage.py check"
     expected:
-      decision: ask
+      decision: allow
   - id: django-test-relative-path
     command: "python ./manage.py test"
     expected:
-      decision: ask
+      decision: allow
   - id: django-check-subdir-path
     command: "python server/manage.py check"
     expected:
-      decision: ask
+      decision: allow
   - id: django-test-subdir-path
     command: "python server/manage.py test"
     expected:
-      decision: ask
+      decision: allow
+
+  # ── Path variations: unsafe paths (NOT normalized, expect: ask) ─
+  # Absolute paths and paths with traversal are NOT normalized.
   - id: django-check-absolute-path
     command: "python /home/user/project/manage.py check"
     expected:
       decision: ask
   - id: django-test-absolute-path
     command: "python /home/user/project/manage.py test"
+    expected:
+      decision: ask
+  - id: django-check-traversal-path
+    command: "python ../manage.py check"
+    expected:
+      decision: ask
+  - id: django-test-traversal-path
+    command: "python ../manage.py test"
+    expected:
+      decision: ask
+  - id: django-check-deep-traversal
+    command: "python ../../project/manage.py check"
+    expected:
+      decision: ask
+  - id: django-check-hidden-traversal
+    command: "python foo/../bar/manage.py check"
     expected:
       decision: ask
 
