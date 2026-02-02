@@ -1,0 +1,109 @@
+# System: process control, config modification, and privileged operations
+
+allowlists:
+  commands: []
+
+rules:
+  # ============================================================
+  # HIGH: Network / process operations
+  # ============================================================
+  - id: kill-signal
+    level: high
+    match:
+      command:
+        any_of: [kill, killall, pkill]
+      flags:
+        any_of: ["-9", "-KILL", "-SIGKILL"]
+    decision: ask
+    reason: "Forceful process termination"
+
+  - id: iptables-modify
+    level: high
+    match:
+      command:
+        any_of: [iptables, ip6tables, nft, ufw]
+    decision: ask
+    reason: "Firewall rule modification"
+
+  # ============================================================
+  # HIGH: System config modification
+  # ============================================================
+  - id: chmod-777
+    level: high
+    match:
+      command: chmod
+      args:
+        any_of: ["777"]
+    decision: ask
+    reason: "Setting world-writable permissions"
+
+  - id: edit-etc-hosts
+    level: high
+    match:
+      command:
+        any_of: [tee, ">>"]
+      args:
+        any_of: ["/etc/hosts"]
+    decision: deny
+    reason: "Modifying /etc/hosts"
+
+  - id: edit-sudoers
+    level: high
+    match:
+      command:
+        any_of: [visudo, tee]
+      args:
+        any_of: ["/etc/sudoers", "/etc/sudoers.d/*"]
+    decision: deny
+    reason: "Modifying sudoers configuration"
+
+  - id: crontab-modify
+    level: high
+    match:
+      command: crontab
+      flags:
+        any_of: ["-e", "-r"]
+    decision: ask
+    reason: "Modifying system crontab"
+
+  - id: systemctl-modify
+    level: high
+    match:
+      command:
+        any_of: [systemctl, launchctl]
+      args:
+        any_of: ["stop", "disable", "mask", "enable", "start", "restart"]
+    decision: ask
+    reason: "Modifying system service"
+
+  - id: edit-shell-profile
+    level: high
+    match:
+      command:
+        any_of: [tee]
+      args:
+        any_of: ["~/.bashrc", "~/.zshrc", "~/.bash_profile", "~/.profile",
+                  "~/.zprofile", "/etc/profile", "/etc/bash.bashrc"]
+    decision: deny
+    reason: "Modifying shell profile"
+
+  # ============================================================
+  # STRICT: Cautionary system operations
+  # ============================================================
+  - id: sudo-rm
+    level: strict
+    match:
+      command: sudo
+      args:
+        any_of: ["rm"]
+    decision: ask
+    reason: "Running rm with elevated privileges"
+
+  - id: crontab-remove
+    level: strict
+    match:
+      command: crontab
+      flags:
+        any_of: ["-r"]
+    decision: deny
+    reason: "Removing all cron jobs"

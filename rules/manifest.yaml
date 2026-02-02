@@ -4,3 +4,13 @@ safety_level: high
 
 include:
   - core-allowlist.yaml
+  - git.yaml
+  - cli-tools.yaml
+  - filesystem.yaml
+  - secrets.yaml
+  - django.yaml
+  - package-managers.yaml
+  - network.yaml
+  - docker.yaml
+  - system.yaml
+  - interpreters.yaml

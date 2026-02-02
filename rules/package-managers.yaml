@@ -1,0 +1,709 @@
+# Package managers: safe invocations and installation rules
+
+allowlists:
+  commands:
+    # ── pip/pip3: safe invocations ────────────────────────────────
+    # pip install - covered by rules (ask for confirmation)
+    - "pip list"
+    - "pip show"
+    - "pip freeze"
+    - "pip check"
+    - "pip3 list"
+    - "pip3 show"
+    - "pip3 freeze"
+    - "pip3 check"
+    # ── gem: safe invocations ─────────────────────────────────────
+    # gem install - covered by rules (ask for confirmation)
+    - "gem list"
+    - "gem info"
+    - "gem search"
+    - "gem --version"
+    - "gem -v"
+    # ── bundler: safe invocations ─────────────────────────────────
+    # bundle install/add - covered by rules (ask for confirmation)
+    - "bundle list"
+    - "bundle show"
+    - "bundle info"
+    - "bundle check"
+    - "bundle --version"
+    - "bundle -v"
+    - "bundler --version"
+    # ── go: safe invocations ──────────────────────────────────────
+    # go get/install - covered by rules (ask for confirmation)
+    - "go build"
+    - "go test"
+    - "go run"
+    - "go vet"
+    - "go fmt"
+    - "go mod"
+    - "go generate"
+    - "go doc"
+    - "go clean"
+    - "go env"
+    - "go version"
+    - "go work"
+    # ── yarn: safe invocations ────────────────────────────────────
+    # yarn add/install - covered by rules (ask for confirmation)
+    - "yarn --version"
+    - "yarn -v"
+    - "yarn list"
+    - "yarn info"
+    - "yarn why"
+    - "yarn run"
+    - "yarn test"
+    - "yarn build"
+    - "yarn start"
+    - "yarn lint"
+    # ── pnpm: safe invocations ────────────────────────────────────
+    # pnpm add/install - covered by rules (ask for confirmation)
+    - "pnpm --version"
+    - "pnpm -v"
+    - "pnpm list"
+    - "pnpm ls"
+    - "pnpm why"
+    - "pnpm run"
+    - "pnpm test"
+    - "pnpm build"
+    - "pnpm start"
+    - "pnpm audit"
+    # ── bun: safe invocations ─────────────────────────────────────
+    # bun add/install - covered by rules (ask for confirmation)
+    - "bun --version"
+    - "bun -v"
+    - "bun run"
+    - "bun test"
+    - "bun build"
+    # ── poetry: safe invocations ──────────────────────────────────
+    # poetry add/install - covered by rules (ask for confirmation)
+    - "poetry --version"
+    - "poetry -V"
+    - "poetry show"
+    - "poetry list"
+    - "poetry check"
+    - "poetry lock"
+    - "poetry run"
+    - "poetry shell"
+    - "poetry env"
+    # ── pipx: safe invocations ────────────────────────────────────
+    # pipx install - covered by rules (ask for confirmation)
+    - "pipx --version"
+    - "pipx list"
+    - "pipx run"
+    # ── pdm: safe invocations ─────────────────────────────────────
+    # pdm add/install - covered by rules (ask for confirmation)
+    - "pdm --version"
+    - "pdm -V"
+    - "pdm list"
+    - "pdm show"
+    - "pdm lock"
+    - "pdm run"
+    # ── rye: safe invocations ─────────────────────────────────────
+    # rye add - covered by rules (ask for confirmation)
+    - "rye --version"
+    - "rye -V"
+    - "rye list"
+    - "rye show"
+    - "rye lock"
+    - "rye run"
+    - "rye sync"
+    # ── conda/mamba: safe invocations ─────────────────────────────
+    # conda/mamba install - covered by rules (ask for confirmation)
+    - "conda --version"
+    - "conda -V"
+    - "conda list"
+    - "conda info"
+    - "conda env"
+    - "mamba --version"
+    - "mamba list"
+    - "mamba info"
+    # ── composer: safe invocations ────────────────────────────────
+    # composer require/install - covered by rules (ask for confirmation)
+    - "composer --version"
+    - "composer -V"
+    - "composer show"
+    - "composer list"
+    - "composer info"
+    - "composer check-platform-reqs"
+    # ── brew: safe invocations ────────────────────────────────────
+    # brew install - covered by rules (ask for confirmation)
+    - "brew --version"
+    - "brew list"
+    - "brew info"
+    - "brew search"
+    - "brew doctor"
+    - "brew outdated"
+    # ── deno: safe invocations ────────────────────────────────────
+    # deno install/add - covered by rules (ask for confirmation)
+    - "deno --version"
+    - "deno -V"
+    - "deno run"
+    - "deno test"
+    - "deno lint"
+    - "deno fmt"
+    - "deno check"
+    - "deno info"
+    - "deno doc"
+    # ── dotnet: safe invocations ──────────────────────────────────
+    # dotnet add - covered by rules (ask for confirmation)
+    - "dotnet --version"
+    - "dotnet --info"
+    - "dotnet build"
+    - "dotnet run"
+    - "dotnet test"
+    - "dotnet clean"
+    - "dotnet restore"
+    - "dotnet list"
+    # ── nuget: safe invocations ───────────────────────────────────
+    # nuget install - covered by rules (ask for confirmation)
+    - "nuget --version"
+    - "nuget list"
+    - "nuget sources"
+    # ── mix (Elixir): safe invocations ────────────────────────────
+    # mix deps.get - covered by rules (ask for confirmation)
+    - "mix --version"
+    - "mix help"
+    - "mix compile"
+    - "mix test"
+    - "mix format"
+    # ── pub (Dart): safe invocations ──────────────────────────────
+    # pub get/add - covered by rules (ask for confirmation)
+    - "dart pub --version"
+    - "dart pub deps"
+    - "dart pub outdated"
+    - "flutter pub deps"
+    - "flutter pub outdated"
+    # ── cabal (Haskell): safe invocations ─────────────────────────
+    # cabal install - covered by rules (ask for confirmation)
+    - "cabal --version"
+    - "cabal -V"
+    - "cabal list"
+    - "cabal info"
+    - "cabal build"
+    - "cabal test"
+    - "cabal run"
+    # ── stack (Haskell): safe invocations ─────────────────────────
+    # stack install - covered by rules (ask for confirmation)
+    - "stack --version"
+    - "stack list-dependencies"
+    - "stack build"
+    - "stack test"
+    - "stack run"
+
+rules:
+  # ============================================================
+  # HIGH: Package installation (supply chain risk)
+  # ============================================================
+  # All package installation commands require confirmation.
+  # Packages can contain arbitrary code that runs at install time.
+  # Risk: typosquatting, malicious packages, supply chain attacks.
+  #
+  # Future: --allow-package-install flag could bypass this section.
+
+  # ── Python package managers ──────────────────────────────────
+  - id: pip-install
+    level: high
+    match:
+      command:
+        any_of: [pip, pip3]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python packages"
+
+  - id: pip-download
+    level: high
+    match:
+      command:
+        any_of: [pip, pip3]
+      args:
+        any_of: ["download"]
+    decision: ask
+    reason: "Downloading Python packages"
+
+  - id: python-m-pip-install
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["-m"]
+      flags:
+        any_of: ["pip"]
+    decision: ask
+    reason: "Installing Python packages via python -m pip"
+
+  - id: uv-pip-install
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["pip"]
+      flags:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python packages via uv"
+
+  - id: uv-add
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via uv"
+
+  - id: poetry-add
+    level: high
+    match:
+      command: poetry
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via Poetry"
+
+  - id: poetry-install
+    level: high
+    match:
+      command: poetry
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python dependencies via Poetry"
+
+  - id: pipx-install
+    level: high
+    match:
+      command: pipx
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python application via pipx"
+
+  - id: pdm-add
+    level: high
+    match:
+      command: pdm
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via PDM"
+
+  - id: pdm-install
+    level: high
+    match:
+      command: pdm
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python dependencies via PDM"
+
+  - id: rye-add
+    level: high
+    match:
+      command: rye
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via Rye"
+
+  - id: conda-install
+    level: high
+    match:
+      command:
+        any_of: [conda, mamba]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing packages via Conda/Mamba"
+
+  # ── JavaScript/Node package managers ─────────────────────────
+  - id: npm-install
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["install", "i", "ci"]
+    decision: ask
+    reason: "Installing npm packages"
+
+  - id: npm-audit-fix
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["audit"]
+      flags:
+        any_of: ["fix"]
+    decision: ask
+    reason: "npm audit fix modifies package dependencies"
+
+  - id: npm-exec
+    level: high
+    match:
+      command: npm
+      args:
+        any_of: ["exec"]
+    decision: ask
+    reason: "npm exec runs arbitrary package code"
+
+  - id: npx-run
+    level: high
+    match:
+      command: npx
+    decision: ask
+    reason: "npx can execute arbitrary npm packages"
+
+  - id: yarn-add
+    level: high
+    match:
+      command: yarn
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via Yarn"
+
+  - id: yarn-install
+    level: high
+    match:
+      command: yarn
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing npm packages via Yarn"
+
+  - id: pnpm-add
+    level: high
+    match:
+      command: pnpm
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via pnpm"
+
+  - id: pnpm-install
+    level: high
+    match:
+      command: pnpm
+      args:
+        any_of: ["install", "i"]
+    decision: ask
+    reason: "Installing npm packages via pnpm"
+
+  - id: bun-add
+    level: high
+    match:
+      command: bun
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via Bun"
+
+  - id: bun-install
+    level: high
+    match:
+      command: bun
+      args:
+        any_of: ["install", "i"]
+    decision: ask
+    reason: "Installing npm packages via Bun"
+
+  # ── Ruby package managers ────────────────────────────────────
+  - id: gem-install
+    level: high
+    match:
+      command: gem
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Ruby gems"
+
+  - id: bundle-install
+    level: high
+    match:
+      command:
+        any_of: [bundle, bundler]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Ruby gems via Bundler"
+
+  - id: bundle-add
+    level: high
+    match:
+      command:
+        any_of: [bundle, bundler]
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Ruby gem via Bundler"
+
+  # ── Rust package managers ────────────────────────────────────
+  - id: cargo-add
+    level: high
+    match:
+      command: cargo
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Rust crate dependency"
+
+  - id: cargo-install
+    level: high
+    match:
+      command: cargo
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Rust binary"
+
+  # ── Go package managers ──────────────────────────────────────
+  - id: go-get
+    level: high
+    match:
+      command: go
+      args:
+        any_of: ["get"]
+    decision: ask
+    reason: "Fetching Go module"
+
+  - id: go-install
+    level: high
+    match:
+      command: go
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Go binary"
+
+  # ── PHP package managers ─────────────────────────────────────
+  - id: composer-require
+    level: high
+    match:
+      command: composer
+      args:
+        any_of: ["require"]
+    decision: ask
+    reason: "Adding PHP package via Composer"
+
+  - id: composer-install
+    level: high
+    match:
+      command: composer
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing PHP packages via Composer"
+
+  # ── System package managers ──────────────────────────────────
+  - id: brew-install
+    level: high
+    match:
+      command: brew
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing package via Homebrew"
+
+  - id: apt-install
+    level: high
+    match:
+      command:
+        any_of: [apt, apt-get]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing system package via apt"
+
+  - id: dnf-install
+    level: high
+    match:
+      command:
+        any_of: [dnf, yum]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing system package via dnf/yum"
+
+  - id: pacman-install
+    level: high
+    match:
+      command: pacman
+      flags:
+        any_of: ["-S", "--sync"]
+    decision: ask
+    reason: "Installing system package via pacman"
+
+  - id: apk-add
+    level: high
+    match:
+      command: apk
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Installing Alpine package"
+
+  - id: snap-install
+    level: high
+    match:
+      command: snap
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Snap package"
+
+  - id: flatpak-install
+    level: high
+    match:
+      command: flatpak
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Flatpak application"
+
+  - id: nix-env-install
+    level: high
+    match:
+      command: nix-env
+      flags:
+        any_of: ["-i", "--install"]
+    decision: ask
+    reason: "Installing package via Nix"
+
+  # ── Deno package managers ────────────────────────────────────
+  - id: deno-install
+    level: high
+    match:
+      command: deno
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Deno package"
+
+  - id: deno-add
+    level: high
+    match:
+      command: deno
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Deno dependency"
+
+  # ── .NET package managers ────────────────────────────────────
+  - id: dotnet-add-package
+    level: high
+    match:
+      command: dotnet
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding .NET package"
+
+  - id: nuget-install
+    level: high
+    match:
+      command: nuget
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing NuGet package"
+
+  # ── Elixir package managers ──────────────────────────────────
+  - id: mix-deps-get
+    level: high
+    match:
+      command: mix
+      args:
+        any_of: ["deps.get"]
+    decision: ask
+    reason: "Fetching Elixir dependencies"
+
+  - id: mix-archive-install
+    level: high
+    match:
+      command: mix
+      args:
+        any_of: ["archive.install", "escript.install"]
+    decision: ask
+    reason: "Installing Elixir archive/escript"
+
+  # ── Dart/Flutter package managers ────────────────────────────
+  - id: dart-pub-get
+    level: high
+    match:
+      command: dart
+      args:
+        any_of: ["pub"]
+      flags:
+        any_of: ["get", "add"]
+    decision: ask
+    reason: "Installing Dart packages"
+
+  - id: flutter-pub-get
+    level: high
+    match:
+      command: flutter
+      args:
+        any_of: ["pub"]
+      flags:
+        any_of: ["get", "add"]
+    decision: ask
+    reason: "Installing Flutter packages"
+
+  - id: pub-get
+    level: high
+    match:
+      command: pub
+      args:
+        any_of: ["get", "add"]
+    decision: ask
+    reason: "Installing Dart packages via pub"
+
+  # ── Haskell package managers ─────────────────────────────────
+  - id: cabal-install
+    level: high
+    match:
+      command: cabal
+      args:
+        any_of: ["install", "v2-install"]
+    decision: ask
+    reason: "Installing Haskell package via Cabal"
+
+  - id: stack-install
+    level: high
+    match:
+      command: stack
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Haskell package via Stack"
+
+  # ── Lua package managers ─────────────────────────────────────
+  - id: luarocks-install
+    level: high
+    match:
+      command: luarocks
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Lua rock"
+
+  # ── sudo/privilege escalation wrappers ───────────────────────
+  - id: sudo-package-install
+    level: high
+    match:
+      command: sudo
+      args:
+        any_of: ["pip", "pip3", "npm", "gem", "apt", "apt-get", "dnf", "yum",
+                 "pacman", "apk", "brew", "snap", "flatpak"]
+    decision: ask
+    reason: "Package installation with sudo"
+
+  - id: doas-package-install
+    level: high
+    match:
+      command: doas
+      args:
+        any_of: ["pip", "pip3", "npm", "gem", "apt", "apt-get", "dnf", "yum",
+                 "pacman", "apk", "brew", "snap", "flatpak"]
+    decision: ask
+    reason: "Package installation with doas"

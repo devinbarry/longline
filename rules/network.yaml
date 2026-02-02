@@ -1,0 +1,87 @@
+# Network: shell injection, exfiltration, and environment exposure
+
+allowlists:
+  commands: []
+
+rules:
+  # ============================================================
+  # CRITICAL: Shell injection / remote code execution
+  # ============================================================
+  - id: curl-pipe-shell
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [sh, bash, zsh, dash, ksh, fish]
+    decision: deny
+    reason: "Remote code execution: piping download to shell"
+
+  - id: wget-pipe-interpreter
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [python, python3, ruby, perl, node]
+    decision: deny
+    reason: "Remote code execution: piping download to interpreter"
+
+  # ============================================================
+  # HIGH: Exfiltration
+  # ============================================================
+  - id: curl-upload-secrets
+    level: high
+    match:
+      command: curl
+      flags:
+        any_of: ["-d", "--data", "-F", "--form", "--data-binary", "--data-urlencode", "-T", "--upload-file"]
+    decision: ask
+    reason: "curl with data upload flags"
+
+  - id: scp-upload
+    level: high
+    match:
+      command: scp
+    decision: ask
+    reason: "scp file transfer"
+
+  - id: rsync-remote
+    level: high
+    match:
+      command: rsync
+    decision: ask
+    reason: "rsync file transfer"
+
+  - id: nc-netcat
+    level: high
+    match:
+      command:
+        any_of: [nc, netcat, ncat]
+    decision: ask
+    reason: "Netcat network connection"
+
+  # ============================================================
+  # HIGH: Secrets via environment
+  # ============================================================
+  - id: printenv
+    level: high
+    match:
+      command:
+        any_of: [printenv, env]
+    decision: ask
+    reason: "Environment dump may expose secrets"
+
+  - id: source-env
+    level: high
+    match:
+      command:
+        any_of: [source, "."]
+      args:
+        any_of: [".env", ".env.*", "**/.env", "**/.env.*", ".envrc"]
+    decision: deny
+    reason: "Sourcing environment file"

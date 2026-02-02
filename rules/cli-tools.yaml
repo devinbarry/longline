@@ -1,0 +1,77 @@
+# CLI tools: gh, glab, glp, git-cliff
+
+allowlists:
+  commands:
+    # ── glp (GitLab Pipeline CLI): read-only invocations ──────────
+    - "glp status"
+    - "glp jobs"
+    - "glp log"
+    - "glp --version"
+    - "glp --help"
+    - "glp -h"
+    # ── glab (GitLab CLI): read-only invocations ──────────────────
+    # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by glab-api-mutating rule
+    - "glab api"
+    - "glab auth status"
+    - "glab ci status"
+    - "glab ci view"
+    - "glab ci list"
+    - "glab ci trace"
+    - "glab ci get"
+    - "glab repo list"
+    - "glab repo view"
+    - "glab group list"
+    - "glab issue list"
+    - "glab issue view"
+    - "glab mr list"
+    - "glab mr view"
+    - "glab --version"
+    - "glab --help"
+    # ── gh (GitHub CLI): read-only invocations ───────────────────────
+    # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by gh-api-mutating rule
+    - "gh api"
+    - "gh pr list"
+    - "gh pr view"
+    - "gh pr status"
+    - "gh pr diff"
+    - "gh pr checks"
+    - "gh issue list"
+    - "gh issue view"
+    - "gh issue status"
+    - "gh repo list"
+    - "gh repo view"
+    - "gh run list"
+    - "gh run view"
+    - "gh run watch"
+    - "gh workflow list"
+    - "gh workflow view"
+    - "gh auth status"
+    - "gh --version"
+    - "gh --help"
+    - "gh -h"
+    # ── git-cliff: stdout-only invocations ────────────────────────
+    - "git-cliff --unreleased"
+    - "git-cliff --latest"
+    - "git-cliff --current"
+
+rules:
+  # ============================================================
+  # HIGH: CLI tool mutating operations
+  # ============================================================
+  - id: glab-api-mutating
+    level: high
+    match:
+      command: glab
+      args:
+        any_of: ["POST", "PUT", "DELETE", "PATCH"]
+    decision: ask
+    reason: "GitLab API mutating operation (POST/PUT/DELETE/PATCH)"
+
+  - id: gh-api-mutating
+    level: high
+    match:
+      command: gh
+      args:
+        any_of: ["POST", "PUT", "DELETE", "PATCH"]
+    decision: ask
+    reason: "GitHub API mutating operation (POST/PUT/DELETE/PATCH)"

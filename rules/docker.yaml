@@ -1,0 +1,30 @@
+# Docker: destructive operations
+
+allowlists:
+  commands: []
+
+rules:
+  # ============================================================
+  # HIGH: Docker destructive
+  # ============================================================
+  - id: docker-volume-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["volume"]
+      flags:
+        any_of: ["rm", "prune"]
+    decision: ask
+    reason: "Docker volume removal"
+
+  - id: docker-system-prune
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["system"]
+      flags:
+        any_of: ["prune"]
+    decision: ask
+    reason: "Docker system prune"

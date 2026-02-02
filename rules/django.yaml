@@ -1,0 +1,256 @@
+# Django: safe manage.py commands and destructive operations
+
+allowlists:
+  commands:
+    # ── Django: safe manage.py commands ─────────────────────────────
+    - "python manage.py check"
+    - "python manage.py showmigrations"
+    - "python manage.py diffsettings"
+    - "python manage.py sqlmigrate"
+    - "python manage.py sqlflush"
+    - "python manage.py sqlsequencereset"
+    - "python manage.py inspectdb"
+    - "python manage.py test"
+    - "python manage.py makemigrations"
+    - "python manage.py runserver"
+    - "python manage.py startapp"
+    - "python manage.py startproject"
+    - "python manage.py dumpdata"
+    - "python manage.py makemessages"
+    - "python manage.py compilemessages"
+    # ── Django: python3 variants ────────────────────────────────────
+    - "python3 manage.py check"
+    - "python3 manage.py showmigrations"
+    - "python3 manage.py diffsettings"
+    - "python3 manage.py sqlmigrate"
+    - "python3 manage.py sqlflush"
+    - "python3 manage.py sqlsequencereset"
+    - "python3 manage.py inspectdb"
+    - "python3 manage.py test"
+    - "python3 manage.py makemigrations"
+    - "python3 manage.py runserver"
+    - "python3 manage.py startapp"
+    - "python3 manage.py startproject"
+    - "python3 manage.py dumpdata"
+    - "python3 manage.py makemessages"
+    - "python3 manage.py compilemessages"
+    # ── Django: uv run variants ─────────────────────────────────────
+    - "uv run python manage.py check"
+    - "uv run python manage.py showmigrations"
+    - "uv run python manage.py diffsettings"
+    - "uv run python manage.py sqlmigrate"
+    - "uv run python manage.py sqlflush"
+    - "uv run python manage.py sqlsequencereset"
+    - "uv run python manage.py inspectdb"
+    - "uv run python manage.py test"
+    - "uv run python manage.py makemigrations"
+    - "uv run python manage.py runserver"
+    - "uv run python manage.py startapp"
+    - "uv run python manage.py startproject"
+    - "uv run python manage.py dumpdata"
+    - "uv run python manage.py makemessages"
+    - "uv run python manage.py compilemessages"
+    - "uv run python3 manage.py check"
+    - "uv run python3 manage.py showmigrations"
+    - "uv run python3 manage.py diffsettings"
+    - "uv run python3 manage.py sqlmigrate"
+    - "uv run python3 manage.py sqlflush"
+    - "uv run python3 manage.py sqlsequencereset"
+    - "uv run python3 manage.py inspectdb"
+    - "uv run python3 manage.py test"
+    - "uv run python3 manage.py makemigrations"
+    - "uv run python3 manage.py runserver"
+    - "uv run python3 manage.py startapp"
+    - "uv run python3 manage.py startproject"
+    - "uv run python3 manage.py dumpdata"
+    - "uv run python3 manage.py makemessages"
+    - "uv run python3 manage.py compilemessages"
+
+rules:
+  # ============================================================
+  # HIGH: Django destructive operations
+  # ============================================================
+  - id: django-migrate
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["migrate"]
+    decision: ask
+    reason: "Django migrate modifies database schema"
+
+  - id: django-flush
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["flush"]
+    decision: ask
+    reason: "Django flush deletes all data from database"
+
+  - id: django-loaddata
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["loaddata"]
+    decision: ask
+    reason: "Django loaddata modifies database content"
+
+  - id: django-createsuperuser
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["createsuperuser"]
+    decision: ask
+    reason: "Django createsuperuser creates admin user"
+
+  - id: django-changepassword
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["changepassword"]
+    decision: ask
+    reason: "Django changepassword modifies user credentials"
+
+  - id: django-clearsessions
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["clearsessions"]
+    decision: ask
+    reason: "Django clearsessions deletes session data"
+
+  - id: django-dbshell
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["dbshell"]
+    decision: ask
+    reason: "Django dbshell provides direct database access"
+
+  - id: django-shell
+    level: high
+    match:
+      command:
+        any_of: [python, python3]
+      args:
+        any_of: ["manage.py", "*/manage.py"]
+      flags:
+        any_of: ["shell", "shell_plus"]
+    decision: ask
+    reason: "Django shell provides arbitrary code execution"
+
+  # ── Django: uv run variants ───────────────────────────────────
+  - id: uv-django-migrate
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["migrate"]
+    decision: ask
+    reason: "Django migrate modifies database schema"
+
+  - id: uv-django-flush
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["flush"]
+    decision: ask
+    reason: "Django flush deletes all data from database"
+
+  - id: uv-django-loaddata
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["loaddata"]
+    decision: ask
+    reason: "Django loaddata modifies database content"
+
+  - id: uv-django-createsuperuser
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["createsuperuser"]
+    decision: ask
+    reason: "Django createsuperuser creates admin user"
+
+  - id: uv-django-changepassword
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["changepassword"]
+    decision: ask
+    reason: "Django changepassword modifies user credentials"
+
+  - id: uv-django-clearsessions
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["clearsessions"]
+    decision: ask
+    reason: "Django clearsessions deletes session data"
+
+  - id: uv-django-dbshell
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["dbshell"]
+    decision: ask
+    reason: "Django dbshell provides direct database access"
+
+  - id: uv-django-shell
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["run"]
+      flags:
+        any_of: ["shell", "shell_plus"]
+    decision: ask
+    reason: "Django shell provides arbitrary code execution"
