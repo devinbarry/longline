@@ -446,4 +446,26 @@ rules:
         assert_eq!(config.rules.len(), 1);
         assert_eq!(config.rules[0].id, "git-force-push");
     }
+
+    #[test]
+    fn test_load_manifest_error_on_missing_file() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+
+        let manifest_path = dir.path().join("manifest.yaml");
+        std::fs::write(
+            &manifest_path,
+            r#"
+version: 1
+include:
+  - nonexistent.yaml
+"#,
+        )
+        .unwrap();
+
+        let result = load_rules(&manifest_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("nonexistent.yaml"));
+    }
 }
