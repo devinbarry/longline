@@ -6,6 +6,19 @@ use std::path::Path;
 
 use crate::types::Decision;
 
+/// Manifest configuration that lists files to include.
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+pub struct ManifestConfig {
+    #[allow(dead_code)]
+    pub version: u32,
+    #[serde(default = "default_decision")]
+    pub default_decision: Decision,
+    #[serde(default = "default_safety_level")]
+    pub safety_level: SafetyLevel,
+    pub include: Vec<String>,
+}
+
 /// Top-level rules configuration loaded from YAML.
 #[derive(Debug, Deserialize)]
 pub struct RulesConfig {
@@ -263,5 +276,20 @@ rules:
         );
         assert_eq!(config.version, 1);
         assert_eq!(config.default_decision, Decision::Ask);
+    }
+
+    #[test]
+    fn test_detect_manifest_has_include() {
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+include:
+  - core.yaml
+  - git.yaml
+"#;
+        let config: ManifestConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.include.len(), 2);
+        assert_eq!(config.include[0], "core.yaml");
     }
 }
