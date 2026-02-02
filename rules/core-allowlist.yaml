@@ -1,0 +1,115 @@
+# Core allowlist: generic safe commands that don't belong to any domain
+
+allowlists:
+  commands:
+    # ── Always safe: read-only / output-only ──────────────────────
+    - cd
+    - ls
+    - echo
+    - pwd
+    - whoami
+    - date
+    - cat
+    - head
+    - tail
+    - wc
+    - file
+    - which
+    - type
+    - basename
+    - dirname
+    - realpath
+    - readlink
+    - stat
+    - du
+    - printf
+    - md5sum
+    - sha256sum
+    - sha1sum
+    - cksum
+    - "true"
+    - "false"
+    - sleep
+    - grep
+    - rg
+    - find
+    - tree
+    - xargs
+    - fd
+    - sort
+    - uniq
+    - tr
+    - cut
+    - diff
+    - jq
+    - yq
+    - test
+    - column
+    - nl
+    - tac
+    - rev
+    - paste
+    - join
+    - comm
+    - cmp
+    - strings
+    - xxd
+    - hexdump
+    - od
+    - base64
+    - time
+    # ── System info: read-only ───────────────────────────────────────
+    - env
+    - printenv
+    - uname
+    - hostname
+    - id
+    - groups
+    - df
+    - ps
+    - pgrep
+    - lsof
+    - nproc
+    - getconf
+    - locale
+    - uptime
+    # ── Pagers and viewers ───────────────────────────────────────────
+    - less
+    - more
+    - man
+    - info
+    # ── Modern CLI alternatives ──────────────────────────────────────
+    - bat
+    - exa
+    - eza
+    - delta
+    - tokei
+    - cloc
+    - scc
+    - hyperfine
+    - ag
+    - ack
+    # ── Always safe: dev tools (no publish risk) ──────────────────
+    - make
+    - cmake
+    - rustc
+    - java
+    - javac
+    # ── Always safe: filesystem ops (secrets caught by rules) ─────
+    - mkdir
+    - touch
+    - ln
+    - cp
+    - mv
+    - tee
+    - tar
+    - gzip
+    - gunzip
+    - zip
+    - unzip
+    # ── Always safe: text processing ──────────────────────────────
+    - sed
+    - awk
+    - patch
+
+rules: []

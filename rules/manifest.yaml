@@ -1,0 +1,6 @@
+version: 1
+default_decision: ask
+safety_level: high
+
+include:
+  - core-allowlist.yaml
