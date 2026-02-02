@@ -29,6 +29,16 @@ pub struct PartialRulesConfig {
     pub rules: Vec<Rule>,
 }
 
+/// Check if YAML content is a manifest (has `include:` key).
+#[allow(dead_code)]
+fn is_manifest(content: &str) -> bool {
+    // Quick check without full parse - look for include: at start of line
+    content.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == "include:" || trimmed.starts_with("include:")
+    })
+}
+
 /// Top-level rules configuration loaded from YAML.
 #[derive(Debug, Deserialize)]
 pub struct RulesConfig {
@@ -321,5 +331,24 @@ rules:
         let config: PartialRulesConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.allowlists.commands.len(), 2);
         assert_eq!(config.rules.len(), 1);
+    }
+
+    #[test]
+    fn test_is_manifest_true_when_has_include() {
+        let yaml = r#"
+version: 1
+include:
+  - core.yaml
+"#;
+        assert!(is_manifest(yaml));
+    }
+
+    #[test]
+    fn test_is_manifest_false_when_no_include() {
+        let yaml = r#"
+version: 1
+rules: []
+"#;
+        assert!(!is_manifest(yaml));
     }
 }
