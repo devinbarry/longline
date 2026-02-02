@@ -547,3 +547,131 @@ tests:
     command: "./manage.py migrate"
     expected:
       decision: ask
+
+  # ============================================================
+  # SECURITY: Argument position attacks (expect: ask)
+  # These test that allowlist matching requires args in correct
+  # positions, not just appearing anywhere in argv.
+  # ============================================================
+
+  # ── Evil script with manage.py as argument ──────────────────
+  # In these, evil.py is the script being run, manage.py is just an argument
+  - id: position-evil-script-manage-arg
+    command: "python evil.py manage.py check"
+    expected:
+      decision: ask
+  - id: position-evil-script-manage-arg-test
+    command: "python evil.py manage.py test"
+    expected:
+      decision: ask
+  - id: position-evil-script-manage-arg-runserver
+    command: "python evil.py manage.py runserver"
+    expected:
+      decision: ask
+  - id: position-evil-script-manage-arg-showmigrations
+    command: "python evil.py manage.py showmigrations"
+    expected:
+      decision: ask
+  - id: position-evil-script-manage-arg-makemigrations
+    command: "python evil.py manage.py makemigrations"
+    expected:
+      decision: ask
+
+  # ── Random script names with manage.py buried in args ───────
+  - id: position-script-with-manage-buried
+    command: "python exploit.py foo bar manage.py check"
+    expected:
+      decision: ask
+  - id: position-script-with-manage-buried-2
+    command: "python script.py --option manage.py test"
+    expected:
+      decision: ask
+  - id: position-script-with-manage-after-flags
+    command: "python script.py -v manage.py check"
+    expected:
+      decision: ask
+  - id: position-harmless-script-manage-suffix
+    command: "python harmless.py arg1 arg2 manage.py"
+    expected:
+      decision: ask
+
+  # ── Out of order arguments ──────────────────────────────────
+  - id: position-check-before-manage
+    command: "python check manage.py"
+    expected:
+      decision: ask
+  - id: position-test-before-manage
+    command: "python test manage.py"
+    expected:
+      decision: ask
+  - id: position-runserver-before-manage
+    command: "python runserver manage.py"
+    expected:
+      decision: ask
+
+  # ── Legitimate-looking but wrong position ───────────────────
+  - id: position-wrapper-script-manage
+    command: "python wrapper.py manage.py check --deploy"
+    expected:
+      decision: ask
+  - id: position-test-runner-manage
+    command: "python test_runner.py manage.py test myapp"
+    expected:
+      decision: ask
+  - id: position-django-launcher-manage
+    command: "python django_launcher.py manage.py runserver"
+    expected:
+      decision: ask
+
+  # ── python3 variants of position attacks ────────────────────
+  - id: position-python3-evil-script
+    command: "python3 evil.py manage.py check"
+    expected:
+      decision: ask
+  - id: position-python3-wrapper
+    command: "python3 wrapper.py manage.py test"
+    expected:
+      decision: ask
+  - id: position-python3-buried-manage
+    command: "python3 script.py arg manage.py runserver"
+    expected:
+      decision: ask
+
+  # ── uv run variants of position attacks ─────────────────────
+  - id: position-uv-evil-script
+    command: "uv run python evil.py manage.py check"
+    expected:
+      decision: ask
+  - id: position-uv-wrapper
+    command: "uv run python wrapper.py manage.py test"
+    expected:
+      decision: ask
+  - id: position-uv-python3-evil
+    command: "uv run python3 evil.py manage.py check"
+    expected:
+      decision: ask
+
+  # ── Multiple manage.py mentions ─────────────────────────────
+  # First arg should be manage.py, not some later one
+  - id: position-double-manage-evil-first
+    command: "python evil.py manage.py manage.py check"
+    expected:
+      decision: ask
+  - id: position-script-outputs-manage
+    command: "python generate.py manage.py check --output manage.py"
+    expected:
+      decision: ask
+
+  # ── Path-like evil scripts ──────────────────────────────────
+  - id: position-path-evil-script
+    command: "python ./evil.py manage.py check"
+    expected:
+      decision: ask
+  - id: position-subdir-evil-script
+    command: "python scripts/evil.py manage.py test"
+    expected:
+      decision: ask
+  - id: position-tmp-evil-script
+    command: "python /tmp/evil.py manage.py check"
+    expected:
+      decision: ask
