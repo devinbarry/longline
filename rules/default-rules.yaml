@@ -97,7 +97,7 @@ allowlists:
     - rustc
     - java
     - javac
-    - npx
+    # npx - covered by npx-run rule (asks for confirmation)
     # ── Interpreters: safe invocations only ─────────────────────
     - "python --version"
     - "python -V"
@@ -131,6 +131,10 @@ allowlists:
     - "uv lock"
     - "uv venv"
     - "uv pip"
+    - "uv pip list"
+    - "uv pip show"
+    - "uv pip freeze"
+    - "uv pip check"
     - "uv --version"
     - "uv --help"
     - "uv -V"
@@ -345,7 +349,6 @@ allowlists:
     - "cargo doc"
     - "cargo clean"
     - "cargo update"
-    - "cargo add"
     - "cargo remove"
     - "cargo init"
     - "cargo new"
@@ -358,8 +361,7 @@ allowlists:
     - "cargo outdated"
     - "cargo expand"
     # ── npm: safe invocations ─────────────────────────────────────
-    - "npm install"
-    - "npm ci"
+    # npm install/ci/exec - covered by rules (ask for confirmation)
     - "npm test"
     - "npm run"
     - "npm start"
@@ -367,22 +369,20 @@ allowlists:
     - "npm outdated"
     - "npm audit"
     - "npm init"
-    - "npm exec"
     - "npm info"
     - "npm pack"
     # ── pip/pip3: safe invocations ────────────────────────────────
-    - "pip install"
+    # pip install - covered by rules (ask for confirmation)
     - "pip list"
     - "pip show"
     - "pip freeze"
     - "pip check"
-    - "pip3 install"
     - "pip3 list"
     - "pip3 show"
     - "pip3 freeze"
     - "pip3 check"
     # ── gem: safe invocations ─────────────────────────────────────
-    - "gem install"
+    # gem install - covered by rules (ask for confirmation)
     - "gem list"
     - "gem info"
     - "gem search"
@@ -395,7 +395,6 @@ allowlists:
     - "go mod"
     - "go generate"
     - "go doc"
-    - "go get"
     - "go clean"
     - "go env"
     - "go version"
@@ -1100,8 +1099,15 @@ rules:
     reason: "Writing to system directory"
 
   # ============================================================
-  # HIGH: Package manager operations
+  # HIGH: Package installation (supply chain risk)
   # ============================================================
+  # All package installation commands require confirmation.
+  # Packages can contain arbitrary code that runs at install time.
+  # Risk: typosquatting, malicious packages, supply chain attacks.
+  #
+  # Future: --allow-package-install flag could bypass this section.
+
+  # ── Python package managers ──────────────────────────────────
   - id: pip-install
     level: high
     match:
@@ -1112,6 +1118,91 @@ rules:
     decision: ask
     reason: "Installing Python packages"
 
+  - id: uv-pip-install
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["pip"]
+      flags:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python packages via uv"
+
+  - id: uv-add
+    level: high
+    match:
+      command: uv
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via uv"
+
+  - id: poetry-add
+    level: high
+    match:
+      command: poetry
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via Poetry"
+
+  - id: poetry-install
+    level: high
+    match:
+      command: poetry
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python dependencies via Poetry"
+
+  - id: pipx-install
+    level: high
+    match:
+      command: pipx
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python application via pipx"
+
+  - id: pdm-add
+    level: high
+    match:
+      command: pdm
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via PDM"
+
+  - id: pdm-install
+    level: high
+    match:
+      command: pdm
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Python dependencies via PDM"
+
+  - id: rye-add
+    level: high
+    match:
+      command: rye
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Python dependency via Rye"
+
+  - id: conda-install
+    level: high
+    match:
+      command:
+        any_of: [conda, mamba]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing packages via Conda/Mamba"
+
+  # ── JavaScript/Node package managers ─────────────────────────
   - id: npm-install
     level: high
     match:
@@ -1120,15 +1211,6 @@ rules:
         any_of: ["install", "i", "ci"]
     decision: ask
     reason: "Installing npm packages"
-
-  - id: gem-install
-    level: high
-    match:
-      command: gem
-      args:
-        any_of: ["install"]
-    decision: ask
-    reason: "Installing Ruby gems"
 
   - id: npm-audit-fix
     level: high
@@ -1156,6 +1238,222 @@ rules:
       command: npx
     decision: ask
     reason: "npx can execute arbitrary npm packages"
+
+  - id: yarn-add
+    level: high
+    match:
+      command: yarn
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via Yarn"
+
+  - id: yarn-install
+    level: high
+    match:
+      command: yarn
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing npm packages via Yarn"
+
+  - id: pnpm-add
+    level: high
+    match:
+      command: pnpm
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via pnpm"
+
+  - id: pnpm-install
+    level: high
+    match:
+      command: pnpm
+      args:
+        any_of: ["install", "i"]
+    decision: ask
+    reason: "Installing npm packages via pnpm"
+
+  - id: bun-add
+    level: high
+    match:
+      command: bun
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding npm package via Bun"
+
+  - id: bun-install
+    level: high
+    match:
+      command: bun
+      args:
+        any_of: ["install", "i"]
+    decision: ask
+    reason: "Installing npm packages via Bun"
+
+  # ── Ruby package managers ────────────────────────────────────
+  - id: gem-install
+    level: high
+    match:
+      command: gem
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Ruby gems"
+
+  - id: bundle-install
+    level: high
+    match:
+      command:
+        any_of: [bundle, bundler]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Ruby gems via Bundler"
+
+  - id: bundle-add
+    level: high
+    match:
+      command:
+        any_of: [bundle, bundler]
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Ruby gem via Bundler"
+
+  # ── Rust package managers ────────────────────────────────────
+  - id: cargo-add
+    level: high
+    match:
+      command: cargo
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Adding Rust crate dependency"
+
+  - id: cargo-install
+    level: high
+    match:
+      command: cargo
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Rust binary"
+
+  # ── Go package managers ──────────────────────────────────────
+  - id: go-get
+    level: high
+    match:
+      command: go
+      args:
+        any_of: ["get"]
+    decision: ask
+    reason: "Fetching Go module"
+
+  - id: go-install
+    level: high
+    match:
+      command: go
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Go binary"
+
+  # ── PHP package managers ─────────────────────────────────────
+  - id: composer-require
+    level: high
+    match:
+      command: composer
+      args:
+        any_of: ["require"]
+    decision: ask
+    reason: "Adding PHP package via Composer"
+
+  - id: composer-install
+    level: high
+    match:
+      command: composer
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing PHP packages via Composer"
+
+  # ── System package managers ──────────────────────────────────
+  - id: brew-install
+    level: high
+    match:
+      command: brew
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing package via Homebrew"
+
+  - id: apt-install
+    level: high
+    match:
+      command:
+        any_of: [apt, apt-get]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing system package via apt"
+
+  - id: dnf-install
+    level: high
+    match:
+      command:
+        any_of: [dnf, yum]
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing system package via dnf/yum"
+
+  - id: pacman-install
+    level: high
+    match:
+      command: pacman
+      flags:
+        any_of: ["-S", "--sync"]
+    decision: ask
+    reason: "Installing system package via pacman"
+
+  - id: apk-add
+    level: high
+    match:
+      command: apk
+      args:
+        any_of: ["add"]
+    decision: ask
+    reason: "Installing Alpine package"
+
+  - id: snap-install
+    level: high
+    match:
+      command: snap
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Snap package"
+
+  - id: flatpak-install
+    level: high
+    match:
+      command: flatpak
+      args:
+        any_of: ["install"]
+    decision: ask
+    reason: "Installing Flatpak application"
+
+  - id: nix-env-install
+    level: high
+    match:
+      command: nix-env
+      flags:
+        any_of: ["-i", "--install"]
+    decision: ask
+    reason: "Installing package via Nix"
 
   # ============================================================
   # STRICT: Cautionary

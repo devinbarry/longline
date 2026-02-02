@@ -374,7 +374,8 @@ tests:
   - id: cargo-add-safe
     command: "cargo add serde"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: cargo-add
   - id: cargo-tree-safe
     command: "cargo tree"
     expected:

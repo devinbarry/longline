@@ -2,6 +2,22 @@
 
 Known gaps and future hardening opportunities.
 
+## Resolved Issues
+
+### Package Installation (resolved 2026-02-02)
+
+All package installation commands now require user confirmation (`ask`). Comprehensive rules cover:
+
+- **Python**: pip, pip3, uv pip, uv add, poetry, pipx, pdm, rye, conda, mamba
+- **JavaScript**: npm, yarn, pnpm, bun, npx
+- **Ruby**: gem, bundle/bundler
+- **Rust**: cargo add, cargo install
+- **Go**: go get, go install
+- **PHP**: composer require, composer install
+- **System**: brew, apt, apt-get, dnf, yum, pacman, apk, snap, flatpak, nix-env
+
+Future enhancement: `--allow-package-install` flag could bypass this section for trusted workflows.
+
 ## Future Enhancements
 
 ### 1. Django Shell Pipe Detection
@@ -22,45 +38,7 @@ Commands like `uv run python /tmp/script.py` or `python ../script.py` execute ar
 - Route scripts outside cwd to AI judge for inspection
 - Default `manage.py` patterns already covered by Django allowlist
 
-### 3. Arbitrary Package Installation (CRITICAL)
-
-**Current state**: Package managers are fully allowlisted, permitting installation of any package without user confirmation:
-
-```yaml
-# Currently allowed without asking:
-- "pip install"       # pip install malicious-package
-- "pip3 install"
-- "npm install"       # npm install typosquatted-pkg
-- "gem install"
-- "go get"
-- "cargo add"
-- "uv pip"
-```
-
-**Risk**:
-- Typosquatting attacks (e.g., `pip install reqeusts` instead of `requests`)
-- Compromised/malicious packages on registries
-- Supply chain attacks
-- Packages with postinstall scripts that execute arbitrary code
-
-**Why this is difficult**:
-- Blocking all installs breaks normal dev workflow
-- Can't easily distinguish "safe" from "unsafe" packages
-- Package names aren't validated against any known-good list
-
-**Proposed mitigation** (requires external tooling):
-1. Integrate with a package security scanner (e.g., Snyk, Socket.dev, pip-audit, npm audit)
-2. Before allowing install, check package against:
-   - Known malicious package databases
-   - Typosquatting detection (Levenshtein distance from popular packages)
-   - Package age/popularity thresholds
-   - Maintainer reputation scores
-3. Route unknown/suspicious packages to "ask" decision
-4. Allow packages from lockfiles (already vetted) without scanning
-
-**Interim recommendation**: Users should be aware that package installation commands are currently unrestricted. Consider manual review of any unfamiliar package names suggested by AI agents.
-
-### 4. Copy-Then-Execute Pattern
+### 3. Copy-Then-Execute Pattern
 
 Compound commands can stage malicious files then execute them:
 ```bash

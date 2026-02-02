@@ -595,3 +595,165 @@ tests:
     expected:
       decision: ask
     # Currently asks because removed from allowlist
+
+  # ============================================================
+  # PACKAGE INSTALLATION - comprehensive coverage
+  # ============================================================
+  # All package installation commands should ask for confirmation
+  # due to supply chain attack risk (typosquatting, malicious packages).
+
+  # --- Go package installation ---
+  - id: go-get-asks
+    command: "go get github.com/spf13/cobra"
+    expected:
+      decision: ask
+      rule_id: go-get
+  - id: go-install-asks
+    command: "go install github.com/golangci/golangci-lint@latest"
+    expected:
+      decision: ask
+      rule_id: go-install
+
+  # --- Cargo (Rust) package installation ---
+  - id: cargo-add-asks
+    command: "cargo add tokio"
+    expected:
+      decision: ask
+      rule_id: cargo-add
+  - id: cargo-install-asks
+    command: "cargo install ripgrep"
+    expected:
+      decision: ask
+      rule_id: cargo-install
+
+  # --- Yarn package installation ---
+  - id: yarn-add-asks
+    command: "yarn add lodash"
+    expected:
+      decision: ask
+      rule_id: yarn-add
+  - id: yarn-install-asks
+    command: "yarn install"
+    expected:
+      decision: ask
+      rule_id: yarn-install
+
+  # --- pnpm package installation ---
+  - id: pnpm-add-asks
+    command: "pnpm add express"
+    expected:
+      decision: ask
+      rule_id: pnpm-add
+  - id: pnpm-install-asks
+    command: "pnpm install"
+    expected:
+      decision: ask
+      rule_id: pnpm-install
+  - id: pnpm-i-asks
+    command: "pnpm i"
+    expected:
+      decision: ask
+      rule_id: pnpm-install
+
+  # --- Bun package installation ---
+  - id: bun-add-asks
+    command: "bun add react"
+    expected:
+      decision: ask
+      rule_id: bun-add
+  - id: bun-install-asks
+    command: "bun install"
+    expected:
+      decision: ask
+      rule_id: bun-install
+
+  # --- Poetry (Python) package installation ---
+  - id: poetry-add-asks
+    command: "poetry add requests"
+    expected:
+      decision: ask
+      rule_id: poetry-add
+  - id: poetry-install-asks
+    command: "poetry install"
+    expected:
+      decision: ask
+      rule_id: poetry-install
+
+  # --- uv (Python) package installation ---
+  - id: uv-add-asks
+    command: "uv add httpx"
+    expected:
+      decision: ask
+      rule_id: uv-add
+  - id: uv-pip-install-asks
+    command: "uv pip install pandas"
+    expected:
+      decision: ask
+      rule_id: uv-pip-install
+
+  # --- pipx (Python apps) package installation ---
+  - id: pipx-install-asks
+    command: "pipx install black"
+    expected:
+      decision: ask
+      rule_id: pipx-install
+
+  # --- Bundler (Ruby) package installation ---
+  - id: bundle-install-asks
+    command: "bundle install"
+    expected:
+      decision: ask
+      rule_id: bundle-install
+  - id: bundle-add-asks
+    command: "bundle add rspec"
+    expected:
+      decision: ask
+      rule_id: bundle-add
+
+  # --- Composer (PHP) package installation ---
+  - id: composer-require-asks
+    command: "composer require laravel/framework"
+    expected:
+      decision: ask
+      rule_id: composer-require
+  - id: composer-install-asks
+    command: "composer install"
+    expected:
+      decision: ask
+      rule_id: composer-install
+
+  # --- System package managers ---
+  - id: brew-install-asks
+    command: "brew install wget"
+    expected:
+      decision: ask
+      rule_id: brew-install
+  - id: apt-install-asks
+    command: "apt install nginx"
+    expected:
+      decision: ask
+      rule_id: apt-install
+  - id: apt-get-install-asks
+    command: "apt-get install curl"
+    expected:
+      decision: ask
+      rule_id: apt-install
+
+  # --- Conda/Mamba package installation ---
+  - id: conda-install-asks
+    command: "conda install numpy"
+    expected:
+      decision: ask
+      rule_id: conda-install
+  - id: mamba-install-asks
+    command: "mamba install scipy"
+    expected:
+      decision: ask
+      rule_id: conda-install
+
+  # --- npx (runs arbitrary packages) ---
+  - id: npx-create-react-app-asks
+    command: "npx create-react-app my-app"
+    expected:
+      decision: ask
+      rule_id: npx-run

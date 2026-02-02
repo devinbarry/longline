@@ -589,7 +589,8 @@ tests:
   - id: uv-pip-install-safe
     command: "uv pip install requests"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: uv-pip-install
   - id: uv-run-precommit-safe
     command: "uv run pre-commit"
     expected:
