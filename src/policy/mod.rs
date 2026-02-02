@@ -4,8 +4,9 @@ mod matching;
 
 #[allow(unused_imports)]
 pub use config::{
-    load_rules, Allowlists, ArgsMatcher, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher,
-    Rule, RulesConfig, SafetyLevel, StageMatcher, StringOrList,
+    load_rules, load_rules_with_info, Allowlists, ArgsMatcher, FlagsMatcher, LoadedConfig,
+    LoadedFileInfo, Matcher, PipelineMatcher, RedirectMatcher, Rule, RulesConfig, SafetyLevel,
+    StageMatcher, StringOrList,
 };
 
 use crate::parser::{self, Statement};
