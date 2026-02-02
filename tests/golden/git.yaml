@@ -135,10 +135,11 @@ tests:
     command: "git merge feature-branch"
     expected:
       decision: allow
-  - id: git-rebase
+  - id: git-rebase-asks
     command: "git rebase main"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: git-rebase
   - id: git-cherry-pick
     command: "git cherry-pick abc1234"
     expected:

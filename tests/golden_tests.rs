@@ -23,7 +23,7 @@ struct Expected {
 fn rules_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("rules")
-        .join("default-rules.yaml")
+        .join("manifest.yaml")
 }
 
 fn load_golden_tests(filename: &str) -> TestSuite {
@@ -100,6 +100,11 @@ fn golden_pipeline() {
 #[test]
 fn golden_git() {
     run_golden_suite("git.yaml");
+}
+
+#[test]
+fn golden_git_rebase() {
+    run_golden_suite("git-rebase.yaml");
 }
 
 #[test]

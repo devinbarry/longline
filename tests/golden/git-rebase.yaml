@@ -1,0 +1,230 @@
+tests:
+  # ============================================================
+  # GIT REBASE - ALL variations should ask
+  # Rebase rewrites history and can cause data loss
+  # ============================================================
+
+  # --- Basic rebase ---
+  - id: git-rebase-branch
+    command: "git rebase main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-origin
+    command: "git rebase origin/main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-upstream
+    command: "git rebase upstream/main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-head
+    command: "git rebase HEAD~3"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-commit-sha
+    command: "git rebase abc1234"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Interactive rebase ---
+  - id: git-rebase-interactive-short
+    command: "git rebase -i HEAD~3"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-interactive-long
+    command: "git rebase --interactive HEAD~5"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-interactive-branch
+    command: "git rebase -i main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-interactive-root
+    command: "git rebase -i --root"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with --onto ---
+  - id: git-rebase-onto
+    command: "git rebase --onto main feature"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-onto-three-args
+    command: "git rebase --onto main feature~3 feature"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-onto-interactive
+    command: "git rebase -i --onto main feature"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase abort/skip/continue ---
+  - id: git-rebase-abort
+    command: "git rebase --abort"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-skip
+    command: "git rebase --skip"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-continue
+    command: "git rebase --continue"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-quit
+    command: "git rebase --quit"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with autosquash/autostash ---
+  - id: git-rebase-autosquash
+    command: "git rebase -i --autosquash HEAD~5"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-autostash
+    command: "git rebase --autostash main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-autosquash-autostash
+    command: "git rebase -i --autosquash --autostash main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with exec ---
+  - id: git-rebase-exec
+    command: "git rebase -i --exec 'npm test' HEAD~5"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-exec-x
+    command: "git rebase -i -x 'make test' main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with strategy ---
+  - id: git-rebase-strategy
+    command: "git rebase -s recursive main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-strategy-option
+    command: "git rebase -X theirs main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-strategy-ours
+    command: "git rebase --strategy-option=ours main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with other flags ---
+  - id: git-rebase-force-rebase
+    command: "git rebase --force-rebase main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-no-ff
+    command: "git rebase --no-ff main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-fork-point
+    command: "git rebase --fork-point main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-no-fork-point
+    command: "git rebase --no-fork-point main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-keep-empty
+    command: "git rebase --keep-empty main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-rebase-merges
+    command: "git rebase --rebase-merges main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-preserve-merges
+    command: "git rebase --preserve-merges main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-committer-date
+    command: "git rebase --committer-date-is-author-date main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-ignore-date
+    command: "git rebase --ignore-date main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-signoff
+    command: "git rebase --signoff main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-verbose
+    command: "git rebase -v main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-stat
+    command: "git rebase --stat main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-quiet
+    command: "git rebase -q main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Rebase with root ---
+  - id: git-rebase-root
+    command: "git rebase --root"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-root-onto
+    command: "git rebase --root --onto new-base"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
+  # --- Combined flags ---
+  - id: git-rebase-combined-flags
+    command: "git rebase -i --autosquash --autostash --stat main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-complex
+    command: "git rebase --onto main --fork-point feature"
+    expected:
+      decision: ask
+      rule_id: git-rebase

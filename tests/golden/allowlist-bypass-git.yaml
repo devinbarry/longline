@@ -204,21 +204,23 @@ tests:
       decision: ask
     # EXPECTED FAIL: can overwrite local changes
 
-  # --- git rebase: abort/skip ---
-  - id: git-rebase-safe
+  # --- git rebase: ALL variations ask ---
+  # See git-rebase.yaml for comprehensive rebase tests
+  - id: git-rebase-basic-asks
     command: "git rebase main"
     expected:
-      decision: allow
-  - id: git-rebase-abort-dangerous
+      decision: ask
+      rule_id: git-rebase
+  - id: git-rebase-abort-asks
     command: "git rebase --abort"
     expected:
       decision: ask
-    # EXPECTED FAIL: discards rebase progress
-  - id: git-rebase-skip-dangerous
+      rule_id: git-rebase
+  - id: git-rebase-skip-asks
     command: "git rebase --skip"
     expected:
       decision: ask
-    # EXPECTED FAIL: skips commit, can lose changes
+      rule_id: git-rebase
 
   # ============================================================
   # SPECIAL CASES - git symbolic-ref (the original issue)

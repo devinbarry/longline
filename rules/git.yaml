@@ -24,7 +24,6 @@ allowlists:
     - "git switch"
     - "git restore"
     - "git merge"
-    - "git rebase"
     - "git cherry-pick"
     - "git worktree"
     - "git clone"
@@ -229,16 +228,14 @@ rules:
     decision: ask
     reason: "git pull --force can overwrite local changes"
 
-  - id: git-rebase-abort
+  - id: git-rebase
     level: high
     match:
       command: git
       args:
         any_of: ["rebase"]
-      flags:
-        any_of: ["--abort", "--skip"]
     decision: ask
-    reason: "Aborting or skipping rebase (may lose changes)"
+    reason: "git rebase rewrites history and can cause data loss"
 
   # ============================================================
   # STRICT: Cautionary git operations

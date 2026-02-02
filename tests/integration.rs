@@ -12,7 +12,7 @@ fn longline_bin() -> PathBuf {
 fn rules_path() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("rules")
-        .join("default-rules.yaml")
+        .join("manifest.yaml")
         .to_string_lossy()
         .to_string()
 }

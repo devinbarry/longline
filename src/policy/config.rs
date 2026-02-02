@@ -415,7 +415,7 @@ rules:
     fn test_load_default_rules_file() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("rules")
-            .join("default-rules.yaml");
+            .join("manifest.yaml");
         let config = load_rules(&path).expect("Default rules should parse");
         assert!(
             config.rules.len() > 30,
@@ -567,7 +567,7 @@ include:
         // Ensure existing monolithic files still work
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("rules")
-            .join("default-rules.yaml");
+            .join("manifest.yaml");
         let config = load_rules(&path).expect("Monolithic rules should still load");
         assert!(config.rules.len() > 100, "Should have many rules");
         assert!(

@@ -350,7 +350,7 @@ rules:
 
     #[test]
     fn test_allowlist_match_populates_reason() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("git status").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -363,7 +363,7 @@ rules:
 
     #[test]
     fn test_bare_allowlist_match_reason() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("ls -la").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -407,7 +407,7 @@ rules:
 
     #[test]
     fn test_command_substitution_deny_propagates() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(rm -rf /)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -420,7 +420,7 @@ rules:
 
     #[test]
     fn test_safe_substitution_allows() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(date)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -428,7 +428,7 @@ rules:
 
     #[test]
     fn test_backtick_substitution_deny() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("echo `rm -rf /`").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Deny);
@@ -436,7 +436,7 @@ rules:
 
     #[test]
     fn test_substitution_cat_env_denies() {
-        let config = load_rules(Path::new("rules/default-rules.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(cat .env)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Deny);
