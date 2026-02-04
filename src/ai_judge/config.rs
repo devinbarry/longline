@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct AiJudgeConfig {
@@ -39,7 +39,7 @@ fn default_command() -> String {
 }
 
 fn default_timeout() -> u64 {
-    15
+    30
 }
 
 fn default_interpreters() -> Vec<InterpreterTrigger> {
@@ -83,10 +83,14 @@ fn default_config_path() -> PathBuf {
 
 pub fn load_config() -> AiJudgeConfig {
     let path = default_config_path();
+    load_config_from_path(&path)
+}
+
+fn load_config_from_path(path: &Path) -> AiJudgeConfig {
     if !path.exists() {
         return default_config();
     }
-    match std::fs::read_to_string(&path) {
+    match std::fs::read_to_string(path) {
         Ok(content) => serde_yaml::from_str(&content).unwrap_or_else(|e| {
             eprintln!("longline: failed to parse ai-judge config: {e}");
             default_config()
@@ -136,8 +140,73 @@ triggers:
         let yaml = "{}";
         let config: AiJudgeConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.command, "codex exec");
-        assert_eq!(config.timeout, 15);
+        assert_eq!(config.timeout, 30);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
+    }
+
+    #[test]
+    fn test_load_config_from_path_missing_file_returns_default() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("ai-judge-config")
+            .join("missing.yaml");
+        let config = load_config_from_path(&path);
+        assert_eq!(config.command, "codex exec");
+        assert_eq!(config.timeout, 30);
+        assert!(!config.triggers.interpreters.is_empty());
+        assert!(!config.triggers.runners.is_empty());
+    }
+
+    #[test]
+    fn test_load_config_from_path_reads_valid_yaml() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("ai-judge-config")
+            .join("valid");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("ai-judge.yaml");
+        std::fs::write(
+            &path,
+            r#"
+command: claude -p
+timeout: 10
+triggers:
+  runners: [uv]
+"#,
+        )
+        .unwrap();
+
+        let config = load_config_from_path(&path);
+        assert_eq!(config.command, "claude -p");
+        assert_eq!(config.timeout, 10);
+        assert_eq!(config.triggers.runners, vec!["uv"]);
+        assert!(!config.triggers.interpreters.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_load_config_from_path_invalid_yaml_falls_back_to_default() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("ai-judge-config")
+            .join("invalid");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("ai-judge.yaml");
+        std::fs::write(&path, "timeout: [not a number]").unwrap();
+
+        let config = load_config_from_path(&path);
+        assert_eq!(config.command, "codex exec");
+        assert_eq!(config.timeout, 30);
+        assert!(!config.triggers.interpreters.is_empty());
+        assert!(!config.triggers.runners.is_empty());
+
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir(&dir);
     }
 }
