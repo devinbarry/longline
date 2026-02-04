@@ -82,18 +82,12 @@ pub fn make_entry(
     parse_ok: bool,
     session_id: Option<String>,
 ) -> LogEntry {
-    let truncated_command = if command.len() > 1024 {
-        format!("{}...", &command[..1024])
-    } else {
-        command.to_string()
-    };
-
     LogEntry {
         version: env!("CARGO_PKG_VERSION"),
         ts: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         tool: tool.to_string(),
         cwd: cwd.to_string(),
-        command: truncated_command,
+        command: command.to_string(),
         decision,
         original_decision: None,
         overridden: false,
@@ -110,7 +104,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_make_entry_truncates_long_command() {
+    fn test_make_entry_does_not_truncate_long_command() {
         let long_cmd = "x".repeat(2000);
         let entry = make_entry(
             "Bash",
@@ -122,8 +116,8 @@ mod tests {
             true,
             None,
         );
-        assert!(entry.command.len() <= 1028); // 1024 + "..."
-        assert!(entry.command.ends_with("..."));
+        assert_eq!(entry.command.len(), 2000);
+        assert_eq!(entry.command, long_cmd);
     }
 
     #[test]
