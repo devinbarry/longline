@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.14] - 2026-02-04
+
+
+### Added
+
+- add lenient AI judge mode
+
+
+### Fixed
+
+- increase timeout to 30s
+
 ## [0.1.13] - 2026-02-04
 
 
@@ -13,6 +25,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - split ai_judge.rs into module directory
+- release v0.1.13
 
 
 ### Fixed
