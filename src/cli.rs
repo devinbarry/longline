@@ -263,7 +263,7 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
         Decision::Ask | Decision::Deny => {
             // Use AI reason if available, otherwise policy reason
             let reason = if let Some(ref ai_reason) = ai_reason {
-                ai_reason.clone()
+                format!("longline: {}", ai_reason)
             } else if overridden {
                 format!("[overridden] {}", format_reason(&result))
             } else {
