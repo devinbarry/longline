@@ -1,6 +1,6 @@
 tests:
   # ============================================================
-  # BARE COMMAND BYPASSES - Dangerous flags on allowlisted commands
+  # PERMISSION ESCALATIONS - Filesystem: safe vs mutating modes
   # ============================================================
 
   # --- ln: symbolic link attacks ---
@@ -105,72 +105,6 @@ tests:
     expected:
       decision: ask
     # gunzip removes original by default
-
-  # --- npx: arbitrary code execution ---
-  - id: npx-known-package
-    command: "npx prettier --check ."
-    expected:
-      decision: ask
-      rule_id: npx-run
-    # npx downloads and executes arbitrary code
-  - id: npx-arbitrary-package
-    command: "npx some-random-package"
-    expected:
-      decision: ask
-    # npx can run arbitrary npm packages
-  - id: npx-typosquat-risk
-    command: "npx loadash"
-    expected:
-      decision: ask
-    # typosquatting risk (lodash vs loadash)
-
-  # --- find: file deletion ---
-  - id: find-name-safe
-    command: "find . -name '*.rs'"
-    expected:
-      decision: allow
-    # just lists files, read-only
-  - id: find-type-safe
-    command: "find . -type f"
-    expected:
-      decision: allow
-    # just lists files, read-only
-  - id: find-delete
-    command: "find . -delete"
-    expected:
-      decision: ask
-      rule_id: find-delete
-    # deletes files
-  - id: find-exec-rm
-    command: "find . -exec rm {} \\;"
-    expected:
-      decision: ask
-      rule_id: find-exec-rm
-    # deletes files via exec
-
-  # --- xargs: command execution ---
-  - id: xargs-echo-safe
-    command: "xargs echo"
-    expected:
-      decision: allow
-    # echo is read-only
-  - id: xargs-cat-safe
-    command: "xargs cat"
-    expected:
-      decision: allow
-    # cat is read-only
-  - id: xargs-rm
-    command: "xargs rm"
-    expected:
-      decision: ask
-      rule_id: xargs-rm
-    # deletes files
-  - id: xargs-rm-rf
-    command: "xargs rm -rf"
-    expected:
-      decision: ask
-      rule_id: xargs-rm
-    # deletes files recursively
 
   # --- cp: force flag is dangerous ---
   - id: cp-basic-safe

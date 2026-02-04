@@ -1,6 +1,6 @@
 tests:
   # ============================================================
-  # PACKAGE MANAGER BYPASSES
+  # PERMISSION ESCALATIONS - Package managers and registries
   # ============================================================
 
   # --- npm run: arbitrary script execution ---
@@ -34,26 +34,26 @@ tests:
     command: "npm audit fix"
     expected:
       decision: ask
-    # EXPECTED FAIL: modifies package.json and node_modules
+    # modifies package.json and node_modules
   - id: npm-audit-fix-force
     command: "npm audit fix --force"
     expected:
       decision: ask
-    # EXPECTED FAIL: forces potentially breaking changes
+    # forces potentially breaking changes
 
   # --- npm exec: arbitrary code ---
   - id: npm-exec-dangerous
     command: "npm exec -- some-package"
     expected:
       decision: ask
-    # EXPECTED FAIL: runs arbitrary package code
+    # runs arbitrary package code
 
   # --- npm uninstall: removes packages ---
   - id: npm-uninstall-dangerous
     command: "npm uninstall lodash"
     expected:
       decision: ask
-    # EXPECTED FAIL: modifies project dependencies
+    # modifies project dependencies
 
   # --- pip install: can install malicious packages ---
   - id: pip-install-known-safe
@@ -65,24 +65,24 @@ tests:
     command: "pip install evil-malicious-pkg"
     expected:
       decision: ask
-    # EXPECTED FAIL: pip install can fetch and run arbitrary code
+    # pip install can fetch and run arbitrary code
   - id: pip3-install-arbitrary-dangerous
     command: "pip3 install typosquatted-package"
     expected:
       decision: ask
-    # EXPECTED FAIL: typosquatting risk
+    # typosquatting risk
 
   # --- pip uninstall: removes packages ---
   - id: pip-uninstall-dangerous
     command: "pip uninstall requests"
     expected:
       decision: ask
-    # EXPECTED FAIL: removes installed package
+    # removes installed package
   - id: pip3-uninstall-dangerous
     command: "pip3 uninstall -y requests"
     expected:
       decision: ask
-    # EXPECTED FAIL: removes without confirmation
+    # removes without confirmation
 
   # --- gem install: can install malicious gems ---
   - id: gem-install-known-safe
@@ -94,14 +94,14 @@ tests:
     command: "gem install evil-malicious-gem"
     expected:
       decision: ask
-    # EXPECTED FAIL: gem install can fetch and run arbitrary code
+    # gem install can fetch and run arbitrary code
 
   # --- gem uninstall: removes packages ---
   - id: gem-uninstall-dangerous
     command: "gem uninstall rails"
     expected:
       decision: ask
-    # EXPECTED FAIL: removes installed gem
+    # removes installed gem
 
   # --- cargo run: inherent code execution risk ---
   - id: cargo-run-safe
@@ -119,28 +119,28 @@ tests:
     command: "cargo publish"
     expected:
       decision: ask
-    # EXPECTED FAIL: publishes to public registry
+    # publishes to public registry
 
   # --- npm publish: publishes to npm ---
   - id: npm-publish-dangerous
     command: "npm publish"
     expected:
       decision: ask
-    # EXPECTED FAIL: publishes to public registry
+    # publishes to public registry
 
   # --- gem push: publishes to rubygems ---
   - id: gem-push-dangerous
     command: "gem push pkg.gem"
     expected:
       decision: ask
-    # EXPECTED FAIL: publishes to public registry
+    # publishes to public registry
 
   # --- twine/pip upload: publishes to PyPI ---
   - id: twine-upload-dangerous
     command: "twine upload dist/*"
     expected:
       decision: ask
-    # EXPECTED FAIL: publishes to public registry
+    # publishes to public registry
   - id: pip-upload-dangerous
     command: "pip upload dist/*"
     expected:
@@ -308,6 +308,22 @@ tests:
     expected:
       decision: ask
       rule_id: npx-run
+  - id: npx-prettier-check-asks
+    command: "npx prettier --check ."
+    expected:
+      decision: ask
+      rule_id: npx-run
+  - id: npx-arbitrary-package-asks
+    command: "npx some-random-package"
+    expected:
+      decision: ask
+      rule_id: npx-run
+  - id: npx-typosquat-asks
+    command: "npx loadash"
+    expected:
+      decision: ask
+      rule_id: npx-run
+    # typosquatting risk (lodash vs loadash)
 
   # --- python -m pip (explicit rule) ---
   - id: python-m-pip-install-asks

@@ -310,6 +310,12 @@ tests:
   # ============================================================
   # DANGEROUS find: -exec rm (ask, rule: find-exec-rm)
   # ============================================================
+  - id: find-exec-rm-minimal
+    command: "find . -exec rm {} \\;"
+    expected:
+      decision: ask
+      rule_id: find-exec-rm
+
   - id: find-exec-rm-semicolon
     command: "find . -name '*.bak' -exec rm {} \\;"
     expected:

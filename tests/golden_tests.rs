@@ -208,13 +208,13 @@ fn golden_missing_allowlist() {
 }
 
 #[test]
-fn golden_allowlist_bypass_filesystem() {
-    run_golden_suite("allowlist-bypass-filesystem.yaml");
+fn golden_permission_escalations_filesystem() {
+    run_golden_suite("permission-escalations-filesystem.yaml");
 }
 
 #[test]
-fn golden_allowlist_bypass_package_managers() {
-    run_golden_suite("allowlist-bypass-package-managers.yaml");
+fn golden_permission_escalations_package_managers() {
+    run_golden_suite("permission-escalations-package-managers.yaml");
 }
 
 #[test]
