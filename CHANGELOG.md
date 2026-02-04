@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.11] - 2026-02-04
+
+
+### Changed
+
+- rename allowlist-bypass golden suites
+
+
+### Fixed
+
+- tighten git/just allowlists
+- remove duplicate test IDs across golden test files
+
 ## [0.1.10] - 2026-02-04
 
 
@@ -9,6 +22,7 @@ All notable changes to this project will be documented in this file.
 
 - middle-ground policy for ln/cp/mv/tee
 - add git -C flag tests to verify rules still fire
+- release v0.1.10
 
 
 ### Fixed
