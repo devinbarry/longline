@@ -60,8 +60,6 @@ allowlists:
     - "git rev-list"
     - "git for-each-ref"
     - "git name-rev"
-    # ── Git: bare command (allows git -C, etc; rules catch dangerous ops) ──
-    - git
 
 rules:
   # ============================================================
@@ -94,7 +92,7 @@ rules:
       args:
         any_of: ["clean"]
       flags:
-        any_of: ["-f", "--force", "-fd", "-fx", "-fxd"]
+        any_of: ["-f", "--force"]
     decision: ask
     reason: "git clean -f permanently removes untracked files"
 

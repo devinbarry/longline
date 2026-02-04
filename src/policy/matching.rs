@@ -4,6 +4,32 @@ use crate::parser::{self, SimpleCommand, Statement};
 
 use super::config::{Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
 
+fn arg_matches_flag(arg: &str, flag: &str) -> bool {
+    if arg == flag {
+        return true;
+    }
+
+    // Support long flags with inline values, e.g. --output=FILE
+    if flag.starts_with("--") {
+        let with_value_prefix = format!("{flag}=");
+        return arg.starts_with(&with_value_prefix);
+    }
+
+    // Support combined short flags, e.g. -xvf contains -x, -v, -f
+    // This intentionally treats any single-letter short flag as present if its
+    // letter appears anywhere in a single-dash token.
+    if flag.starts_with('-') && !flag.starts_with("--") && flag.len() == 2 {
+        let Some(needle) = flag.chars().nth(1) else {
+            return false;
+        };
+        if arg.starts_with('-') && !arg.starts_with("--") && arg.len() > 2 {
+            return arg[1..].chars().any(|c| c == needle);
+        }
+    }
+
+    false
+}
+
 /// Check if a rule's matcher matches a given SimpleCommand.
 /// Pipeline matchers are handled separately in `evaluate` and are skipped here.
 pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
@@ -26,7 +52,7 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                     let has_any = flags_matcher
                         .any_of
                         .iter()
-                        .any(|f| cmd.argv.iter().any(|a| a == f));
+                        .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
                     if !has_any {
                         return false;
                     }
@@ -35,7 +61,7 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                     let has_all = flags_matcher
                         .all_of
                         .iter()
-                        .all(|f| cmd.argv.iter().any(|a| a == f));
+                        .all(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
                     if !has_all {
                         return false;
                     }
@@ -45,7 +71,7 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                     let has_any_excluded = flags_matcher
                         .none_of
                         .iter()
-                        .any(|f| cmd.argv.iter().any(|a| a == f));
+                        .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
                     if has_any_excluded {
                         return false;
                     }
@@ -126,4 +152,32 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
         };
         op_matches && target_matches
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::arg_matches_flag;
+
+    #[test]
+    fn test_arg_matches_flag_exact_match() {
+        assert!(arg_matches_flag("-f", "-f"));
+        assert!(arg_matches_flag("--force", "--force"));
+        assert!(!arg_matches_flag("--forceful", "--force"));
+    }
+
+    #[test]
+    fn test_arg_matches_flag_long_with_equals() {
+        assert!(arg_matches_flag("--output=out.txt", "--output"));
+        assert!(arg_matches_flag("--prune=now", "--prune"));
+        assert!(!arg_matches_flag("--output", "--output-file"));
+    }
+
+    #[test]
+    fn test_arg_matches_flag_combined_short() {
+        assert!(arg_matches_flag("-xffd", "-f"));
+        assert!(arg_matches_flag("-ffd", "-f"));
+        assert!(arg_matches_flag("-fd", "-f"));
+        assert!(arg_matches_flag("-fd", "-d"));
+        assert!(!arg_matches_flag("-n", "-f"));
+    }
 }

@@ -540,8 +540,8 @@ tests:
   - id: git-symbolic-ref-read-safe
     command: "git symbolic-ref HEAD"
     expected:
-      decision: allow
-    # Read-only operation
+      decision: ask
+    # Not allowlisted; safer to default-ask
   - id: git-symbolic-ref-delete-dangerous
     command: "git symbolic-ref --delete HEAD"
     expected:
@@ -551,15 +551,15 @@ tests:
   - id: git-symbolic-ref-short-safe
     command: "git symbolic-ref --short HEAD"
     expected:
-      decision: allow
-    # Read-only operation
+      decision: ask
+    # Not allowlisted; safer to default-ask
 
-  # --- git -C flag (bare git in allowlist, rules still fire) ---
+  # --- git -C flag (allowlist matches once -C is stripped) ---
   - id: git-C-status-allow
     command: "git -C /tmp status"
     expected:
       decision: allow
-    # Safe command with -C flag, matches bare git allowlist
+    # Safe command with -C flag
   - id: git-C-reset-hard-ask
     command: "git -C /tmp reset --hard"
     expected:
@@ -584,3 +584,45 @@ tests:
       decision: deny
       rule_id: git-force-push-main
     # Destructive command with -C flag, rule still fires
+
+  # --- git combined short flags (should still match rules) ---
+  - id: git-clean-ffd-ask
+    command: "git clean -ffd"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+    # Combined flags contain -f
+  - id: git-clean-ffdx-ask
+    command: "git clean -ffdx"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+    # Combined flags contain -f
+  - id: git-clean-xdf-ask
+    command: "git clean -xdf"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+    # Common combined flags ordering still contains -f
+
+  # --- git subcommands that execute arbitrary shell / rewrite refs ---
+  - id: git-submodule-foreach-ask
+    command: "git submodule foreach 'rm -rf /'"
+    expected:
+      decision: ask
+    # Runs an arbitrary command per-submodule; should never be allowlisted
+  - id: git-alias-shell-ask
+    command: "git -c alias.x='!rm -rf /' x"
+    expected:
+      decision: ask
+    # Git aliases with '!' execute a shell command
+  - id: git-update-ref-delete-ask
+    command: "git update-ref -d refs/heads/main"
+    expected:
+      decision: ask
+    # Deletes refs; not allowlisted
+  - id: git-filter-branch-ask
+    command: "git filter-branch -- --all"
+    expected:
+      decision: ask
+    # History rewriting; not allowlisted

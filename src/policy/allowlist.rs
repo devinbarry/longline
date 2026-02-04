@@ -3,6 +3,7 @@
 use crate::parser::{SimpleCommand, Statement};
 
 use super::config::RulesConfig;
+use std::borrow::Cow;
 
 /// Check if a leaf node is allowlisted.
 pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
@@ -10,6 +11,47 @@ pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
         Statement::SimpleCommand(cmd) => find_allowlist_match(config, cmd).is_some(),
         _ => false,
     }
+}
+
+/// Git supports global options like `-C <path>` that appear before the subcommand.
+/// Strip those so allowlist entries like `git status` still match `git -C /tmp status`.
+fn strip_git_global_c_flag(argv: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(argv.len());
+    let mut i = 0;
+    let mut in_global_opts = true;
+
+    while i < argv.len() {
+        let arg = &argv[i];
+
+        if in_global_opts {
+            if arg == "--" {
+                // End of options marker; everything after is command args.
+                in_global_opts = false;
+                out.push(arg.clone());
+                i += 1;
+                continue;
+            }
+
+            if arg == "-C" {
+                // Skip `-C` and its path argument (if present).
+                i += 1;
+                if i < argv.len() {
+                    i += 1;
+                }
+                continue;
+            }
+
+            // First non-flag token is the git subcommand; stop treating subsequent args as global opts.
+            if !arg.starts_with('-') {
+                in_global_opts = false;
+            }
+        }
+
+        out.push(arg.clone());
+        i += 1;
+    }
+
+    out
 }
 
 /// Normalize a path-like argument for matching.
@@ -62,6 +104,12 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
         None => return None,
     };
 
+    let argv: Cow<[String]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a == "-C") {
+        Cow::Owned(strip_git_global_c_flag(&cmd.argv))
+    } else {
+        Cow::Borrowed(&cmd.argv)
+    };
+
     for entry in &config.allowlists.commands {
         let parts: Vec<&str> = entry.split_whitespace().collect();
         if parts.is_empty() {
@@ -76,7 +124,7 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
         }
         // Multi-word entry: required args must match as ordered prefix
         let required_args = &parts[1..];
-        if args_match_prefix(required_args, &cmd.argv) {
+        if args_match_prefix(required_args, argv.as_ref()) {
             return Some(entry);
         }
     }
@@ -86,6 +134,16 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_git_cmd(argv: Vec<&str>) -> SimpleCommand {
+        SimpleCommand {
+            name: Some("git".to_string()),
+            argv: argv.into_iter().map(|s| s.to_string()).collect(),
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        }
+    }
 
     // ================================================================
     // normalize_arg tests
@@ -222,5 +280,61 @@ mod tests {
         let required: &[&str] = &[];
         let argv = vec!["anything".to_string()];
         assert!(args_match_prefix(required, &argv));
+    }
+
+    // ================================================================
+    // strip_git_global_c_flag tests
+    // ================================================================
+
+    #[test]
+    fn test_strip_git_global_c_flag_basic() {
+        let argv = vec!["-C".to_string(), "/tmp".to_string(), "status".to_string()];
+        assert_eq!(strip_git_global_c_flag(&argv), vec!["status".to_string()]);
+    }
+
+    #[test]
+    fn test_strip_git_global_c_flag_multiple() {
+        let argv = vec![
+            "-C".to_string(),
+            "/tmp".to_string(),
+            "-C".to_string(),
+            "/other".to_string(),
+            "status".to_string(),
+        ];
+        assert_eq!(strip_git_global_c_flag(&argv), vec!["status".to_string()]);
+    }
+
+    #[test]
+    fn test_find_allowlist_match_git_c_status_matches_git_status() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            allowlists: crate::policy::Allowlists {
+                commands: vec!["git status".to_string()],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = test_git_cmd(vec!["-C", "/tmp", "status"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("git status"));
+    }
+
+    #[test]
+    fn test_find_allowlist_match_git_c_clean_does_not_match_git_clean_allowlist() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            allowlists: crate::policy::Allowlists {
+                commands: vec!["git status".to_string()],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = test_git_cmd(vec!["-C", "/tmp", "clean", "-f"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), None);
     }
 }
