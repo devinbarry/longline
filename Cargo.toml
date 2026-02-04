@@ -1,6 +1,6 @@
 [package]
 name = "longline"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 description = "System-installed safety hook for Claude Code"
 license = "MIT"

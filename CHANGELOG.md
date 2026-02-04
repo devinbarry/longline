@@ -2,18 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.1.12] - 2026-02-04
+## [0.1.13] - 2026-02-04
+
 
 ### Added
 
-- AI judge extracts Python from runner-wrapped commands (uv/poetry/pipenv/pdm/rye run)
-- AI judge extracts Python from Django shell pipelines (echo/printf/cat | manage.py shell)
-- AI judge extracts Python from heredocs and here-strings (<<, <<-, <<<)
-- Django-specific context injection for AI judge prompts
+- send Python script executions to AI judge
+
+
+### Changed
+
+- split ai_judge.rs into module directory
+
 
 ### Fixed
 
-- consistent 'longline:' prefix for all AI judge reason outputs
+- use pull_policy: always for GitLab runner compatibility
+- stop truncating hook logs
+
+## [0.1.12] - 2026-02-04
+
+
+### Added
+
+- extract Python code from more execution forms
+
+
+### Changed
+
+- remove superseded design and plan files
+- release v0.1.12
+
+
+### Fixed
+
+- consistent 'longline:' prefix for AI judge reasons
 
 ## [0.1.11] - 2026-02-04
 
