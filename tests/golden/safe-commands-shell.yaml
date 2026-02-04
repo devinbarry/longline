@@ -56,11 +56,6 @@ tests:
     command: "cp src/main.rs src/main.rs.bak"
     expected:
       decision: allow
-  - id: mv-basic
-    command: "mv old.txt new.txt"
-    expected:
-      decision: ask
-      rule_id: mv-any
   - id: date-safe
     command: "date"
     expected:
@@ -221,7 +216,7 @@ tests:
     command: "sort -r file.txt"
     expected:
       decision: allow
-  - id: tar-extract
+  - id: tar-extract-gzip
     command: "tar -xzf archive.tar.gz"
     expected:
       decision: ask

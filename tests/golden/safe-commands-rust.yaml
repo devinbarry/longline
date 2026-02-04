@@ -20,7 +20,7 @@ tests:
     command: "cargo fmt"
     expected:
       decision: allow
-  - id: cargo-run-safe
+  - id: cargo-run-with-args-safe
     command: "cargo run -- --arg"
     expected:
       decision: allow

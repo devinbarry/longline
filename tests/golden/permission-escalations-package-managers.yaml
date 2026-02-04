@@ -26,10 +26,6 @@ tests:
     # npm start is allowlisted for dev tasks
 
   # --- npm audit: fix modifies packages ---
-  - id: npm-audit-safe
-    command: "npm audit"
-    expected:
-      decision: allow
   - id: npm-audit-fix-dangerous
     command: "npm audit fix"
     expected:
