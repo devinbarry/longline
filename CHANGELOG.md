@@ -2,12 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.12] - 2026-02-04
+
+### Added
+
+- AI judge extracts Python from runner-wrapped commands (uv/poetry/pipenv/pdm/rye run)
+- AI judge extracts Python from Django shell pipelines (echo/printf/cat | manage.py shell)
+- AI judge extracts Python from heredocs and here-strings (<<, <<-, <<<)
+- Django-specific context injection for AI judge prompts
+
+### Fixed
+
+- consistent 'longline:' prefix for all AI judge reason outputs
+
 ## [0.1.11] - 2026-02-04
 
 
 ### Changed
 
 - rename allowlist-bypass golden suites
+- release v0.1.11
 
 
 ### Fixed
