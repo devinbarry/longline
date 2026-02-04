@@ -130,6 +130,8 @@ const MAX_EXTRACTED_CODE_BYTES: usize = 32 * 1024;
 /// 1) Inline flags (`python -c`, `node -e`, etc), including runner-wrapped commands.
 /// 2) Heredoc / here-string to python or Django shell (from raw command text).
 /// 3) Pipelines feeding Django shell from `echo`/`printf`/`cat <file>` (CWD+/tmp only).
+/// 4) Python script execution (`python script.py`, heredoc-created scripts, or `python < file.py`)
+///    when the script contents can be safely extracted (CWD+/tmp only).
 pub fn extract_code(
     raw_command: &str,
     stmt: &Statement,
@@ -147,6 +149,14 @@ pub fn extract_code(
     }
 
     if let Some(extracted) = extract_from_django_shell_pipeline(stmt, cwd, config) {
+        return Some(extracted);
+    }
+
+    if let Some(extracted) = extract_from_python_stdin_pipeline(stmt, cwd, config) {
+        return Some(extracted);
+    }
+
+    if let Some(extracted) = extract_python_script_execution(raw_command, stmt, cwd, config) {
         return Some(extracted);
     }
 
@@ -375,6 +385,113 @@ fn extract_from_django_shell_pipeline(
     }
 }
 
+fn extract_from_python_stdin_pipeline(
+    stmt: &Statement,
+    cwd: &str,
+    config: &AiJudgeConfig,
+) -> Option<ExtractedCode> {
+    match stmt {
+        Statement::Pipeline(pipeline) => {
+            for i in 0..pipeline.stages.len() {
+                let stage = pipeline.stages.get(i)?;
+                let Statement::SimpleCommand(consumer_cmd) = stage else {
+                    continue;
+                };
+
+                if i == 0 {
+                    continue;
+                }
+
+                let consumer_tokens = tokens_from_simple_command(consumer_cmd)?;
+                let consumer_unwrapped =
+                    unwrap_runner_chain(&consumer_tokens, &config.triggers.runners);
+
+                if is_django_shell_consumer(&consumer_unwrapped) {
+                    continue;
+                }
+
+                let consumer_name = consumer_unwrapped.first()?.as_str();
+                if !command_name_matches("python", consumer_name) {
+                    continue;
+                }
+                if consumer_unwrapped.iter().any(|a| a == "-c" || a == "-m") {
+                    continue;
+                }
+                if extract_python_script_path(&consumer_unwrapped[1..]).is_some() {
+                    continue;
+                }
+
+                let prev_stage = pipeline.stages.get(i - 1)?;
+                let Statement::SimpleCommand(source_cmd) = prev_stage else {
+                    continue;
+                };
+
+                let source_tokens = tokens_from_simple_command(source_cmd)?;
+                let source_name = source_tokens.first()?.as_str();
+                let source_argv = &source_tokens[1..];
+
+                if source_name == "echo" {
+                    let code = extract_echo_output(source_argv)?;
+                    if code.len() > MAX_EXTRACTED_CODE_BYTES {
+                        return None;
+                    }
+                    return Some(ExtractedCode {
+                        language: consumer_name.to_string(),
+                        code,
+                        context: None,
+                    });
+                }
+
+                if source_name == "printf" {
+                    let code = extract_printf_output(source_argv)?;
+                    if code.len() > MAX_EXTRACTED_CODE_BYTES {
+                        return None;
+                    }
+                    return Some(ExtractedCode {
+                        language: consumer_name.to_string(),
+                        code,
+                        context: None,
+                    });
+                }
+
+                if source_name == "cat" {
+                    let path = extract_single_cat_path(source_argv)?;
+                    let code = read_safe_code_file(&path, cwd)?;
+                    return Some(ExtractedCode {
+                        language: consumer_name.to_string(),
+                        code,
+                        context: None,
+                    });
+                }
+            }
+            None
+        }
+        Statement::List(list) => {
+            if let Some(extracted) = extract_from_python_stdin_pipeline(&list.first, cwd, config) {
+                return Some(extracted);
+            }
+            for (_, stmt) in &list.rest {
+                if let Some(extracted) = extract_from_python_stdin_pipeline(stmt, cwd, config) {
+                    return Some(extracted);
+                }
+            }
+            None
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            extract_from_python_stdin_pipeline(inner, cwd, config)
+        }
+        Statement::SimpleCommand(cmd) => {
+            for sub in &cmd.embedded_substitutions {
+                if let Some(extracted) = extract_from_python_stdin_pipeline(sub, cwd, config) {
+                    return Some(extracted);
+                }
+            }
+            None
+        }
+        Statement::Opaque(_) => None,
+    }
+}
+
 fn extract_echo_output(argv: &[String]) -> Option<String> {
     // Handle common echo flags (-n/-e/-E), then join remaining words.
     let mut idx = 0;
@@ -417,6 +534,142 @@ fn extract_single_cat_path(argv: &[String]) -> Option<String> {
         return None;
     }
     Some(path.to_string())
+}
+
+fn extract_python_script_execution(
+    raw_command: &str,
+    stmt: &Statement,
+    cwd: &str,
+    config: &AiJudgeConfig,
+) -> Option<ExtractedCode> {
+    match stmt {
+        Statement::SimpleCommand(cmd) => {
+            for sub in &cmd.embedded_substitutions {
+                if let Some(result) = extract_python_script_execution(raw_command, sub, cwd, config)
+                {
+                    return Some(result);
+                }
+            }
+            extract_python_script_from_simple_command(raw_command, cmd, cwd, config)
+        }
+        Statement::Pipeline(pipeline) => {
+            for stage in &pipeline.stages {
+                if let Some(result) =
+                    extract_python_script_execution(raw_command, stage, cwd, config)
+                {
+                    return Some(result);
+                }
+            }
+            None
+        }
+        Statement::List(list) => {
+            if let Some(result) =
+                extract_python_script_execution(raw_command, &list.first, cwd, config)
+            {
+                return Some(result);
+            }
+            for (_, stmt) in &list.rest {
+                if let Some(result) =
+                    extract_python_script_execution(raw_command, stmt, cwd, config)
+                {
+                    return Some(result);
+                }
+            }
+            None
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            extract_python_script_execution(raw_command, inner, cwd, config)
+        }
+        Statement::Opaque(_) => None,
+    }
+}
+
+fn extract_python_script_from_simple_command(
+    raw_command: &str,
+    cmd: &crate::parser::SimpleCommand,
+    cwd: &str,
+    config: &AiJudgeConfig,
+) -> Option<ExtractedCode> {
+    let tokens = tokens_from_simple_command(cmd)?;
+    let unwrapped = unwrap_runner_chain(&tokens, &config.triggers.runners);
+    let cmd_name = unwrapped.first()?.as_str();
+    let argv = &unwrapped[1..];
+
+    if !command_name_matches("python", cmd_name) {
+        return None;
+    }
+    if argv.iter().any(|a| a == "-c" || a == "-m") {
+        return None;
+    }
+
+    if is_django_shell_consumer(&unwrapped) {
+        return None;
+    }
+
+    if let Some(script_path) = extract_python_script_path(argv) {
+        if is_manage_py_path(script_path) {
+            return None;
+        }
+
+        if let Some(code) = extract_heredoc_written_script(raw_command, script_path) {
+            return Some(ExtractedCode {
+                language: cmd_name.to_string(),
+                code,
+                context: None,
+            });
+        }
+
+        let code = read_safe_code_file(script_path, cwd)?;
+        return Some(ExtractedCode {
+            language: cmd_name.to_string(),
+            code,
+            context: None,
+        });
+    }
+
+    // No script path: try `python < file.py`
+    let mut read_targets: Vec<&str> = cmd
+        .redirects
+        .iter()
+        .filter_map(|r| match r.op {
+            crate::parser::RedirectOp::Read => Some(r.target.as_str()),
+            _ => None,
+        })
+        .collect();
+    read_targets.dedup();
+    if read_targets.len() != 1 {
+        return None;
+    }
+    let code = read_safe_code_file(read_targets[0], cwd)?;
+    Some(ExtractedCode {
+        language: cmd_name.to_string(),
+        code,
+        context: None,
+    })
+}
+
+fn extract_python_script_path(argv: &[String]) -> Option<&str> {
+    let mut i = 0;
+    while i < argv.len() {
+        let arg = argv.get(i)?.as_str();
+        if arg == "--" {
+            return argv.get(i + 1).map(|s| s.as_str());
+        }
+        if arg == "-c" || arg == "-m" {
+            return None;
+        }
+        // Flags with an accompanying value
+        if arg == "-W" || arg == "-X" {
+            i += 2;
+            continue;
+        }
+        if arg.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return Some(arg);
+    }
+    None
 }
 
 fn read_safe_code_file(path: &str, cwd: &str) -> Option<String> {
@@ -591,6 +844,54 @@ fn django_context(code_source: String) -> String {
     format!(
         "Execution context: Django manage.py shell (can access the database and Django settings). Code source: {code_source}. Guidance: ALLOW only read-only ORM queries/printing; ASK on any data writes/deletes/migrations, secrets, network, or subprocess execution."
     )
+}
+
+fn extract_heredoc_written_script(raw_command: &str, script_path: &str) -> Option<String> {
+    // Support `cat > script.py <<'EOF' ... EOF` and `cat <<'EOF' > script.py`.
+    // Only triggers when we can confidently associate the heredoc with the script path.
+    let mut candidates: Vec<&str> = vec![script_path];
+    if let Some(rest) = script_path.strip_prefix("./") {
+        candidates.push(rest);
+    }
+
+    let lines: Vec<&str> = raw_command.lines().collect();
+    for (i, line) in lines.iter().enumerate() {
+        let Some((op_idx, op_kind)) = find_heredoc_op_outside_quotes(line) else {
+            continue;
+        };
+        let (delim, strip_tabs) = parse_heredoc_delim(&line[op_idx..], op_kind)?;
+
+        // Must be a heredoc that writes to the same path the python invocation executes.
+        if !candidates.iter().any(|p| line.contains(p)) {
+            continue;
+        }
+
+        let before = line[..op_idx].trim_start();
+        let consumer = before.split_whitespace().next().map(basename)?;
+        if consumer != "cat" && consumer != "tee" {
+            continue;
+        }
+
+        let mut body = Vec::new();
+        for line in lines.iter().skip(i + 1) {
+            let mut candidate = line.trim_end_matches('\r');
+            if strip_tabs {
+                candidate = candidate.trim_start_matches('\t');
+            }
+            if candidate == delim {
+                let code = body.join("\n");
+                if code.len() > MAX_EXTRACTED_CODE_BYTES {
+                    return None;
+                }
+                return Some(code);
+            }
+            body.push(line.trim_end_matches('\r').to_string());
+            if body.iter().map(|s| s.len() + 1).sum::<usize>() > MAX_EXTRACTED_CODE_BYTES {
+                return None;
+            }
+        }
+    }
+    None
 }
 
 fn extract_from_heredoc_or_herestring(raw_command: &str) -> Option<ExtractedCode> {
@@ -948,12 +1249,35 @@ mod tests {
     }
 
     #[test]
-    fn test_no_extract_for_script() {
+    fn test_extract_python_script_file_cwd_allowed() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("ai-judge-script");
+        let _ = std::fs::create_dir_all(&dir);
+        let file = dir.join("script.py");
+        std::fs::write(&file, "print(123)\n").unwrap();
+
         let cmd = "python3 script.py";
         let stmt = parser::parse(cmd).unwrap();
         let config = test_config();
-        let result = extract_code(cmd, &stmt, "/tmp", &config);
-        assert!(result.is_none(), "script.py should not match -c trigger");
+        let cwd = dir.to_string_lossy();
+        let result = extract_code(cmd, &stmt, &cwd, &config).unwrap();
+        assert_eq!(result.language, "python3");
+        assert!(result.code.contains("print(123)"));
+
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn test_extract_python_script_from_heredoc_write_then_execute() {
+        let cmd = "cat > /tmp/script.py <<'EOF'\nprint(42)\nEOF\npython3 /tmp/script.py";
+        let stmt = parser::parse(cmd).unwrap();
+        let config = test_config();
+        let result = extract_code(cmd, &stmt, "/tmp", &config).unwrap();
+        assert_eq!(result.language, "python3");
+        assert!(result.code.contains("print(42)"));
     }
 
     #[test]
@@ -1181,6 +1505,38 @@ mod tests {
         let result = extract_code(cmd, &stmt, "/tmp", &config).unwrap();
         assert_eq!(result.language, "python3");
         assert_eq!(result.code, "print(1)");
+    }
+
+    #[test]
+    fn test_extract_python_stdin_pipeline_echo() {
+        let cmd = "echo 'print(1)' | python3";
+        let stmt = parser::parse(cmd).unwrap();
+        let config = test_config();
+        let result = extract_code(cmd, &stmt, "/tmp", &config).unwrap();
+        assert_eq!(result.language, "python3");
+        assert_eq!(result.code, "print(1)");
+    }
+
+    #[test]
+    fn test_extract_python_stdin_redirect_file_cwd_allowed() {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("ai-judge-redirect");
+        let _ = std::fs::create_dir_all(&dir);
+        let file = dir.join("code.py");
+        std::fs::write(&file, "print(7)\n").unwrap();
+
+        let cmd = "python3 < code.py";
+        let stmt = parser::parse(cmd).unwrap();
+        let config = test_config();
+        let cwd = dir.to_string_lossy();
+        let result = extract_code(cmd, &stmt, &cwd, &config).unwrap();
+        assert_eq!(result.language, "python3");
+        assert!(result.code.contains("print(7)"));
+
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
     }
 
     #[test]
