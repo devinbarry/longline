@@ -1,7 +1,7 @@
 use crate::types::Decision;
 
 use super::config::AiJudgeConfig;
-use super::prompt::build_prompt;
+use super::prompt::{build_prompt, build_prompt_lenient};
 use super::response::parse_response_with_reason;
 
 /// Evaluate inline code using the AI judge.
@@ -14,7 +14,23 @@ pub fn evaluate(
     context: Option<&str>,
 ) -> (Decision, String) {
     let prompt = build_prompt(language, code, cwd, context);
+    evaluate_with_prompt(config, prompt)
+}
 
+/// Evaluate inline code using the AI judge with a lenient prompt.
+/// Returns (decision, reason) where reason is the AI's assessment.
+pub fn evaluate_lenient(
+    config: &AiJudgeConfig,
+    language: &str,
+    code: &str,
+    cwd: &str,
+    context: Option<&str>,
+) -> (Decision, String) {
+    let prompt = build_prompt_lenient(language, code, cwd, context);
+    evaluate_with_prompt(config, prompt)
+}
+
+fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, String) {
     let parts: Vec<String> = config
         .command
         .split_whitespace()

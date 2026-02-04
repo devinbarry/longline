@@ -385,6 +385,22 @@ fn test_e2e_ask_ai_flag_accepted() {
 }
 
 #[test]
+fn test_e2e_ask_ai_lenient_flag_accepted() {
+    let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--ask-ai-lenient"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+}
+
+#[test]
+fn test_e2e_lenient_alias_flag_accepted() {
+    let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--lenient"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+}
+
+#[test]
 fn test_e2e_ask_ai_does_not_affect_deny() {
     let (code, stdout) = run_hook_with_flags("Bash", "rm -rf /", &["--ask-ai"]);
     assert_eq!(code, 0);
