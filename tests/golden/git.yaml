@@ -553,3 +553,34 @@ tests:
     expected:
       decision: allow
     # Read-only operation
+
+  # --- git -C flag (bare git in allowlist, rules still fire) ---
+  - id: git-C-status-allow
+    command: "git -C /tmp status"
+    expected:
+      decision: allow
+    # Safe command with -C flag, matches bare git allowlist
+  - id: git-C-reset-hard-ask
+    command: "git -C /tmp reset --hard"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+    # Destructive command with -C flag, rule still fires
+  - id: git-C-clean-f-ask
+    command: "git -C /tmp clean -f"
+    expected:
+      decision: ask
+      rule_id: git-clean-force
+    # Destructive command with -C flag, rule still fires
+  - id: git-C-rebase-ask
+    command: "git -C /tmp rebase main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+    # Destructive command with -C flag, rule still fires
+  - id: git-C-push-force-deny
+    command: "git -C /tmp push --force origin main"
+    expected:
+      decision: deny
+      rule_id: git-force-push-main
+    # Destructive command with -C flag, rule still fires
