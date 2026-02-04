@@ -24,6 +24,10 @@ struct Cli {
     #[arg(long)]
     ask_ai: bool,
 
+    /// Use AI to evaluate inline interpreter code with a lenient prompt (implies AI judge)
+    #[arg(long = "ask-ai-lenient", visible_alias = "lenient")]
+    ask_ai_lenient: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -121,12 +125,22 @@ pub fn run() -> i32 {
             group_by,
         }) => run_rules(&rules_config, verbose, filter, level, group_by),
         Some(Commands::Files) => unreachable!(), // handled above
-        None => run_hook(&rules_config, cli.ask_on_deny, cli.ask_ai),
+        None => run_hook(
+            &rules_config,
+            cli.ask_on_deny,
+            cli.ask_ai || cli.ask_ai_lenient,
+            cli.ask_ai_lenient,
+        ),
     }
 }
 
 /// Run hook mode: read stdin, evaluate, output decision.
-fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool) -> i32 {
+fn run_hook(
+    rules_config: &policy::RulesConfig,
+    ask_on_deny: bool,
+    ask_ai: bool,
+    ask_ai_lenient: bool,
+) -> i32 {
     // Read hook input from stdin
     let mut input_str = String::new();
     if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
@@ -204,17 +218,34 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
             .unwrap_or(".");
         match ai_judge::extract_code(command, &stmt, cwd, &ai_config) {
             Some(extracted) => {
-                let (ai_decision, reason) = ai_judge::evaluate(
-                    &ai_config,
-                    &extracted.language,
-                    &extracted.code,
-                    cwd,
-                    extracted.context.as_deref(),
-                );
-                eprintln!(
-                    "longline: ai-judge evaluated {} code: {ai_decision}",
-                    extracted.language
-                );
+                let (ai_decision, reason) = if ask_ai_lenient {
+                    ai_judge::evaluate_lenient(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        cwd,
+                        extracted.context.as_deref(),
+                    )
+                } else {
+                    ai_judge::evaluate(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        cwd,
+                        extracted.context.as_deref(),
+                    )
+                };
+                if ask_ai_lenient {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
+                        extracted.language
+                    );
+                } else {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code: {ai_decision}",
+                        extracted.language
+                    );
+                }
                 (ai_decision, Some(reason))
             }
             None => (initial_decision, None),
@@ -460,5 +491,22 @@ fn print_json<T: serde::Serialize>(value: &T) {
             eprintln!("longline: failed to serialize output: {e}");
             println!("{{}}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_parses_ask_ai_lenient_flag() {
+        let cli = Cli::try_parse_from(["longline", "--ask-ai-lenient"]).unwrap();
+        assert!(cli.ask_ai_lenient);
+    }
+
+    #[test]
+    fn test_cli_parses_lenient_alias_flag() {
+        let cli = Cli::try_parse_from(["longline", "--lenient"]).unwrap();
+        assert!(cli.ask_ai_lenient);
     }
 }

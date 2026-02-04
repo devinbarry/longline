@@ -9,8 +9,8 @@ pub use config::load_config;
 pub use config::{AiJudgeConfig, InterpreterTrigger, TriggersConfig};
 #[allow(unused_imports)]
 pub use extract::{extract_code, ExtractedCode};
-pub use invoke::evaluate;
+pub use invoke::{evaluate, evaluate_lenient};
 #[allow(unused_imports)]
-pub use prompt::build_prompt;
+pub use prompt::{build_prompt, build_prompt_lenient};
 #[allow(unused_imports)]
 pub use response::parse_response_with_reason;
