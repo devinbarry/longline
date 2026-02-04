@@ -60,6 +60,8 @@ allowlists:
     - "git rev-list"
     - "git for-each-ref"
     - "git name-rev"
+    # ── Git: bare command (allows git -C, etc; rules catch dangerous ops) ──
+    - git
 
 rules:
   # ============================================================
@@ -236,6 +238,17 @@ rules:
         any_of: ["rebase"]
     decision: ask
     reason: "git rebase rewrites history and can cause data loss"
+
+  - id: git-symbolic-ref-delete
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["symbolic-ref"]
+      flags:
+        any_of: ["--delete", "-d"]
+    decision: ask
+    reason: "git symbolic-ref --delete removes symbolic references"
 
   # ============================================================
   # STRICT: Cautionary git operations

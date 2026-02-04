@@ -62,23 +62,23 @@ tests:
     expected:
       decision: allow
 
-  # Negative tests (should ask - runs arbitrary recipes or bare command)
-  - id: just-bare-ask
+  # All just commands allowed (bare just in allowlist)
+  - id: just-bare
     command: "just"
     expected:
-      decision: ask
-  - id: just-recipe-release-ask
+      decision: allow
+  - id: just-recipe-release
     command: "just release patch"
     expected:
-      decision: ask
-  - id: just-recipe-clean-ask
+      decision: allow
+  - id: just-recipe-clean
     command: "just clean"
     expected:
-      decision: ask
-  - id: just-unknown-recipe-ask
+      decision: allow
+  - id: just-unknown-recipe
     command: "just foobar"
     expected:
-      decision: ask
+      decision: allow
 
   # ════════════════════════════════════════════════════════════════
   # git-cliff: stdout-only invocations allowed

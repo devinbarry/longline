@@ -537,19 +537,19 @@ tests:
   # ============================================================
 
   # --- git symbolic-ref ---
-  # Removed from allowlist due to potential for destructive use
   - id: git-symbolic-ref-read-safe
     command: "git symbolic-ref HEAD"
     expected:
-      decision: ask
-    # Currently asks because removed from allowlist
+      decision: allow
+    # Read-only operation
   - id: git-symbolic-ref-delete-dangerous
     command: "git symbolic-ref --delete HEAD"
     expected:
       decision: ask
-    # Must always ask - destructive operation
+      rule_id: git-symbolic-ref-delete
+    # Destructive operation - removes symbolic references
   - id: git-symbolic-ref-short-safe
     command: "git symbolic-ref --short HEAD"
     expected:
-      decision: ask
-    # Currently asks because removed from allowlist
+      decision: allow
+    # Read-only operation

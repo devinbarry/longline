@@ -92,6 +92,7 @@ allowlists:
     # ── Always safe: dev tools (no publish risk) ──────────────────
     - make
     - cmake
+    - just
     - rustc
     - java
     - javac
