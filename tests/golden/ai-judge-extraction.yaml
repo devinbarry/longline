@@ -106,3 +106,26 @@ tests:
     expected:
       decision: ask
     note: "Standalone perl -e"
+
+  # Runner wrappers (uv/poetry/etc)
+  - id: runner-uv-python-c
+    command: "uv run python3 -c 'print(1)'"
+    expected:
+      decision: ask
+    note: "Runner-wrapped python -c triggers AI judge"
+
+  # Heredoc / here-string to python
+  - id: python-heredoc
+    command: |
+      python3 <<'EOF'
+      print(1)
+      EOF
+    expected:
+      decision: ask
+    note: "Heredoc-fed python triggers AI judge extraction"
+
+  - id: python-herestring
+    command: "python3 <<< 'print(1)'"
+    expected:
+      decision: ask
+    note: "Here-string fed python triggers AI judge extraction"

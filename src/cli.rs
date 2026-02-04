@@ -196,16 +196,25 @@ fn run_hook(rules_config: &policy::RulesConfig, ask_on_deny: bool, ask_ai: bool)
     // AI judge: evaluate inline interpreter code instead of asking user
     let (final_decision, ai_reason) = if ask_ai && initial_decision == Decision::Ask {
         let ai_config = ai_judge::load_config();
-        match ai_judge::extract_inline_code(&stmt, &ai_config) {
-            Some((language, code)) => {
-                // Default to "." if cwd is empty or missing
-                let cwd = hook_input
-                    .cwd
-                    .as_deref()
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or(".");
-                let (ai_decision, reason) = ai_judge::evaluate(&ai_config, &language, &code, cwd);
-                eprintln!("longline: ai-judge evaluated {language} code: {ai_decision}");
+        // Default to "." if cwd is empty or missing
+        let cwd = hook_input
+            .cwd
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(".");
+        match ai_judge::extract_code(command, &stmt, cwd, &ai_config) {
+            Some(extracted) => {
+                let (ai_decision, reason) = ai_judge::evaluate(
+                    &ai_config,
+                    &extracted.language,
+                    &extracted.code,
+                    cwd,
+                    extracted.context.as_deref(),
+                );
+                eprintln!(
+                    "longline: ai-judge evaluated {} code: {ai_decision}",
+                    extracted.language
+                );
                 (ai_decision, Some(reason))
             }
             None => (initial_decision, None),

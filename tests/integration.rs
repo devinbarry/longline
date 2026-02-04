@@ -427,6 +427,38 @@ fn test_e2e_ask_ai_falls_back_on_missing_codex() {
 }
 
 #[test]
+fn test_e2e_ask_ai_handles_uv_run_python_c() {
+    let (code, stdout) = run_hook_with_flags("Bash", "uv run python3 -c 'print(1)'", &["--ask-ai"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let decision = parsed["hookSpecificOutput"]["permissionDecision"]
+        .as_str()
+        .unwrap();
+    assert!(
+        decision == "ask" || decision == "allow",
+        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
+    );
+}
+
+#[test]
+fn test_e2e_ask_ai_handles_django_shell_pipeline() {
+    let (code, stdout) = run_hook_with_flags(
+        "Bash",
+        "echo 'print(1)' | python manage.py shell",
+        &["--ask-ai"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let decision = parsed["hookSpecificOutput"]["permissionDecision"]
+        .as_str()
+        .unwrap();
+    assert!(
+        decision == "ask" || decision == "allow",
+        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
+    );
+}
+
+#[test]
 fn test_e2e_allow_has_hook_event_name() {
     let (code, stdout) = run_hook("Bash", "ls -la");
     assert_eq!(code, 0);
