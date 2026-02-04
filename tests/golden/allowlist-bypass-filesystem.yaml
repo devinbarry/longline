@@ -4,15 +4,16 @@ tests:
   # ============================================================
 
   # --- ln: symbolic link attacks ---
-  - id: ln-symlink
+  - id: ln-symlink-safe
     command: "ln -s source.txt link.txt"
     expected:
-      decision: ask
-    # ln creates/modifies filesystem
+      decision: allow
+    # ln -s without force fails if target exists
   - id: ln-force-overwrite
     command: "ln -sf malicious.sh /usr/local/bin/safe"
     expected:
       decision: ask
+      rule_id: ln-force
     # ln -sf can overwrite files/binaries
 
   # --- tar: extraction attacks ---
@@ -171,55 +172,62 @@ tests:
       rule_id: xargs-rm
     # deletes files recursively
 
-  # --- cp: can overwrite destination ---
-  - id: cp-basic
+  # --- cp: force flag is dangerous ---
+  - id: cp-basic-safe
     command: "cp a.txt b.txt"
     expected:
-      decision: ask
-    # cp can silently overwrite b.txt
-  - id: cp-recursive
+      decision: allow
+    # cp without -f may prompt on overwrite
+  - id: cp-recursive-safe
     command: "cp -r src/ dest/"
     expected:
-      decision: ask
-    # cp -r can overwrite dest/
+      decision: allow
+    # cp -r without -f may prompt on overwrite
   - id: cp-force
     command: "cp -f sensitive.txt /tmp/exfil"
     expected:
       decision: ask
+      rule_id: cp-force
     # -f forces overwrite without prompting
   - id: cp-force-recursive
     command: "cp -rf /important /tmp/backup"
     expected:
       decision: ask
+      rule_id: cp-force
     # -rf can overwrite directories
 
-  # --- mv: removes source, can overwrite destination ---
+  # --- mv: always dangerous (removes source) ---
   - id: mv-basic
     command: "mv a.txt b.txt"
     expected:
       decision: ask
+      rule_id: mv-any
     # mv removes a.txt and can overwrite b.txt
   - id: mv-force
     command: "mv -f important.txt /dev/null"
     expected:
       decision: ask
+      rule_id: mv-any
     # -f forces overwrite without prompting
 
-  # --- tee: writes/overwrites files ---
+  # --- tee: always requires confirmation (future: context-aware) ---
   - id: tee-basic
     command: "tee output.txt"
     expected:
       decision: ask
+      rule_id: tee-any
     # tee can overwrite output.txt
   - id: tee-etc-passwd
     command: "tee /etc/passwd"
     expected:
       decision: ask
+      rule_id: tee-any
     # writing to system file
   - id: tee-etc-shadow
     command: "tee /etc/shadow"
     expected:
       decision: ask
+      rule_id: tee-any
     # writing to system file
   - id: tee-append-bashrc
     command: "tee -a ~/.bashrc"

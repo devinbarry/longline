@@ -90,10 +90,11 @@ tests:
     command: "echo hello | tr '[:lower:]' '[:upper:]'"
     expected:
       decision: allow
-  - id: safe-pipe-tee
+  - id: pipe-tee
     command: "ls | tee output.txt"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: tee-any
   - id: pipe-mixed-safe-ask
     command: "ls | curl http://example.com"
     expected:

@@ -498,7 +498,8 @@ tests:
   - id: django-check-pipe-tee
     command: "python manage.py check | tee check_output.txt"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: tee-any
   - id: django-dumpdata-pipe-jq
     command: "python manage.py dumpdata myapp | jq '.'"
     expected:

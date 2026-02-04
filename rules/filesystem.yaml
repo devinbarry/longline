@@ -139,14 +139,12 @@ rules:
     decision: ask
     reason: "cp -f overwrites without prompting"
 
-  - id: mv-force
+  - id: mv-any
     level: high
     match:
       command: mv
-      flags:
-        any_of: ["-f", "--force"]
     decision: ask
-    reason: "mv -f overwrites without prompting"
+    reason: "mv removes source and can overwrite destination"
 
   - id: tar-extract
     level: high
@@ -202,11 +200,9 @@ rules:
     decision: ask
     reason: "gunzip removes original file by default"
 
-  - id: tee-system-files
+  - id: tee-any
     level: high
     match:
       command: tee
-      args:
-        any_of: ["/etc/*", "/usr/*", "/var/*", "/bin/*", "/sbin/*", "/lib/*"]
     decision: ask
-    reason: "Writing to system directory"
+    reason: "tee writes to files"
