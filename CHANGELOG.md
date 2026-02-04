@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.10] - 2026-02-04
+
+
+### Changed
+
+- middle-ground policy for ln/cp/mv/tee
+- add git -C flag tests to verify rules still fire
+
+
+### Fixed
+
+- add bare git and just to allowlist for -C flag support
+
 ## [0.1.9] - 2026-02-02
 
 
@@ -33,6 +46,7 @@ All notable changes to this project will be documented in this file.
 - split large golden test files by domain
 - merge allowlist-bypass-git.yaml into git.yaml
 - update allowlist-bypass-filesystem tests to expect ask for dangerous commands
+- release v0.1.9
 
 
 ### Fixed
