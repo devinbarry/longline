@@ -536,12 +536,29 @@ tests:
   # 19. SPECIAL CASES
   # ============================================================
 
-  # --- git symbolic-ref ---
+  # --- git check-ignore (read-only) ---
+  - id: git-check-ignore-file
+    command: "git check-ignore file.txt"
+    expected:
+      decision: allow
+    # Read-only: checks if file matches gitignore patterns
+  - id: git-check-ignore-verbose
+    command: "git check-ignore -v node_modules"
+    expected:
+      decision: allow
+    # Read-only: verbose output shows which pattern matched
+  - id: git-check-ignore-stdin
+    command: "git check-ignore --stdin"
+    expected:
+      decision: allow
+    # Read-only: reads paths from stdin
+
+  # --- git symbolic-ref (read-only queries) ---
   - id: git-symbolic-ref-read-safe
     command: "git symbolic-ref HEAD"
     expected:
-      decision: ask
-    # Not allowlisted; safer to default-ask
+      decision: allow
+    # Read-only: shows what ref HEAD points to
   - id: git-symbolic-ref-delete-dangerous
     command: "git symbolic-ref --delete HEAD"
     expected:
@@ -551,8 +568,35 @@ tests:
   - id: git-symbolic-ref-short-safe
     command: "git symbolic-ref --short HEAD"
     expected:
-      decision: ask
-    # Not allowlisted; safer to default-ask
+      decision: allow
+    # Read-only: shows branch name without refs/heads/ prefix
+  - id: git-symbolic-ref-quiet
+    command: "git symbolic-ref -q HEAD"
+    expected:
+      decision: allow
+    # Read-only: quiet mode, no error if not symbolic ref
+
+  # --- git show-ref (read-only) ---
+  - id: git-show-ref-basic
+    command: "git show-ref"
+    expected:
+      decision: allow
+    # Read-only: lists all refs
+  - id: git-show-ref-heads
+    command: "git show-ref --heads"
+    expected:
+      decision: allow
+    # Read-only: lists branch refs only
+  - id: git-show-ref-tags
+    command: "git show-ref --tags"
+    expected:
+      decision: allow
+    # Read-only: lists tag refs only
+  - id: git-show-ref-verify
+    command: "git show-ref --verify refs/heads/main"
+    expected:
+      decision: allow
+    # Read-only: verifies a specific ref exists
 
   # --- git -C flag (allowlist matches once -C is stripped) ---
   - id: git-C-status-allow

@@ -39,6 +39,9 @@ allowlists:
     - "git cat-file"
     - "git grep"
     - "git archive"
+    - "git check-ignore"
+    - "git symbolic-ref"
+    - "git show-ref"
     # ── Git: safe file operations ────────────────────────────────────
     - "git mv"
     - "git rm"
