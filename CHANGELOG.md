@@ -2,12 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-02-05
+
+
+### Added
+
+- add support for compound bash statements
+
+
+### Changed
+
+- update documentation for recent features
+
+
+### Fixed
+
+- eliminate flaky AI judge script execution tests
+
 ## [0.1.14] - 2026-02-04
 
 
 ### Added
 
 - add lenient AI judge mode
+
+
+### Changed
+
+- release v0.1.14
 
 
 ### Fixed
