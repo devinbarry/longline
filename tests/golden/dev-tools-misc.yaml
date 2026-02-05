@@ -62,13 +62,27 @@ tests:
     expected:
       decision: allow
 
+  # Standard dev recipes (should allow) - release
+  - id: just-release-safe
+    command: "just release"
+    expected:
+      decision: allow
+  - id: just-release-patch-safe
+    command: "just release patch"
+    expected:
+      decision: allow
+  - id: just-release-minor-safe
+    command: "just release minor"
+    expected:
+      decision: allow
+  - id: just-release-major-safe
+    command: "just release major"
+    expected:
+      decision: allow
+
   # Negative tests (should ask - runs arbitrary recipes or bare command)
   - id: just-bare
     command: "just"
-    expected:
-      decision: ask
-  - id: just-recipe-release
-    command: "just release patch"
     expected:
       decision: ask
   - id: just-recipe-clean
