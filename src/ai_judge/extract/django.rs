@@ -103,7 +103,7 @@ pub(super) fn extract_from_django_shell_pipeline(
             }
             None
         }
-        Statement::Opaque(_) => None,
+        Statement::Opaque(_) | Statement::Empty => None,
     }
 }
 

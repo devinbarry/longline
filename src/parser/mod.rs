@@ -15,6 +15,8 @@ pub enum Statement {
     Subshell(Box<Statement>),
     CommandSubstitution(Box<Statement>),
     Opaque(String),
+    /// Empty statement (e.g., comments) - evaluates to allow
+    Empty,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,7 +110,7 @@ pub fn parse(command: &str) -> Result<Statement, String> {
     Ok(convert_program(root, command))
 }
 
-/// Flatten a Statement into its leaf SimpleCommand and Opaque nodes.
+/// Flatten a Statement into its leaf SimpleCommand, Opaque, and Empty nodes.
 pub fn flatten(stmt: &Statement) -> Vec<&Statement> {
     match stmt {
         Statement::SimpleCommand(cmd) => {
@@ -118,7 +120,7 @@ pub fn flatten(stmt: &Statement) -> Vec<&Statement> {
             }
             out
         }
-        Statement::Opaque(_) => vec![stmt],
+        Statement::Opaque(_) | Statement::Empty => vec![stmt],
         Statement::Pipeline(p) => p.stages.iter().flat_map(flatten).collect(),
         Statement::List(l) => {
             let mut out = flatten(&l.first);
@@ -462,5 +464,146 @@ mod tests {
             "Should flatten embedded substitution: got {} leaves",
             leaves.len()
         );
+    }
+
+    // --- Compound statement parsing tests ---
+
+    #[test]
+    fn test_parse_for_loop() {
+        let stmt = parse("for f in *.yaml; do echo $f; done").unwrap();
+        let leaves = flatten(&stmt);
+        // Should extract the echo command from the loop body
+        assert!(
+            leaves.len() >= 1,
+            "For loop should have at least 1 leaf, got {}",
+            leaves.len()
+        );
+        // Verify we got the echo command
+        let has_echo = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("echo")
+            } else {
+                false
+            }
+        });
+        assert!(has_echo, "For loop body should contain echo command");
+    }
+
+    #[test]
+    fn test_parse_while_loop() {
+        let stmt = parse("while true; do ls; done").unwrap();
+        let leaves = flatten(&stmt);
+        // Should extract both the condition (true) and body (ls)
+        assert!(
+            leaves.len() >= 2,
+            "While loop should have at least 2 leaves, got {}",
+            leaves.len()
+        );
+    }
+
+    #[test]
+    fn test_parse_if_statement() {
+        let stmt = parse("if true; then echo yes; else echo no; fi").unwrap();
+        let leaves = flatten(&stmt);
+        // Should have: true (condition), echo yes (then), echo no (else)
+        assert!(
+            leaves.len() >= 3,
+            "If statement should have at least 3 leaves, got {}",
+            leaves.len()
+        );
+    }
+
+    #[test]
+    fn test_parse_case_statement() {
+        let stmt = parse("case $x in a) echo a;; b) echo b;; esac").unwrap();
+        let leaves = flatten(&stmt);
+        // Should have echo commands from both case items
+        assert!(
+            leaves.len() >= 2,
+            "Case statement should have at least 2 leaves, got {}",
+            leaves.len()
+        );
+    }
+
+    #[test]
+    fn test_parse_compound_statement() {
+        let stmt = parse("{ echo a; echo b; }").unwrap();
+        let leaves = flatten(&stmt);
+        assert!(
+            leaves.len() >= 2,
+            "Compound statement should have at least 2 leaves, got {}",
+            leaves.len()
+        );
+    }
+
+    #[test]
+    fn test_parse_comment_returns_empty() {
+        let stmt = parse("# this is a comment").unwrap();
+        match stmt {
+            Statement::Empty => {}
+            other => panic!("Expected Empty for comment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_returns_empty() {
+        let stmt = parse("[[ -f file.txt ]]").unwrap();
+        match stmt {
+            Statement::Empty => {}
+            other => panic!("Expected Empty for test command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_test_command_with_substitution() {
+        // Test commands with substitutions should extract the substitution
+        let stmt = parse("[[ $(cat /etc/passwd) == root ]]").unwrap();
+        let leaves = flatten(&stmt);
+        // Should have the cat command from the substitution
+        let has_cat = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("cat")
+            } else {
+                false
+            }
+        });
+        assert!(
+            has_cat,
+            "Test command with substitution should extract inner command"
+        );
+    }
+
+    #[test]
+    fn test_parse_c_style_for_loop() {
+        let stmt = parse("for ((i=0; i<10; i++)); do echo $i; done").unwrap();
+        let leaves = flatten(&stmt);
+        assert!(
+            leaves.len() >= 1,
+            "C-style for loop should have at least 1 leaf, got {}",
+            leaves.len()
+        );
+    }
+
+    #[test]
+    fn test_parse_function_definition() {
+        let stmt = parse("foo() { echo hi; }").unwrap();
+        let leaves = flatten(&stmt);
+        // Function definitions should extract the body commands
+        let has_echo = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("echo")
+            } else {
+                false
+            }
+        });
+        assert!(has_echo, "Function definition should contain echo command");
+    }
+
+    #[test]
+    fn test_flatten_empty() {
+        let stmt = Statement::Empty;
+        let leaves = flatten(&stmt);
+        assert_eq!(leaves.len(), 1, "Empty should flatten to itself");
+        assert!(matches!(leaves[0], Statement::Empty));
     }
 }

@@ -9,6 +9,7 @@ use std::borrow::Cow;
 pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
         Statement::SimpleCommand(cmd) => find_allowlist_match(config, cmd).is_some(),
+        Statement::Empty => true, // Empty statements (e.g., comments) are always safe
         _ => false,
     }
 }

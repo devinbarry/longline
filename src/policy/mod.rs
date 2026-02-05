@@ -90,9 +90,10 @@ fn collect_pipelines(stmt: &Statement) -> Vec<&parser::Pipeline> {
     }
 }
 
-/// Evaluate a single leaf node (SimpleCommand or Opaque).
+/// Evaluate a single leaf node (SimpleCommand, Opaque, or Empty).
 fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
     match leaf {
+        Statement::Empty => PolicyResult::allow(),
         Statement::Opaque(_) => PolicyResult {
             decision: Decision::Ask,
             rule_id: None,
@@ -782,5 +783,189 @@ rules:
 
         // Note: -xvf won't be excluded because -v is embedded, not separate
         // This is a known limitation - none_of checks exact matches
+    }
+
+    // --- Compound statement policy tests ---
+
+    #[test]
+    fn test_for_loop_with_safe_command_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("for f in *.yaml; do echo $f; done").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "For loop with allowlisted command should allow"
+        );
+    }
+
+    #[test]
+    fn test_for_loop_with_dangerous_command_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("for f in *; do rm -rf /; done").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "For loop with dangerous command should deny: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_while_loop_with_safe_command_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("while true; do ls; done").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "While loop with allowlisted commands should allow"
+        );
+    }
+
+    #[test]
+    fn test_while_loop_condition_with_dangerous_command_denies() {
+        // The condition itself can be dangerous
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("while cat .env; do echo hi; done").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "While loop with dangerous condition should deny"
+        );
+    }
+
+    #[test]
+    fn test_if_statement_with_safe_commands_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("if true; then echo yes; else echo no; fi").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "If statement with allowlisted commands should allow"
+        );
+    }
+
+    #[test]
+    fn test_if_statement_with_dangerous_else_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("if true; then echo ok; else rm -rf /; fi").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "If statement with dangerous else clause should deny"
+        );
+    }
+
+    #[test]
+    fn test_case_statement_with_safe_commands_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("case $x in a) echo a;; b) echo b;; esac").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Case statement with allowlisted commands should allow"
+        );
+    }
+
+    #[test]
+    fn test_case_statement_with_dangerous_case_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("case $x in a) echo a;; b) rm -rf /;; esac").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Case statement with dangerous case should deny"
+        );
+    }
+
+    #[test]
+    fn test_function_definition_with_dangerous_body_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("cleanup() { rm -rf /; }").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Function with dangerous body should deny"
+        );
+    }
+
+    #[test]
+    fn test_compound_statement_with_safe_commands_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("{ echo a; echo b; }").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Compound statement with allowlisted commands should allow"
+        );
+    }
+
+    #[test]
+    fn test_test_command_with_safe_substitution_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("[[ $(date) == today ]]").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Test command with allowlisted substitution should allow"
+        );
+    }
+
+    #[test]
+    fn test_test_command_with_dangerous_substitution_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("[[ $(cat .env) == secret ]]").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Test command with dangerous substitution should deny"
+        );
+    }
+
+    #[test]
+    fn test_comment_alone_allows() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("# this is just a comment").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Comments should always allow"
+        );
+    }
+
+    #[test]
+    fn test_comment_with_command_allows_if_command_safe() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("# comment\necho hello").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Comment followed by allowlisted command should allow"
+        );
+    }
+
+    #[test]
+    fn test_nested_loops_with_dangerous_command_denies() {
+        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let stmt = parse("for i in 1 2 3; do for j in a b c; do rm -rf /; done; done").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Nested loops with dangerous command should deny"
+        );
     }
 }

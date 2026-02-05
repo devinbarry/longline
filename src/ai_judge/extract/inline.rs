@@ -40,7 +40,7 @@ pub(super) fn extract_inline_code_from_stmt(
         Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
             extract_inline_code_from_stmt(inner, config)
         }
-        Statement::Opaque(_) => None,
+        Statement::Opaque(_) | Statement::Empty => None,
     }
 }
 

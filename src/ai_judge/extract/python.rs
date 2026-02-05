@@ -113,7 +113,7 @@ pub(super) fn extract_from_python_stdin_pipeline(
             }
             None
         }
-        Statement::Opaque(_) => None,
+        Statement::Opaque(_) | Statement::Empty => None,
     }
 }
 
@@ -161,7 +161,7 @@ pub(super) fn extract_python_script_execution(
         Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
             extract_python_script_execution(raw_command, inner, cwd, config)
         }
-        Statement::Opaque(_) => None,
+        Statement::Opaque(_) | Statement::Empty => None,
     }
 }
 

@@ -39,6 +39,16 @@ fn convert_node(node: Node, source: &str) -> Statement {
         "negated_command" => convert_negated_command(node, source),
         "variable_assignment" => convert_bare_assignment(node, source),
         "variable_assignments" => convert_bare_assignment(node, source),
+        // Compound statements - extract body commands for evaluation
+        "for_statement" | "c_style_for_statement" => convert_for_statement(node, source),
+        "while_statement" => convert_while_statement(node, source),
+        "if_statement" => convert_if_statement(node, source),
+        "case_statement" => convert_case_statement(node, source),
+        "compound_statement" => convert_compound_statement(node, source),
+        "function_definition" => convert_function_definition(node, source),
+        // Test commands and comments - no executable commands inside
+        "test_command" => convert_test_command(node, source),
+        "comment" => Statement::Empty,
         _ => Statement::Opaque(node_text(node, source).to_string()),
     }
 }
@@ -238,4 +248,172 @@ fn convert_bare_assignment(node: Node, source: &str) -> Statement {
         assignments,
         embedded_substitutions: vec![],
     })
+}
+
+// --- Compound statement converters ---
+
+/// Convert a "for_statement" or "c_style_for_statement" node.
+/// Extracts the do_group body for security evaluation.
+fn convert_for_statement(node: Node, source: &str) -> Statement {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "do_group" {
+            return convert_do_group(child, source);
+        }
+    }
+    // No do_group found - shouldn't happen for valid syntax
+    Statement::Opaque(node_text(node, source).to_string())
+}
+
+/// Convert a "while_statement" node.
+/// Extracts BOTH the condition AND the do_group body - the condition can contain dangerous commands.
+fn convert_while_statement(node: Node, source: &str) -> Statement {
+    let mut condition: Option<Statement> = None;
+    let mut body: Option<Statement> = None;
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            "do_group" => {
+                body = Some(convert_do_group(child, source));
+            }
+            _ => {
+                // First non-do_group child is the condition
+                if condition.is_none() {
+                    condition = Some(convert_node(child, source));
+                }
+            }
+        }
+    }
+
+    // Combine condition and body into a list for evaluation
+    match (condition, body) {
+        (Some(c), Some(b)) => wrap_as_list(vec![c, b]),
+        (None, Some(b)) => b,
+        (Some(c), None) => c,
+        (None, None) => Statement::Opaque(node_text(node, source).to_string()),
+    }
+}
+
+/// Convert an "if_statement" node.
+/// Extracts condition, then-body, and any elif/else clauses.
+fn convert_if_statement(node: Node, source: &str) -> Statement {
+    let mut parts: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            "elif_clause" | "else_clause" => {
+                // Recursively extract commands from elif/else
+                let mut inner_cursor = child.walk();
+                for inner in child.named_children(&mut inner_cursor) {
+                    parts.push(convert_node(inner, source));
+                }
+            }
+            _ => {
+                // Condition and then-body commands
+                parts.push(convert_node(child, source));
+            }
+        }
+    }
+
+    wrap_as_list(parts)
+}
+
+/// Convert a "case_statement" node.
+/// Extracts all case_item bodies.
+fn convert_case_statement(node: Node, source: &str) -> Statement {
+    let mut parts: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "case_item" {
+            // Extract commands from this case item (skip the pattern)
+            let mut inner_cursor = child.walk();
+            for inner in child.named_children(&mut inner_cursor) {
+                // Skip pattern words, only convert commands
+                if inner.kind() != "word" && inner.kind() != "concatenation" {
+                    parts.push(convert_node(inner, source));
+                }
+            }
+        }
+    }
+
+    wrap_as_list(parts)
+}
+
+/// Convert a "compound_statement" node ({ ... }).
+fn convert_compound_statement(node: Node, source: &str) -> Statement {
+    let mut parts: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        parts.push(convert_node(child, source));
+    }
+
+    wrap_as_list(parts)
+}
+
+/// Convert a "function_definition" node.
+/// Note: Defining a function doesn't execute it, but we still parse the body
+/// in case the function is called later in the same command.
+fn convert_function_definition(node: Node, source: &str) -> Statement {
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        if child.kind() == "compound_statement" {
+            return convert_compound_statement(child, source);
+        }
+    }
+    Statement::Empty
+}
+
+/// Convert a "test_command" node ([[ ... ]] or [ ... ]).
+/// These don't execute commands, but may contain command substitutions.
+fn convert_test_command(node: Node, source: &str) -> Statement {
+    // Look for any command_substitution children that need evaluation
+    let mut substitutions: Vec<Statement> = Vec::new();
+
+    fn find_substitutions(node: Node, source: &str, out: &mut Vec<Statement>) {
+        if node.kind() == "command_substitution" {
+            out.push(convert_command_substitution(node, source));
+        }
+        let mut cursor = node.walk();
+        for child in node.named_children(&mut cursor) {
+            find_substitutions(child, source, out);
+        }
+    }
+
+    find_substitutions(node, source, &mut substitutions);
+
+    if substitutions.is_empty() {
+        Statement::Empty
+    } else {
+        wrap_as_list(substitutions)
+    }
+}
+
+/// Convert a "do_group" node (the body of for/while loops).
+fn convert_do_group(node: Node, source: &str) -> Statement {
+    let mut parts: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        parts.push(convert_node(child, source));
+    }
+
+    wrap_as_list(parts)
+}
+
+/// Helper to wrap multiple statements as a List, or return single/empty appropriately.
+fn wrap_as_list(parts: Vec<Statement>) -> Statement {
+    match parts.len() {
+        0 => Statement::Empty,
+        1 => parts.into_iter().next().unwrap(),
+        _ => {
+            let mut iter = parts.into_iter();
+            let first = Box::new(iter.next().unwrap());
+            let rest: Vec<(ListOp, Statement)> = iter.map(|s| (ListOp::Semi, s)).collect();
+            Statement::List(List { first, rest })
+        }
+    }
 }
