@@ -114,13 +114,22 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         use std::path::PathBuf;
 
+        // Use both process ID and thread ID for unique filenames across parallel tests
+        let unique_name = format!(
+            "{}-{:?}-{}",
+            name,
+            std::thread::current().id(),
+            std::process::id()
+        );
         let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("target")
             .join("test-tmp")
             .join("ai-judge-invoke");
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(unique_name);
         std::fs::write(&path, contents).unwrap();
+        // Ensure file is synced to disk before setting permissions
+        std::fs::File::open(&path).unwrap().sync_all().unwrap();
         let mut perms = std::fs::metadata(&path).unwrap().permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(&path, perms).unwrap();
@@ -142,7 +151,8 @@ echo "ALLOW: safe computation"
         );
         let config = AiJudgeConfig {
             command: script.to_string_lossy().to_string(),
-            timeout: 2,
+            // Use generous timeout (10s) to avoid flakiness under CI load
+            timeout: 10,
             triggers: super::super::config::TriggersConfig::default(),
         };
 
@@ -159,19 +169,20 @@ echo "ALLOW: safe computation"
         let script = make_executable_script(
             "sleep.sh",
             r#"#!/bin/sh
-sleep 2
+sleep 10
 echo "ALLOW: safe computation"
 "#,
         );
         let config = AiJudgeConfig {
             command: script.to_string_lossy().to_string(),
-            timeout: 0,
+            // Use 1s timeout with 10s sleep to reliably trigger timeout
+            timeout: 1,
             triggers: super::super::config::TriggersConfig::default(),
         };
 
         let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None);
         assert_eq!(decision, Decision::Ask);
-        assert_eq!(reason, "AI judge error: timed out after 0s");
+        assert_eq!(reason, "AI judge error: timed out after 1s");
 
         let _ = std::fs::remove_file(&script);
     }
