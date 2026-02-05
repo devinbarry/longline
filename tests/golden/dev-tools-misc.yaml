@@ -97,11 +97,12 @@ tests:
     expected:
       decision: allow
 
-  # Negative tests (should ask - writes files or other operations)
-  - id: git-cliff-bare-ask
+  - id: git-cliff-bare-safe
     command: "git-cliff"
     expected:
-      decision: ask
+      decision: allow
+
+  # Negative tests (should ask - writes files or other operations)
   - id: git-cliff-output-ask
     command: "git-cliff -o CHANGELOG.md"
     expected:

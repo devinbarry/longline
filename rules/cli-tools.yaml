@@ -50,6 +50,7 @@ allowlists:
     - "gh --help"
     - "gh -h"
     # ── git-cliff: stdout-only invocations ────────────────────────
+    - "git-cliff"
     - "git-cliff --unreleased"
     - "git-cliff --latest"
     - "git-cliff --current"
@@ -75,3 +76,12 @@ rules:
         any_of: ["POST", "PUT", "DELETE", "PATCH"]
     decision: ask
     reason: "GitHub API mutating operation (POST/PUT/DELETE/PATCH)"
+
+  - id: git-cliff-write-file
+    level: high
+    match:
+      command: git-cliff
+      args:
+        any_of: ["-o", "--output", "--init", "--tag"]
+    decision: ask
+    reason: "git-cliff operation that writes files or modifies state"
