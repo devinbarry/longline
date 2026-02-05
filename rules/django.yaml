@@ -44,6 +44,7 @@ allowlists:
     - "uv run python manage.py inspectdb"
     - "uv run python manage.py test"
     - "uv run python manage.py makemigrations"
+    - "uv run python manage.py migrate"
     - "uv run python manage.py runserver"
     - "uv run python manage.py startapp"
     - "uv run python manage.py startproject"
@@ -59,6 +60,7 @@ allowlists:
     - "uv run python3 manage.py inspectdb"
     - "uv run python3 manage.py test"
     - "uv run python3 manage.py makemigrations"
+    - "uv run python3 manage.py migrate"
     - "uv run python3 manage.py runserver"
     - "uv run python3 manage.py startapp"
     - "uv run python3 manage.py startproject"
@@ -167,17 +169,6 @@ rules:
     reason: "Django shell provides arbitrary code execution"
 
   # ── Django: uv run variants ───────────────────────────────────
-  - id: uv-django-migrate
-    level: high
-    match:
-      command: uv
-      args:
-        any_of: ["run"]
-      flags:
-        any_of: ["migrate"]
-    decision: ask
-    reason: "Django migrate modifies database schema"
-
   - id: uv-django-flush
     level: high
     match:
