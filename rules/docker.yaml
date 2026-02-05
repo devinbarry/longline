@@ -1,11 +1,93 @@
-# Docker: destructive operations
+# Docker: read-only commands and destructive operations
 
 allowlists:
-  commands: []
+  commands:
+    # ── Docker: read-only operations ─────────────────────────────
+    - "docker ps"
+    - "docker images"
+    - "docker logs"
+    - "docker inspect"
+    - "docker stats"
+    - "docker top"
+    - "docker port"
+    - "docker version"
+    - "docker info"
+    # ── Docker network: read-only ────────────────────────────────
+    - "docker network ls"
+    - "docker network inspect"
+    # ── Docker volume: read-only ─────────────────────────────────
+    - "docker volume ls"
+    - "docker volume inspect"
+    # ── Docker compose (new plugin): safe operations ─────────────
+    - "docker compose ps"
+    - "docker compose logs"
+    - "docker compose config"
+    - "docker compose images"
+    - "docker compose top"
+    - "docker compose version"
+    - "docker compose down"
+    # ── Docker-compose (legacy): safe operations ─────────────────
+    - "docker-compose ps"
+    - "docker-compose logs"
+    - "docker-compose config"
+    - "docker-compose images"
+    - "docker-compose top"
+    - "docker-compose version"
+    - "docker-compose down"
 
 rules:
   # ============================================================
-  # HIGH: Docker destructive
+  # HIGH: Docker compose destructive
+  # ============================================================
+  # docker compose down -v / docker compose down --volumes
+  - id: docker-compose-down-volumes
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["compose"]
+      flags:
+        all_of: ["down"]
+        any_of: ["--volumes", "-v"]
+    decision: ask
+    reason: "Docker compose down with volume removal"
+
+  # docker-compose down -v / docker-compose down --volumes (legacy)
+  - id: docker-compose-legacy-down-volumes
+    level: high
+    match:
+      command: docker-compose
+      args:
+        any_of: ["down"]
+      flags:
+        any_of: ["--volumes", "-v"]
+    decision: ask
+    reason: "Docker compose down with volume removal"
+
+  # docker compose rm
+  - id: docker-compose-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["compose"]
+      flags:
+        any_of: ["rm"]
+    decision: ask
+    reason: "Docker compose rm removes containers"
+
+  # docker-compose rm (legacy)
+  - id: docker-compose-legacy-rm
+    level: high
+    match:
+      command: docker-compose
+      args:
+        any_of: ["rm"]
+    decision: ask
+    reason: "Docker compose rm removes containers"
+
+  # ============================================================
+  # HIGH: Docker volume destructive
   # ============================================================
   - id: docker-volume-rm
     level: high
@@ -18,6 +100,122 @@ rules:
     decision: ask
     reason: "Docker volume removal"
 
+  # ============================================================
+  # HIGH: Docker container destructive
+  # ============================================================
+  # docker container rm / docker container remove
+  - id: docker-container-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["container"]
+      flags:
+        any_of: ["rm", "remove"]
+    decision: ask
+    reason: "Removing Docker container"
+
+  # docker container prune
+  - id: docker-container-prune
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["container"]
+      flags:
+        any_of: ["prune"]
+    decision: ask
+    reason: "Pruning stopped Docker containers"
+
+  # docker rm / docker remove (shorthand) - must exclude subcommand forms
+  - id: docker-rm-container
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["rm", "remove"]
+      flags:
+        none_of: ["volume", "container", "network", "image", "compose"]
+    decision: ask
+    reason: "Removing Docker container"
+
+  # docker kill
+  - id: docker-kill
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["kill"]
+    decision: ask
+    reason: "Killing Docker container"
+
+  # ============================================================
+  # HIGH: Docker image destructive
+  # ============================================================
+  # docker image rm / docker image remove
+  - id: docker-image-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["image"]
+      flags:
+        any_of: ["rm", "remove"]
+    decision: ask
+    reason: "Removing Docker image"
+
+  # docker image prune
+  - id: docker-image-prune
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["image"]
+      flags:
+        any_of: ["prune"]
+    decision: ask
+    reason: "Pruning unused Docker images"
+
+  # docker rmi (shorthand)
+  - id: docker-rmi
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["rmi"]
+    decision: ask
+    reason: "Removing Docker image"
+
+  # ============================================================
+  # HIGH: Docker network destructive
+  # ============================================================
+  # docker network rm / docker network remove
+  - id: docker-network-rm
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["network"]
+      flags:
+        any_of: ["rm", "remove"]
+    decision: ask
+    reason: "Removing Docker network"
+
+  # docker network prune
+  - id: docker-network-prune
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["network"]
+      flags:
+        any_of: ["prune"]
+    decision: ask
+    reason: "Pruning unused Docker networks"
+
+  # ============================================================
+  # HIGH: Docker system destructive
+  # ============================================================
   - id: docker-system-prune
     level: high
     match:

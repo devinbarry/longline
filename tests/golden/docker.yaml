@@ -1,5 +1,147 @@
 tests:
-  # docker volume operations
+  # ============================================================
+  # Allowlisted read-only commands (expect allow)
+  # ============================================================
+
+  # Basic Docker read-only commands
+  - id: docker-ps
+    command: "docker ps"
+    expected:
+      decision: allow
+  - id: docker-ps-all
+    command: "docker ps -a"
+    expected:
+      decision: allow
+  - id: docker-images
+    command: "docker images"
+    expected:
+      decision: allow
+  - id: docker-images-all
+    command: "docker images -a"
+    expected:
+      decision: allow
+  - id: docker-logs
+    command: "docker logs mycontainer"
+    expected:
+      decision: allow
+  - id: docker-logs-follow
+    command: "docker logs -f mycontainer"
+    expected:
+      decision: allow
+  - id: docker-inspect
+    command: "docker inspect mycontainer"
+    expected:
+      decision: allow
+  - id: docker-stats
+    command: "docker stats"
+    expected:
+      decision: allow
+  - id: docker-top
+    command: "docker top mycontainer"
+    expected:
+      decision: allow
+  - id: docker-port
+    command: "docker port mycontainer"
+    expected:
+      decision: allow
+  - id: docker-version
+    command: "docker version"
+    expected:
+      decision: allow
+  - id: docker-info
+    command: "docker info"
+    expected:
+      decision: allow
+
+  # Network read-only commands
+  - id: docker-network-ls
+    command: "docker network ls"
+    expected:
+      decision: allow
+  - id: docker-network-inspect
+    command: "docker network inspect bridge"
+    expected:
+      decision: allow
+
+  # Volume read-only commands
+  - id: docker-volume-ls
+    command: "docker volume ls"
+    expected:
+      decision: allow
+  - id: docker-volume-inspect
+    command: "docker volume inspect myvolume"
+    expected:
+      decision: allow
+
+  # Docker Compose safe commands (docker compose)
+  - id: docker-compose-ps
+    command: "docker compose ps"
+    expected:
+      decision: allow
+  - id: docker-compose-logs
+    command: "docker compose logs"
+    expected:
+      decision: allow
+  - id: docker-compose-logs-follow
+    command: "docker compose logs -f"
+    expected:
+      decision: allow
+  - id: docker-compose-config
+    command: "docker compose config"
+    expected:
+      decision: allow
+  - id: docker-compose-images
+    command: "docker compose images"
+    expected:
+      decision: allow
+  - id: docker-compose-top
+    command: "docker compose top"
+    expected:
+      decision: allow
+  - id: docker-compose-version
+    command: "docker compose version"
+    expected:
+      decision: allow
+  - id: docker-compose-down-basic
+    command: "docker compose down"
+    expected:
+      decision: allow
+
+  # Docker Compose safe commands (docker-compose legacy)
+  - id: docker-compose-legacy-ps
+    command: "docker-compose ps"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-logs
+    command: "docker-compose logs"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-config
+    command: "docker-compose config"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-images
+    command: "docker-compose images"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-top
+    command: "docker-compose top"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-version
+    command: "docker-compose version"
+    expected:
+      decision: allow
+  - id: docker-compose-legacy-down-basic
+    command: "docker-compose down"
+    expected:
+      decision: allow
+
+  # ============================================================
+  # Destructive rules (expect ask with rule_id)
+  # ============================================================
+
+  # docker volume operations (existing rules)
   - id: docker-volume-rm
     command: "docker volume rm mydata"
     expected:
@@ -10,12 +152,8 @@ tests:
     expected:
       decision: ask
       rule_id: docker-volume-rm
-  - id: docker-volume-ls-no-rule
-    command: "docker volume ls"
-    expected:
-      decision: ask
 
-  # docker system operations
+  # docker system operations (existing rules)
   - id: docker-system-prune
     command: "docker system prune"
     expected:
@@ -31,21 +169,163 @@ tests:
     expected:
       decision: ask
 
-  # General docker commands (not allowlisted, no matching rule)
+  # Container removal rules (new)
+  - id: docker-rm-container
+    command: "docker rm mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-rm-container
+  - id: docker-rm-multiple
+    command: "docker rm container1 container2"
+    expected:
+      decision: ask
+      rule_id: docker-rm-container
+  - id: docker-rm-force
+    command: "docker rm -f mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-rm-container
+  - id: docker-remove
+    command: "docker remove mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-rm-container
+  - id: docker-container-rm
+    command: "docker container rm mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-container-rm
+
+  # Container prune rules (new)
+  - id: docker-container-prune
+    command: "docker container prune"
+    expected:
+      decision: ask
+      rule_id: docker-container-prune
+  - id: docker-container-prune-force
+    command: "docker container prune -f"
+    expected:
+      decision: ask
+      rule_id: docker-container-prune
+
+  # Docker kill rules (new)
+  - id: docker-kill
+    command: "docker kill mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-kill
+  - id: docker-kill-signal
+    command: "docker kill --signal SIGKILL mycontainer"
+    expected:
+      decision: ask
+      rule_id: docker-kill
+
+  # Image removal rules (new)
+  - id: docker-rmi
+    command: "docker rmi myimage:latest"
+    expected:
+      decision: ask
+      rule_id: docker-rmi
+  - id: docker-rmi-force
+    command: "docker rmi -f myimage"
+    expected:
+      decision: ask
+      rule_id: docker-rmi
+  - id: docker-image-rm
+    command: "docker image rm myimage"
+    expected:
+      decision: ask
+      rule_id: docker-image-rm
+
+  # Image prune rules (new)
+  - id: docker-image-prune
+    command: "docker image prune"
+    expected:
+      decision: ask
+      rule_id: docker-image-prune
+  - id: docker-image-prune-all
+    command: "docker image prune -a"
+    expected:
+      decision: ask
+      rule_id: docker-image-prune
+
+  # Network removal rules (new)
+  - id: docker-network-rm
+    command: "docker network rm mynetwork"
+    expected:
+      decision: ask
+      rule_id: docker-network-rm
+  - id: docker-network-remove
+    command: "docker network remove mynetwork"
+    expected:
+      decision: ask
+      rule_id: docker-network-rm
+
+  # Network prune rules (new)
+  - id: docker-network-prune
+    command: "docker network prune"
+    expected:
+      decision: ask
+      rule_id: docker-network-prune
+  - id: docker-network-prune-force
+    command: "docker network prune -f"
+    expected:
+      decision: ask
+      rule_id: docker-network-prune
+
+  # Docker compose down with volumes (new)
+  - id: docker-compose-down-volumes
+    command: "docker compose down -v"
+    expected:
+      decision: ask
+      rule_id: docker-compose-down-volumes
+  - id: docker-compose-down-volumes-long
+    command: "docker compose down --volumes"
+    expected:
+      decision: ask
+      rule_id: docker-compose-down-volumes
+  - id: docker-compose-legacy-down-volumes
+    command: "docker-compose down -v"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-down-volumes
+  - id: docker-compose-legacy-down-volumes-long
+    command: "docker-compose down --volumes"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-down-volumes
+
+  # Docker compose rm (new)
+  - id: docker-compose-rm
+    command: "docker compose rm"
+    expected:
+      decision: ask
+      rule_id: docker-compose-rm
+  - id: docker-compose-rm-force
+    command: "docker compose rm -f"
+    expected:
+      decision: ask
+      rule_id: docker-compose-rm
+  - id: docker-compose-legacy-rm
+    command: "docker-compose rm"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-rm
+  - id: docker-compose-legacy-rm-force
+    command: "docker-compose rm -f"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-rm
+
+  # ============================================================
+  # Non-allowlisted commands without specific rules (expect ask)
+  # ============================================================
   - id: docker-build
     command: "docker build ."
     expected:
       decision: ask
   - id: docker-run
     command: "docker run -it ubuntu bash"
-    expected:
-      decision: ask
-  - id: docker-ps
-    command: "docker ps"
-    expected:
-      decision: ask
-  - id: docker-images
-    command: "docker images"
     expected:
       decision: ask
   - id: docker-compose-up
@@ -60,11 +340,23 @@ tests:
     command: "docker stop mycontainer"
     expected:
       decision: ask
-  - id: docker-rm-container
-    command: "docker rm mycontainer"
+  - id: docker-exec
+    command: "docker exec -it mycontainer bash"
     expected:
       decision: ask
-  - id: docker-rmi
-    command: "docker rmi myimage:latest"
+  - id: docker-start
+    command: "docker start mycontainer"
+    expected:
+      decision: ask
+  - id: docker-restart
+    command: "docker restart mycontainer"
+    expected:
+      decision: ask
+  - id: docker-push
+    command: "docker push myimage:latest"
+    expected:
+      decision: ask
+  - id: docker-tag
+    command: "docker tag myimage:latest myrepo/myimage:v1"
     expected:
       decision: ask
