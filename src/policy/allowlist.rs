@@ -5,13 +5,20 @@ use crate::parser::{SimpleCommand, Statement};
 use super::config::RulesConfig;
 use std::borrow::Cow;
 
-/// Check if a leaf node is allowlisted.
+/// Check if a leaf node is allowlisted (or is a bare version check).
 pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
-        Statement::SimpleCommand(cmd) => find_allowlist_match(config, cmd).is_some(),
+        Statement::SimpleCommand(cmd) => {
+            find_allowlist_match(config, cmd).is_some() || is_version_check(cmd)
+        }
         Statement::Empty => true, // Empty statements (e.g., comments) are always safe
         _ => false,
     }
+}
+
+/// Check if a command is a bare version check (e.g., `foo --version` or `foo -V`).
+pub(super) fn is_version_check(cmd: &SimpleCommand) -> bool {
+    cmd.argv.len() == 1 && (cmd.argv[0] == "--version" || cmd.argv[0] == "-V")
 }
 
 /// Git supports global options like `-C <path>` that appear before the subcommand.

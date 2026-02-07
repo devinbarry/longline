@@ -12,7 +12,7 @@ pub use config::{
 use crate::parser::{self, Statement};
 use crate::types::{Decision, PolicyResult};
 
-use allowlist::{find_allowlist_match, is_allowlisted};
+use allowlist::{find_allowlist_match, is_allowlisted, is_version_check};
 use matching::{matches_pipeline, matches_rule};
 
 /// Evaluate a parsed statement against the policy rules.
@@ -122,6 +122,15 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
             // If a rule matched, return the rule result
             if worst.rule_id.is_some() {
                 return worst;
+            }
+
+            // Bare --version / -V is always safe, regardless of allowlist
+            if is_version_check(cmd) {
+                return PolicyResult {
+                    decision: Decision::Allow,
+                    rule_id: None,
+                    reason: "version check".to_string(),
+                };
             }
 
             // No rule matched -- check allowlist as fallback
@@ -954,6 +963,49 @@ rules:
             result.decision,
             Decision::Allow,
             "Comment followed by allowlisted command should allow"
+        );
+    }
+
+    // --- Generic --version allow tests ---
+
+    #[test]
+    fn test_version_check_allows_unknown_command() {
+        let config = test_config();
+        let stmt = parse("someunknowntool --version").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Bare --version should always allow: {:?}",
+            result
+        );
+        assert!(result.reason.contains("version check"));
+    }
+
+    #[test]
+    fn test_version_check_v_flag_allows() {
+        let config = test_config();
+        let stmt = parse("sometool -V").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Bare -V should always allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_version_with_extra_args_not_allowed() {
+        let config = test_config();
+        // "cargo yank --version 1.0.0" pattern -- not a version check
+        let stmt = parse("cargo yank --version 1.0.0").unwrap();
+        let result = evaluate(&config, &stmt);
+        // This should NOT be auto-allowed as a version check
+        // (it has argv ["yank", "--version", "1.0.0"], not just ["--version"])
+        assert_ne!(
+            result.reason, "version check",
+            "Multi-arg command with --version should not be treated as version check"
         );
     }
 

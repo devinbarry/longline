@@ -1,0 +1,66 @@
+tests:
+  # ── Generic --version always allows ────────────────────────────────
+
+  - id: unknown-tool-version
+    command: "someunknowntool --version"
+    expected:
+      decision: allow
+    note: "Any command with bare --version should allow"
+
+  - id: longline-version
+    command: "longline --version"
+    expected:
+      decision: allow
+
+  - id: codex-version
+    command: "codex --version"
+    expected:
+      decision: allow
+
+  - id: curl-version-generic
+    command: "curl --version"
+    expected:
+      decision: allow
+
+  - id: random-command-version-V
+    command: "randomtool -V"
+    expected:
+      decision: allow
+    note: "Bare -V treated as version check"
+
+  - id: docker-version-flag
+    command: "docker --version"
+    expected:
+      decision: allow
+
+  - id: terraform-version
+    command: "terraform --version"
+    expected:
+      decision: allow
+
+  - id: kubectl-version
+    command: "kubectl --version"
+    expected:
+      decision: allow
+
+  # ── Not bare version checks (should NOT auto-allow) ────────────────
+
+  - id: cargo-yank-version-is-not-version-check
+    command: "cargo yank --version 1.0.0"
+    expected:
+      decision: ask
+    note: "Has subcommand + --version + value, not a bare version check"
+
+  - id: npm-install-version-flag
+    command: "npm install --version 2.0.0"
+    expected:
+      decision: ask
+      rule_id: npm-install
+    note: "npm install rule takes precedence, and this is not a bare version check"
+
+  - id: pip-install-version
+    command: "pip install requests --version 2.28.0"
+    expected:
+      decision: ask
+      rule_id: pip-install
+    note: "pip install rule matches, not a bare version check"
