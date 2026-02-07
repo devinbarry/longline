@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-02-07
+
+
+### Added
+
+- add git read-only commands check-ignore, symbolic-ref, show-ref
+- add git-cliff base command with safety rules
+- add just release to safe commands
+- allow uv run python manage.py migrate
+- add Docker allowlist and destructive operation rules
+- add docker compose down --rmi and --remove-orphans rules
+
+
+### Changed
+
+- add design for fixing duplicate test execution
+- add .worktrees/ to gitignore
+- remove duplicate module declarations from main.rs
+- add implementation plan for duplicate test fix
+
+
+### Fixed
+
+- use gpt-5.1-codex-mini with medium reasoning effort
+- use flags matcher for git-cliff dash-prefixed options
+
 ## [0.2.0] - 2026-02-05
 
 
@@ -13,6 +39,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - update documentation for recent features
+- release v0.2.0
 
 
 ### Fixed
