@@ -81,7 +81,7 @@ rules:
     level: high
     match:
       command: git-cliff
-      args:
+      flags:
         any_of: ["-o", "--output", "--init", "--tag"]
     decision: ask
     reason: "git-cliff operation that writes files or modifies state"

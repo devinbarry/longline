@@ -125,8 +125,20 @@ tests:
     command: "git-cliff --output CHANGELOG.md"
     expected:
       decision: ask
+  - id: git-cliff-output-equals-ask
+    command: "git-cliff --output=CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-short-attached-ask
+    command: "git-cliff -oCHANGELOG.md"
+    expected:
+      decision: ask
   - id: git-cliff-tag-ask
     command: "git-cliff --tag v1.0.0"
+    expected:
+      decision: ask
+  - id: git-cliff-tag-equals-ask
+    command: "git-cliff --tag=v1.0.0"
     expected:
       decision: ask
   - id: git-cliff-init-ask
