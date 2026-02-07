@@ -26,25 +26,41 @@ All package manager version checks (`--version`) and read-only commands (list, i
 
 Future enhancement: `--allow-package-install` flag could bypass this section for trusted workflows.
 
+### Django Shell Pipe Detection (resolved 2026-02-05)
+
+Dedicated extractor in `ai_judge/extract/django.rs` detects `echo`/`printf`/`cat` piped to `manage.py shell` or `shell_plus`. Code is extracted and routed to the AI judge for evaluation. Covered by 6+ golden test cases in `django.yaml`.
+
 ## Future Enhancements
 
-### 1. Django Shell Pipe Detection
+### 1. Pipeline Stage Argument Matching
 
-When Claude pipes Python code into Django shell:
-```bash
-echo "User.objects.all().delete()" | python manage.py shell
+The pipeline matcher (`StageMatcher`) only checks command names per stage, not arguments. This means `curl | python3 -c 'import json; ...'` (safe JSON processing) is denied identically to `curl | python3` (arbitrary remote code execution).
+
+To distinguish these, `StageMatcher` would need `flags` and `args` fields, and `matches_pipeline()` would need to inspect stage arguments. This would enable rules like:
+
+```yaml
+# Block curl | python3 (no inline flag = executing downloaded code)
+- id: curl-pipe-interpreter-no-inline
+  match:
+    pipeline:
+      stages:
+        - command: [curl, wget]
+        - command: [python, python3]
+          flags:
+            none_of: ["-c", "-e"]
+  decision: deny
 ```
 
-This bypasses command-level analysis. Should route to AI judge for code inspection.
+An alternative is to downgrade `wget-pipe-interpreter` from `deny` to `ask` for interpreter targets (keeping `deny` for shell targets), letting the AI judge evaluate the inline code.
 
 ### 2. Python File Execution Outside Working Directory
 
-Commands like `uv run python /tmp/script.py` or `python ../script.py` execute arbitrary code.
+Commands like `uv run python /tmp/script.py` or `python ../script.py` execute arbitrary code. The AI judge extractor (`ai_judge/extract/fs.rs`) validates paths (only allows cwd + `/tmp`), but the rules themselves don't flag these invocations -- they only come into play when `--ask-ai` is enabled.
 
 **Proposed mitigation**:
-- Allowlist scripts inside current working directory (trusted project files)
-- Route scripts outside cwd to AI judge for inspection
-- Default `manage.py` patterns already covered by Django allowlist
+- Add rules that flag Python script execution with paths outside cwd
+- Route to AI judge for inspection
+- `manage.py` patterns already covered by Django allowlist
 
 ### 3. Copy-Then-Execute Pattern
 
