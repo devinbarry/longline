@@ -6,3 +6,6 @@
 # Claude settings (user-specific)
 .claude/
 
+# Git worktrees
+.worktrees/
+
