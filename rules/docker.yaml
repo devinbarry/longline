@@ -64,6 +64,56 @@ rules:
     decision: ask
     reason: "Docker compose down with volume removal"
 
+  # docker compose down --rmi
+  - id: docker-compose-down-rmi
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["compose"]
+      flags:
+        all_of: ["down"]
+        any_of: ["--rmi"]
+    decision: ask
+    reason: "Docker compose down with image removal"
+
+  # docker-compose down --rmi (legacy)
+  - id: docker-compose-legacy-down-rmi
+    level: high
+    match:
+      command: docker-compose
+      args:
+        any_of: ["down"]
+      flags:
+        any_of: ["--rmi"]
+    decision: ask
+    reason: "Docker compose down with image removal"
+
+  # docker compose down --remove-orphans
+  - id: docker-compose-down-remove-orphans
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["compose"]
+      flags:
+        all_of: ["down"]
+        any_of: ["--remove-orphans"]
+    decision: ask
+    reason: "Docker compose down removing orphan containers"
+
+  # docker-compose down --remove-orphans (legacy)
+  - id: docker-compose-legacy-down-remove-orphans
+    level: high
+    match:
+      command: docker-compose
+      args:
+        any_of: ["down"]
+      flags:
+        any_of: ["--remove-orphans"]
+    decision: ask
+    reason: "Docker compose down removing orphan containers"
+
   # docker compose rm
   - id: docker-compose-rm
     level: high

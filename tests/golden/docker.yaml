@@ -273,7 +273,17 @@ tests:
       decision: ask
       rule_id: docker-network-prune
 
-  # Docker compose down with volumes (new)
+  # Docker compose down (new)
+  - id: docker-compose-down-rmi
+    command: "docker compose down --rmi all"
+    expected:
+      decision: ask
+      rule_id: docker-compose-down-rmi
+  - id: docker-compose-down-remove-orphans
+    command: "docker compose down --remove-orphans"
+    expected:
+      decision: ask
+      rule_id: docker-compose-down-remove-orphans
   - id: docker-compose-down-volumes
     command: "docker compose down -v"
     expected:
@@ -284,6 +294,16 @@ tests:
     expected:
       decision: ask
       rule_id: docker-compose-down-volumes
+  - id: docker-compose-legacy-down-rmi
+    command: "docker-compose down --rmi all"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-down-rmi
+  - id: docker-compose-legacy-down-remove-orphans
+    command: "docker-compose down --remove-orphans"
+    expected:
+      decision: ask
+      rule_id: docker-compose-legacy-down-remove-orphans
   - id: docker-compose-legacy-down-volumes
     command: "docker-compose down -v"
     expected:
