@@ -21,10 +21,10 @@ tests:
     expected:
       decision: deny
       rule_id: rm-recursive-root
-  - id: cd-and-ask
+  - id: cd-and-curl-allow
     command: "cd /tmp && curl http://example.com"
     expected:
-      decision: ask
+      decision: allow
 
   # && chains
   - id: and-safe-safe
@@ -117,10 +117,10 @@ tests:
     command: "echo start; ls && echo done"
     expected:
       decision: allow
-  - id: mixed-semi-and-ask
+  - id: mixed-semi-and-curl-allow
     command: "echo start; curl http://example.com && echo done"
     expected:
-      decision: ask
+      decision: allow
 
   # Subshell variations
   - id: subshell-safe
@@ -149,10 +149,10 @@ tests:
       decision: allow
 
   # Multiple non-allowlisted
-  - id: and-ask-ask
+  - id: and-curl-curl-allow
     command: "curl http://a.com && curl http://b.com"
     expected:
-      decision: ask
+      decision: allow
   - id: semi-ask-ask
     command: "rm foo; rm bar"
     expected:

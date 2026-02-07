@@ -97,8 +97,8 @@ tests:
       decision: ask
       rule_id: nc-netcat
 
-  # curl without upload flags is just ask (no matching rule, not allowlisted)
+  # curl without upload flags is allowed (curl is allowlisted, no unsafe flags)
   - id: curl-plain-get
     command: "curl http://example.com"
     expected:
-      decision: ask
+      decision: allow

@@ -22,7 +22,7 @@ tests:
   - id: safe-curl-download
     command: "curl -o output.tar.gz http://example.com/file.tar.gz"
     expected:
-      decision: ask
+      decision: allow
   - id: safe-pipe-grep
     command: "ls -la | grep pattern"
     expected:
@@ -95,7 +95,7 @@ tests:
     expected:
       decision: ask
       rule_id: tee-any
-  - id: pipe-mixed-safe-ask
+  - id: pipe-mixed-safe-allow
     command: "ls | curl http://example.com"
     expected:
-      decision: ask
+      decision: allow

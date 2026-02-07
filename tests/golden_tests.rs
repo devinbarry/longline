@@ -246,3 +246,13 @@ fn golden_dev_tools_python() {
 fn golden_django() {
     run_golden_suite("django.yaml");
 }
+
+#[test]
+fn golden_curl() {
+    run_golden_suite("curl.yaml");
+}
+
+#[test]
+fn golden_version_check() {
+    run_golden_suite("version-check.yaml");
+}

@@ -1,7 +1,9 @@
 # Network: shell injection, exfiltration, and environment exposure
 
 allowlists:
-  commands: []
+  commands:
+    # ── curl: read-only invocations (upload/method flags caught by rules) ──
+    - curl
 
 rules:
   # ============================================================
@@ -39,9 +41,20 @@ rules:
     match:
       command: curl
       flags:
-        any_of: ["-d", "--data", "-F", "--form", "--data-binary", "--data-urlencode", "-T", "--upload-file"]
+        any_of: ["-d", "--data", "--data-raw", "--data-binary", "--data-urlencode",
+                 "-F", "--form", "--json",
+                 "-T", "--upload-file"]
     decision: ask
     reason: "curl with data upload flags"
+
+  - id: curl-request-method
+    level: high
+    match:
+      command: curl
+      flags:
+        any_of: ["-X", "--request"]
+    decision: ask
+    reason: "curl with explicit HTTP method"
 
   - id: scp-upload
     level: high

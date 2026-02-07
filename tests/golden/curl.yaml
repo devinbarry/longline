@@ -1,0 +1,251 @@
+tests:
+  # ── Safe curl invocations (allow) ──────────────────────────────────
+
+  - id: curl-plain-get
+    command: "curl http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-silent-get
+    command: "curl -s http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-silent-show-error
+    command: "curl -sS http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-output-file
+    command: "curl -o output.txt http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-output-remote-name
+    command: "curl -O http://example.com/file.tar.gz"
+    expected:
+      decision: allow
+
+  - id: curl-follow-redirects
+    command: "curl -L http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-head-request-short
+    command: "curl -I http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-head-request-long
+    command: "curl --head http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-verbose
+    command: "curl -v http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-write-out
+    command: "curl -w '%{http_code}' http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-status-check-pattern
+    command: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/api/"
+    expected:
+      decision: allow
+
+  - id: curl-compressed
+    command: "curl --compressed http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-insecure-short
+    command: "curl -k http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-insecure-long
+    command: "curl --insecure http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-connect-timeout
+    command: "curl --connect-timeout 10 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-max-time-short
+    command: "curl -m 30 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-max-time-long
+    command: "curl --max-time 30 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-custom-header
+    command: "curl -H 'Accept: application/json' http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-user-agent
+    command: "curl -A 'MyAgent/1.0' http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-ipv4
+    command: "curl -4 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-ipv6
+    command: "curl -6 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-version
+    command: "curl --version"
+    expected:
+      decision: allow
+
+  - id: curl-combined-safe-flags
+    command: "curl -sL http://example.com/file.tar.gz -o /tmp/file.tar.gz"
+    expected:
+      decision: allow
+
+  - id: curl-localhost-json
+    command: "curl -s 'http://localhost:8000/api/sessions/?project=test&status=complete' -o /tmp/sessions.json"
+    expected:
+      decision: allow
+
+  - id: curl-silent-fail
+    command: "curl -f http://example.com/health"
+    expected:
+      decision: allow
+
+  - id: curl-retry
+    command: "curl --retry 3 http://example.com"
+    expected:
+      decision: allow
+
+  - id: curl-location-trusted
+    command: "curl --location-trusted http://example.com"
+    expected:
+      decision: allow
+
+  # ── Unsafe curl invocations: data upload (ask) ─────────────────────
+
+  - id: curl-data-short
+    command: "curl -d 'key=value' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-data-long
+    command: "curl --data 'secret=abc' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-data-raw
+    command: "curl --data-raw 'payload' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-data-binary
+    command: "curl --data-binary @file.txt http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-data-urlencode
+    command: "curl --data-urlencode 'name=value' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-form-short
+    command: "curl -F 'file=@data.txt' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-form-long
+    command: "curl --form 'file=@data.txt' http://example.com"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-json
+    command: "curl --json '{\"key\":\"val\"}' http://example.com/api"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-upload-file-short
+    command: "curl -T localfile.txt http://example.com/upload"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-upload-file-long
+    command: "curl --upload-file localfile.txt http://example.com/upload"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  # ── Unsafe curl invocations: explicit HTTP method (ask) ────────────
+
+  - id: curl-post-method
+    command: "curl -X POST http://example.com/api"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
+
+  - id: curl-put-method
+    command: "curl -X PUT http://example.com/api/1"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
+
+  - id: curl-patch-method
+    command: "curl -X PATCH http://example.com/api/1"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
+
+  - id: curl-delete-method
+    command: "curl -X DELETE http://example.com/api/1"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
+
+  - id: curl-request-long
+    command: "curl --request POST http://example.com/api"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
+
+  - id: curl-post-with-data
+    command: "curl -X POST -d 'data' http://example.com/api"
+    expected:
+      decision: ask
+    note: "Matches both curl-request-method and curl-upload-secrets"
+
+  # ── Combined safe flags with one unsafe flag (ask) ─────────────────
+
+  - id: curl-safe-flags-plus-data
+    command: "curl -s -L -H 'Accept: application/json' -d '{\"q\":\"test\"}' http://example.com/api"
+    expected:
+      decision: ask
+      rule_id: curl-upload-secrets
+
+  - id: curl-safe-flags-plus-method
+    command: "curl -s -o /dev/null -w '%{http_code}' -X DELETE http://example.com/api/1"
+    expected:
+      decision: ask
+      rule_id: curl-request-method
