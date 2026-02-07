@@ -30,6 +30,17 @@ pub fn evaluate_lenient(
     evaluate_with_prompt(config, prompt)
 }
 
+#[cfg(unix)]
+fn kill_process_group(pid: u32) {
+    if pid == 0 {
+        return;
+    }
+    // Ignore errors (process may have already exited).
+    unsafe {
+        libc::kill(-(pid as i32), libc::SIGKILL);
+    }
+}
+
 fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, String) {
     let parts: Vec<String> = config
         .command
@@ -43,39 +54,99 @@ fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, St
     }
 
     let timeout = std::time::Duration::from_secs(config.timeout);
-    let (tx, rx) = std::sync::mpsc::channel();
 
-    std::thread::spawn(move || {
-        let result = std::process::Command::new(&parts[0])
-            .args(&parts[1..])
-            .arg(&prompt)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .output();
-        let _ = tx.send(result);
-    });
+    let mut cmd = std::process::Command::new(&parts[0]);
+    cmd.args(&parts[1..])
+        .arg(&prompt)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 
-    match rx.recv_timeout(timeout) {
-        Ok(Ok(output)) => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            parse_response_with_reason(&stdout)
-        }
-        Ok(Err(e)) => {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
             let reason = format!("AI judge error: {e}");
             eprintln!("longline: ai-judge process error: {e}");
-            (Decision::Ask, reason)
+            return (Decision::Ask, reason);
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+    };
+
+    let child_pid = child.id();
+    let stdout = match child.stdout.take() {
+        Some(s) => s,
+        None => {
+            let reason = "AI judge error: failed to capture stdout".to_string();
+            eprintln!("longline: ai-judge failed to capture stdout");
+            return (Decision::Ask, reason);
+        }
+    };
+    let stderr = match child.stderr.take() {
+        Some(s) => s,
+        None => {
+            let reason = "AI judge error: failed to capture stderr".to_string();
+            eprintln!("longline: ai-judge failed to capture stderr");
+            return (Decision::Ask, reason);
+        }
+    };
+
+    let stdout_handle = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        let mut reader = stdout;
+        let _ = reader.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = Vec::new();
+        let mut reader = stderr;
+        let _ = reader.read_to_end(&mut buf);
+        buf
+    });
+
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => break,
+            Ok(None) => {}
+            Err(e) => {
+                let reason = format!("AI judge error: {e}");
+                eprintln!("longline: ai-judge process error: {e}");
+                #[cfg(unix)]
+                kill_process_group(child_pid);
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_handle.join();
+                let _ = stderr_handle.join();
+                return (Decision::Ask, reason);
+            }
+        }
+
+        if start.elapsed() >= timeout {
+            #[cfg(unix)]
+            kill_process_group(child_pid);
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = stdout_handle.join();
+            let _ = stderr_handle.join();
             let reason = format!("AI judge error: timed out after {}s", config.timeout);
             eprintln!("longline: ai-judge timed out after {}s", config.timeout);
-            (Decision::Ask, reason)
+            return (Decision::Ask, reason);
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            let reason = "AI judge error: thread error".to_string();
-            eprintln!("longline: ai-judge thread error");
-            (Decision::Ask, reason)
-        }
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
     }
+
+    let stdout = stdout_handle.join().unwrap_or_default();
+    let _stderr = stderr_handle.join().unwrap_or_default();
+    let stdout = String::from_utf8_lossy(&stdout);
+    parse_response_with_reason(&stdout)
 }
 
 #[cfg(test)]

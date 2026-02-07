@@ -392,6 +392,7 @@ dependencies = [
  "clap",
  "comfy-table",
  "glob-match",
+ "libc",
  "serde",
  "serde_json",
  "serde_yaml",

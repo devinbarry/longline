@@ -1,12 +1,36 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 fn longline_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join("debug")
         .join("longline")
+}
+
+fn test_home_dir() -> &'static PathBuf {
+    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    HOME.get_or_init(|| {
+        let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join("integration-home");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Ensure AI judge never invokes real `codex` in tests.
+        let config_dir = dir.join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let ai_judge_config = config_dir.join("ai-judge.yaml");
+        std::fs::write(
+            &ai_judge_config,
+            "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+        )
+        .unwrap();
+
+        dir
+    })
 }
 
 fn rules_path() -> String {
@@ -36,8 +60,10 @@ fn run_hook_with_config(tool_name: &str, command: &str, config: &str) -> (i32, S
         "cwd": "/tmp"
     });
 
+    let home = test_home_dir().to_string_lossy().to_string();
     let mut child = Command::new(longline_bin())
         .args(["--config", config])
+        .env("HOME", &home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -58,8 +84,10 @@ fn run_hook_with_config(tool_name: &str, command: &str, config: &str) -> (i32, S
 }
 
 fn run_subcommand(args: &[&str]) -> (i32, String, String) {
+    let home = test_home_dir().to_string_lossy().to_string();
     let child = Command::new(longline_bin())
         .args(args)
+        .env("HOME", &home)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -92,8 +120,10 @@ fn run_hook_with_flags(tool_name: &str, command: &str, extra_args: &[&str]) -> (
     let mut args = vec!["--config", &config];
     args.extend_from_slice(extra_args);
 
+    let home = test_home_dir().to_string_lossy().to_string();
     let mut child = Command::new(longline_bin())
         .args(&args)
+        .env("HOME", &home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -426,20 +456,14 @@ fn test_e2e_allow_emits_explicit_decision() {
 #[test]
 fn test_e2e_ask_ai_falls_back_on_missing_codex() {
     // python3 -c should be ask (not on allowlist).
-    // With --ask-ai, if codex isn't available, fallback to ask.
-    // If codex IS available, it may evaluate and return allow.
+    // With --ask-ai and a missing AI judge command, fallback to ask.
     let (code, stdout) = run_hook_with_flags("Bash", "python3 -c 'print(1)'", &["--ask-ai"]);
     assert_eq!(code, 0);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
-    // When codex is not installed, ai_judge falls back to ask.
-    // When codex IS installed, it evaluates the safe code and returns allow.
     let decision = parsed["hookSpecificOutput"]["permissionDecision"]
         .as_str()
         .unwrap();
-    assert!(
-        decision == "ask" || decision == "allow",
-        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
-    );
+    assert_eq!(decision, "ask");
 }
 
 #[test]
@@ -450,10 +474,7 @@ fn test_e2e_ask_ai_handles_uv_run_python_c() {
     let decision = parsed["hookSpecificOutput"]["permissionDecision"]
         .as_str()
         .unwrap();
-    assert!(
-        decision == "ask" || decision == "allow",
-        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
-    );
+    assert_eq!(decision, "ask");
 }
 
 #[test]
@@ -468,10 +489,7 @@ fn test_e2e_ask_ai_handles_django_shell_pipeline() {
     let decision = parsed["hookSpecificOutput"]["permissionDecision"]
         .as_str()
         .unwrap();
-    assert!(
-        decision == "ask" || decision == "allow",
-        "Should be ask (codex unavailable) or allow (codex evaluated safe code), got: {decision}"
-    );
+    assert_eq!(decision, "ask");
 }
 
 #[test]
