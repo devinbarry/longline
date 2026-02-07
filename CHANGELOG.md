@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-02-07
+
+
+### Added
+
+- add log rotation with 10-file retention
+- allowlist curl and add rules for unsafe flags
+- allow bare --version and -V on any command
+
+
+### Changed
+
+- update SECURITY.md with resolved items and future work
+
+
+### Fixed
+
+- kill judge subprocesses on timeout
+- log raw stdout/stderr on unparseable response
+
 ## [0.2.1] - 2026-02-07
 
 
@@ -21,6 +41,7 @@ All notable changes to this project will be documented in this file.
 - add .worktrees/ to gitignore
 - remove duplicate module declarations from main.rs
 - add implementation plan for duplicate test fix
+- release v0.2.1
 
 
 ### Fixed
