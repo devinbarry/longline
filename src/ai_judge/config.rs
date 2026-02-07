@@ -35,7 +35,7 @@ pub struct InterpreterTrigger {
 }
 
 fn default_command() -> String {
-    "codex exec".to_string()
+    "codex exec -m gpt-5.1-codex-mini -c model_reasoning_effort=medium".to_string()
 }
 
 fn default_timeout() -> u64 {
@@ -139,7 +139,10 @@ triggers:
     fn test_config_defaults() {
         let yaml = "{}";
         let config: AiJudgeConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.command, "codex exec");
+        assert_eq!(
+            config.command,
+            "codex exec -m gpt-5.1-codex-mini -c model_reasoning_effort=medium"
+        );
         assert_eq!(config.timeout, 30);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
@@ -153,7 +156,10 @@ triggers:
             .join("ai-judge-config")
             .join("missing.yaml");
         let config = load_config_from_path(&path);
-        assert_eq!(config.command, "codex exec");
+        assert_eq!(
+            config.command,
+            "codex exec -m gpt-5.1-codex-mini -c model_reasoning_effort=medium"
+        );
         assert_eq!(config.timeout, 30);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
@@ -201,7 +207,10 @@ triggers:
         std::fs::write(&path, "timeout: [not a number]").unwrap();
 
         let config = load_config_from_path(&path);
-        assert_eq!(config.command, "codex exec");
+        assert_eq!(
+            config.command,
+            "codex exec -m gpt-5.1-codex-mini -c model_reasoning_effort=medium"
+        );
         assert_eq!(config.timeout, 30);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
