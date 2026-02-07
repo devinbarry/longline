@@ -3,11 +3,11 @@ use clap::Subcommand;
 use std::io::Read;
 use std::path::PathBuf;
 
-use crate::ai_judge;
 use crate::logger;
-use crate::parser;
-use crate::policy;
-use crate::types::{Decision, HookInput, HookOutput, PolicyResult};
+use longline::ai_judge;
+use longline::parser;
+use longline::policy;
+use longline::types::{Decision, HookInput, HookOutput, PolicyResult};
 
 #[derive(ClapParser)]
 #[command(name = "longline", version, about = "Safety hook for Claude Code")]

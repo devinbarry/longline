@@ -4,7 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::types::Decision;
+use longline::types::Decision;
 
 #[derive(Debug, Serialize)]
 pub struct LogEntry {

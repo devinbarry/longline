@@ -3,8 +3,8 @@ use comfy_table::{
     Table,
 };
 
-use crate::policy;
-use crate::types::Decision;
+use longline::policy;
+use longline::types::Decision;
 
 /// Map a Decision to its display color.
 fn decision_color(d: Decision) -> Color {
