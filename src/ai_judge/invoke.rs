@@ -144,9 +144,17 @@ fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, St
     }
 
     let stdout = stdout_handle.join().unwrap_or_default();
-    let _stderr = stderr_handle.join().unwrap_or_default();
+    let stderr = stderr_handle.join().unwrap_or_default();
     let stdout = String::from_utf8_lossy(&stdout);
-    parse_response_with_reason(&stdout)
+    let result = parse_response_with_reason(&stdout);
+    if result.1.contains("unparseable") {
+        let stderr = String::from_utf8_lossy(&stderr);
+        eprintln!(
+            "longline: ai-judge unparseable response\n  stdout: {:?}\n  stderr: {:?}",
+            stdout, stderr
+        );
+    }
+    result
 }
 
 #[cfg(test)]
