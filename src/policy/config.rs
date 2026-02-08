@@ -197,11 +197,12 @@ pub struct ProjectConfig {
 }
 
 /// Walk up from `cwd` to find the project root.
-/// Looks for `.git` or `.claude` directory.
+/// Looks for `.git` (directory or worktree file) or `.claude` directory.
 pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
     let mut current = cwd.to_path_buf();
     loop {
-        if current.join(".git").is_dir() || current.join(".claude").is_dir() {
+        // .git can be a directory (normal repo) or a file (worktree)
+        if current.join(".git").exists() || current.join(".claude").is_dir() {
             return Some(current);
         }
         if !current.pop() {
@@ -735,6 +736,24 @@ disable_rules:
         let sub = dir.path().join("a").join("b").join("c");
         std::fs::create_dir_all(&sub).unwrap();
         std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+
+        let result = find_project_root(&sub);
+        assert_eq!(result, Some(dir.path().to_path_buf()));
+    }
+
+    #[test]
+    fn test_find_project_root_with_git_worktree_file() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let sub = dir.path().join("src");
+        std::fs::create_dir_all(&sub).unwrap();
+        // In a worktree, .git is a file, not a directory
+        std::fs::write(
+            dir.path().join(".git"),
+            "gitdir: /some/main/repo/.git/worktrees/branch",
+        )
+        .unwrap();
 
         let result = find_project_root(&sub);
         assert_eq!(result, Some(dir.path().to_path_buf()));
