@@ -754,3 +754,21 @@ fn test_e2e_project_config_no_file_unchanged() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
+
+#[test]
+fn test_e2e_project_config_unknown_field_exits_2() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    // "allowlist" is a typo for "allowlists"
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "allowlist:\n  commands:\n    - docker\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, _stdout) = run_hook_with_cwd("Bash", "ls -la", &cwd);
+    assert_eq!(code, 2, "Malformed project config should exit with code 2");
+}

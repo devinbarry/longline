@@ -162,8 +162,15 @@ fn run_hook(
 
     // Load and merge per-project config
     if let Some(ref cwd) = hook_input.cwd {
-        if let Some(project_config) = policy::load_project_config(std::path::Path::new(cwd)) {
-            policy::merge_project_config(&mut rules_config, project_config);
+        match policy::load_project_config(std::path::Path::new(cwd)) {
+            Ok(Some(project_config)) => {
+                policy::merge_project_config(&mut rules_config, project_config);
+            }
+            Ok(None) => {} // No project config file
+            Err(e) => {
+                eprintln!("longline: {e}");
+                return 2;
+            }
         }
     }
 

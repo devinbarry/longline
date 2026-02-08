@@ -189,6 +189,7 @@ impl StringOrList {
 /// Per-project config loaded from `.claude/longline.yaml`.
 /// All fields are optional; only specified fields override the global config.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub override_safety_level: Option<SafetyLevel>,
     pub allowlists: Option<Allowlists>,
@@ -213,20 +214,20 @@ pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
 
 /// Load project config from `.claude/longline.yaml` if it exists.
 /// Walks up from `cwd` to find the project root first.
-pub fn load_project_config(cwd: &Path) -> Option<ProjectConfig> {
-    let root = find_project_root(cwd)?;
+/// Returns Ok(None) if no project config file exists, Err on parse failure.
+pub fn load_project_config(cwd: &Path) -> Result<Option<ProjectConfig>, String> {
+    let root = match find_project_root(cwd) {
+        Some(r) => r,
+        None => return Ok(None),
+    };
     let config_path = root.join(".claude").join("longline.yaml");
-    let content = fs::read_to_string(&config_path).ok()?;
-    match serde_yaml::from_str(&content) {
-        Ok(config) => Some(config),
-        Err(e) => {
-            eprintln!(
-                "longline: warning: failed to parse {}: {e}",
-                config_path.display()
-            );
-            None
-        }
-    }
+    let content = match fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return Ok(None), // File doesn't exist
+    };
+    let config: ProjectConfig = serde_yaml::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
+    Ok(Some(config))
 }
 
 /// Merge a project config into a global config (mutates in place).
@@ -795,7 +796,7 @@ disable_rules:
         )
         .unwrap();
 
-        let result = load_project_config(dir.path());
+        let result = load_project_config(dir.path()).unwrap();
         assert!(result.is_some());
         let config = result.unwrap();
         assert_eq!(config.override_safety_level, Some(SafetyLevel::Strict));
@@ -808,7 +809,7 @@ disable_rules:
         let dir = TempDir::new().unwrap();
         std::fs::create_dir_all(dir.path().join(".git")).unwrap();
 
-        let result = load_project_config(dir.path());
+        let result = load_project_config(dir.path()).unwrap();
         assert!(result.is_none());
     }
 
@@ -829,11 +830,35 @@ disable_rules:
         let sub = dir.path().join("src").join("deep");
         std::fs::create_dir_all(&sub).unwrap();
 
-        let result = load_project_config(&sub);
+        let result = load_project_config(&sub).unwrap();
         assert!(result.is_some());
         assert_eq!(
             result.unwrap().override_safety_level,
             Some(SafetyLevel::Critical)
+        );
+    }
+
+    #[test]
+    fn test_load_project_config_rejects_unknown_fields() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+        let claude_dir = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        // "allowlist" is a typo for "allowlists"
+        std::fs::write(
+            claude_dir.join("longline.yaml"),
+            "allowlist:\n  commands:\n    - docker\n",
+        )
+        .unwrap();
+
+        let result = load_project_config(dir.path());
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.contains("unknown field"),
+            "Error should mention unknown field: {err}"
         );
     }
 
