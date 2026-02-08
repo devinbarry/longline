@@ -14,6 +14,8 @@ pub struct ManifestConfig {
     pub default_decision: Decision,
     #[serde(default = "default_safety_level")]
     pub safety_level: SafetyLevel,
+    #[serde(default)]
+    pub trust_level: TrustLevel,
     pub include: Vec<String>,
 }
 
@@ -64,6 +66,8 @@ pub struct RulesConfig {
     #[serde(default = "default_safety_level")]
     pub safety_level: SafetyLevel,
     #[serde(default)]
+    pub trust_level: TrustLevel,
+    #[serde(default)]
     pub allowlists: Allowlists,
     #[serde(default)]
     pub rules: Vec<Rule>,
@@ -95,10 +99,70 @@ impl std::fmt::Display for SafetyLevel {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TrustLevel {
+    Minimal,
+    #[default]
+    Standard,
+    Full,
+}
+
+impl std::fmt::Display for TrustLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(match self {
+            TrustLevel::Minimal => "minimal",
+            TrustLevel::Standard => "standard",
+            TrustLevel::Full => "full",
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AllowlistEntry {
+    pub command: String,
+    pub trust: TrustLevel,
+}
+
+/// Support deserializing AllowlistEntry from both a bare string and a tagged object.
+/// Bare string: `"git status"` -> AllowlistEntry { command: "git status", trust: Standard }
+/// Tagged:      `{ command: "git status", trust: minimal }` -> AllowlistEntry { command: "git status", trust: Minimal }
+impl<'de> serde::Deserialize<'de> for AllowlistEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Tagged {
+            command: String,
+            #[serde(default)]
+            trust: TrustLevel,
+        }
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum StringOrTagged {
+            Bare(String),
+            Tagged(Tagged),
+        }
+
+        match StringOrTagged::deserialize(deserializer)? {
+            StringOrTagged::Bare(s) => Ok(AllowlistEntry {
+                command: s,
+                trust: TrustLevel::default(),
+            }),
+            StringOrTagged::Tagged(t) => Ok(AllowlistEntry {
+                command: t.command,
+                trust: t.trust,
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Default, Deserialize)]
 pub struct Allowlists {
     #[serde(default)]
-    pub commands: Vec<String>,
+    pub commands: Vec<AllowlistEntry>,
     #[serde(default)]
     #[allow(dead_code)]
     pub paths: Vec<String>,
@@ -192,6 +256,7 @@ impl StringOrList {
 #[serde(deny_unknown_fields)]
 pub struct ProjectConfig {
     pub override_safety_level: Option<SafetyLevel>,
+    pub override_trust_level: Option<TrustLevel>,
     pub allowlists: Option<Allowlists>,
     pub rules: Option<Vec<Rule>>,
     pub disable_rules: Option<Vec<String>>,
@@ -240,6 +305,10 @@ pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
         config.safety_level = level;
     }
 
+    if let Some(level) = project.override_trust_level {
+        config.trust_level = level;
+    }
+
     if let Some(allowlists) = project.allowlists {
         config.allowlists.commands.extend(allowlists.commands);
         config.allowlists.paths.extend(allowlists.paths);
@@ -275,7 +344,7 @@ fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, Str
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
 
-    let mut merged_allowlists: Vec<String> = Vec::new();
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
     let mut merged_rules: Vec<Rule> = Vec::new();
 
     for file_name in &manifest.include {
@@ -294,6 +363,7 @@ fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, Str
         version: manifest.version,
         default_decision: manifest.default_decision,
         safety_level: manifest.safety_level,
+        trust_level: manifest.trust_level,
         allowlists: Allowlists {
             commands: merged_allowlists,
             paths: Vec::new(),
@@ -337,7 +407,7 @@ fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<Loaded
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
 
-    let mut merged_allowlists: Vec<String> = Vec::new();
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
     let mut merged_rules: Vec<Rule> = Vec::new();
     let mut files: Vec<LoadedFileInfo> = Vec::new();
 
@@ -364,6 +434,7 @@ fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<Loaded
             version: manifest.version,
             default_decision: manifest.default_decision,
             safety_level: manifest.safety_level,
+            trust_level: manifest.trust_level,
             allowlists: Allowlists {
                 commands: merged_allowlists,
                 paths: Vec::new(),
@@ -868,11 +939,13 @@ disable_rules:
             version: 1,
             default_decision: Decision::Ask,
             safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
             allowlists: Allowlists::default(),
             rules: vec![],
         };
         let project = ProjectConfig {
             override_safety_level: Some(SafetyLevel::Strict),
+            override_trust_level: None,
             allowlists: None,
             rules: None,
             disable_rules: None,
@@ -887,16 +960,24 @@ disable_rules:
             version: 1,
             default_decision: Decision::Ask,
             safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
             allowlists: Allowlists {
-                commands: vec!["ls".to_string()],
+                commands: vec![AllowlistEntry {
+                    command: "ls".to_string(),
+                    trust: TrustLevel::Standard,
+                }],
                 paths: vec![],
             },
             rules: vec![],
         };
         let project = ProjectConfig {
             override_safety_level: None,
+            override_trust_level: None,
             allowlists: Some(Allowlists {
-                commands: vec!["docker compose".to_string()],
+                commands: vec![AllowlistEntry {
+                    command: "docker compose".to_string(),
+                    trust: TrustLevel::Standard,
+                }],
                 paths: vec![],
             }),
             rules: None,
@@ -904,11 +985,12 @@ disable_rules:
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands.len(), 2);
-        assert!(config.allowlists.commands.contains(&"ls".to_string()));
+        assert!(config.allowlists.commands.iter().any(|e| e.command == "ls"));
         assert!(config
             .allowlists
             .commands
-            .contains(&"docker compose".to_string()));
+            .iter()
+            .any(|e| e.command == "docker compose"));
     }
 
     #[test]
@@ -917,6 +999,7 @@ disable_rules:
             version: 1,
             default_decision: Decision::Ask,
             safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
             allowlists: Allowlists::default(),
             rules: vec![
                 Rule {
@@ -945,6 +1028,7 @@ disable_rules:
         };
         let project = ProjectConfig {
             override_safety_level: None,
+            override_trust_level: None,
             allowlists: None,
             rules: None,
             disable_rules: Some(vec!["rule-a".to_string()]),
@@ -960,6 +1044,7 @@ disable_rules:
             version: 1,
             default_decision: Decision::Ask,
             safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
             allowlists: Allowlists::default(),
             rules: vec![],
         };
@@ -984,14 +1069,19 @@ rules:
             version: 1,
             default_decision: Decision::Ask,
             safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
             allowlists: Allowlists {
-                commands: vec!["ls".to_string()],
+                commands: vec![AllowlistEntry {
+                    command: "ls".to_string(),
+                    trust: TrustLevel::Standard,
+                }],
                 paths: vec![],
             },
             rules: vec![],
         };
         let project = ProjectConfig {
             override_safety_level: None,
+            override_trust_level: None,
             allowlists: None,
             rules: None,
             disable_rules: None,
@@ -999,5 +1089,59 @@ rules:
         merge_project_config(&mut config, project);
         assert_eq!(config.safety_level, SafetyLevel::High);
         assert_eq!(config.allowlists.commands.len(), 1);
+    }
+
+    #[test]
+    fn test_trust_level_ordering() {
+        assert!(TrustLevel::Minimal < TrustLevel::Standard);
+        assert!(TrustLevel::Standard < TrustLevel::Full);
+        assert!(TrustLevel::Minimal < TrustLevel::Full);
+    }
+
+    #[test]
+    fn test_trust_level_deserialize() {
+        let level: TrustLevel = serde_yaml::from_str("minimal").unwrap();
+        assert_eq!(level, TrustLevel::Minimal);
+        let level: TrustLevel = serde_yaml::from_str("standard").unwrap();
+        assert_eq!(level, TrustLevel::Standard);
+        let level: TrustLevel = serde_yaml::from_str("full").unwrap();
+        assert_eq!(level, TrustLevel::Full);
+    }
+
+    #[test]
+    fn test_allowlist_entry_deserialize_tagged() {
+        let yaml = "command: \"git status\"\ntrust: minimal\n";
+        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.command, "git status");
+        assert_eq!(entry.trust, TrustLevel::Minimal);
+    }
+
+    #[test]
+    fn test_allowlist_entry_deserialize_bare_string() {
+        let entry: AllowlistEntry = serde_yaml::from_str("\"git status\"").unwrap();
+        assert_eq!(entry.command, "git status");
+        assert_eq!(entry.trust, TrustLevel::Standard);
+    }
+
+    #[test]
+    fn test_allowlist_entry_deserialize_tagged_default_trust() {
+        let yaml = "command: \"ls\"\n";
+        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.command, "ls");
+        assert_eq!(entry.trust, TrustLevel::Standard);
+    }
+
+    #[test]
+    fn test_rules_config_trust_level_default() {
+        let yaml = "version: 1\nallowlists:\n  commands: []\nrules: []\n";
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.trust_level, TrustLevel::Standard);
+    }
+
+    #[test]
+    fn test_rules_config_trust_level_explicit() {
+        let yaml = "version: 1\ntrust_level: minimal\nallowlists:\n  commands: []\nrules: []\n";
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.trust_level, TrustLevel::Minimal);
     }
 }

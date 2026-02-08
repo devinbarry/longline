@@ -16,6 +16,10 @@ struct Cli {
     #[arg(short, long, value_name = "FILE", global = true)]
     config: Option<PathBuf>,
 
+    /// Override trust level (minimal, standard, full)
+    #[arg(long, value_name = "LEVEL", global = true)]
+    trust_level: Option<TrustLevelArg>,
+
     /// Downgrade deny decisions to ask (hook mode only)
     #[arg(long)]
     ask_on_deny: bool,
@@ -30,6 +34,23 @@ struct Cli {
 
     #[command(subcommand)]
     command: Option<Commands>,
+}
+
+#[derive(Clone, clap::ValueEnum)]
+enum TrustLevelArg {
+    Minimal,
+    Standard,
+    Full,
+}
+
+impl TrustLevelArg {
+    fn to_trust_level(&self) -> policy::TrustLevel {
+        match self {
+            TrustLevelArg::Minimal => policy::TrustLevel::Minimal,
+            TrustLevelArg::Standard => policy::TrustLevel::Standard,
+            TrustLevelArg::Full => policy::TrustLevel::Full,
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -103,18 +124,23 @@ pub fn run() -> i32 {
     // Handle Files command early (needs path before loading)
     if let Some(Commands::Files) = &cli.command {
         let config_path = cli.config.clone().unwrap_or_else(default_config_path);
-        return run_files(&config_path);
+        return run_files(&config_path, cli.trust_level.as_ref());
     }
 
     // Load rules config for other commands
     let config_path = cli.config.unwrap_or_else(default_config_path);
-    let rules_config = match policy::load_rules(&config_path) {
+    let mut rules_config = match policy::load_rules(&config_path) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("longline: {e}");
             return 2;
         }
     };
+
+    // Apply CLI trust level override
+    if let Some(ref level) = cli.trust_level {
+        rules_config.trust_level = level.to_trust_level();
+    }
 
     match cli.command {
         Some(Commands::Check { file, filter }) => run_check(&rules_config, file, filter),
@@ -445,14 +471,14 @@ fn run_rules(
     }
 
     println!(
-        "Safety level: {} | Default decision: {}",
-        config.safety_level, config.default_decision
+        "Safety level: {} | Trust level: {} | Default decision: {}",
+        config.safety_level, config.trust_level, config.default_decision
     );
 
     0
 }
 
-fn run_files(config_path: &std::path::Path) -> i32 {
+fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelArg>) -> i32 {
     let loaded = match policy::load_rules_with_info(config_path) {
         Ok(c) => c,
         Err(e) => {
@@ -466,7 +492,14 @@ fn run_files(config_path: &std::path::Path) -> i32 {
     } else {
         println!("Config: {}", config_path.display());
     }
-    println!("Safety level: {}", loaded.config.safety_level);
+    let trust_level = match trust_override {
+        Some(level) => level.to_trust_level(),
+        None => loaded.config.trust_level,
+    };
+    println!(
+        "Safety level: {} | Trust level: {}",
+        loaded.config.safety_level, trust_level
+    );
     println!();
 
     if loaded.is_manifest {

@@ -105,7 +105,8 @@ fn args_match_prefix(required_args: &[&str], argv: &[String]) -> bool {
 /// Find the matching allowlist entry for a SimpleCommand.
 /// Entries like "git status" match command name + required args.
 /// Bare entries like "ls" match any invocation of that command.
-/// Returns the matching entry string, or None if no match.
+/// Entries with a trust level above the config's trust_level are skipped.
+/// Returns the matching command string, or None if no match.
 pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) -> Option<&'a str> {
     let cmd_name = match &cmd.name {
         Some(n) => n.as_str(),
@@ -119,7 +120,12 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
     };
 
     for entry in &config.allowlists.commands {
-        let parts: Vec<&str> = entry.split_whitespace().collect();
+        // Skip entries that require a higher trust level than configured
+        if entry.trust > config.trust_level {
+            continue;
+        }
+
+        let parts: Vec<&str> = entry.command.split_whitespace().collect();
         if parts.is_empty() {
             continue;
         }
@@ -128,12 +134,12 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
         }
         if parts.len() == 1 {
             // Bare command name matches any invocation
-            return Some(entry);
+            return Some(&entry.command);
         }
         // Multi-word entry: required args must match as ordered prefix
         let required_args = &parts[1..];
         if args_match_prefix(required_args, argv.as_ref()) {
-            return Some(entry);
+            return Some(&entry.command);
         }
     }
     None
@@ -318,8 +324,12 @@ mod tests {
             version: 1,
             default_decision: crate::types::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::default(),
             allowlists: crate::policy::Allowlists {
-                commands: vec!["git status".to_string()],
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git status".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                }],
                 paths: vec![],
             },
             rules: vec![],
@@ -335,8 +345,12 @@ mod tests {
             version: 1,
             default_decision: crate::types::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::default(),
             allowlists: crate::policy::Allowlists {
-                commands: vec!["git status".to_string()],
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git status".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                }],
                 paths: vec![],
             },
             rules: vec![],

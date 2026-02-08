@@ -186,31 +186,48 @@ pub fn check_table(rows: &[(Decision, String, String)]) -> Table {
     table
 }
 
-/// Build a table showing all allowlisted commands.
-pub fn allowlist_table(commands: &[String]) -> Table {
+/// Map a TrustLevel to its display color.
+fn trust_color(t: policy::TrustLevel) -> Color {
+    match t {
+        policy::TrustLevel::Minimal => Color::Cyan,
+        policy::TrustLevel::Standard => Color::Green,
+        policy::TrustLevel::Full => Color::Yellow,
+    }
+}
+
+/// Build a table showing all allowlisted commands with trust level.
+pub fn allowlist_table(commands: &[policy::AllowlistEntry]) -> Table {
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(vec![
-            Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold)
+            Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold),
+            Cell::new("TRUST").add_attribute(Attribute::Bold),
         ]);
 
-    for cmd in commands {
-        table.add_row(vec![Cell::new(cmd).fg(Color::Green)]);
+    for entry in commands {
+        table.add_row(vec![
+            Cell::new(&entry.command).fg(Color::Green),
+            Cell::new(entry.trust).fg(trust_color(entry.trust)),
+        ]);
     }
 
     table
 }
 
 /// Print allowlist summary (compact, for non-allow-filter views).
-pub fn print_allowlist_summary(commands: &[String]) {
+pub fn print_allowlist_summary(commands: &[policy::AllowlistEntry]) {
     if commands.is_empty() {
         println!("Allowlist: (none)");
         return;
     }
-    let display: Vec<&str> = commands.iter().take(10).map(|s| s.as_str()).collect();
+    let display: Vec<&str> = commands
+        .iter()
+        .take(10)
+        .map(|e| e.command.as_str())
+        .collect();
     let suffix = if commands.len() > 10 {
         format!(", ... ({} total)", commands.len())
     } else {
