@@ -186,6 +186,17 @@ impl StringOrList {
     }
 }
 
+/// Per-project config loaded from `.claude/longline.yaml`.
+/// All fields are optional; only specified fields override the global config.
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Used in later tasks when wired into CLI
+pub struct ProjectConfig {
+    pub override_safety_level: Option<SafetyLevel>,
+    pub allowlists: Option<Allowlists>,
+    pub rules: Option<Vec<Rule>>,
+    pub disable_rules: Option<Vec<String>>,
+}
+
 /// Load rules from a YAML file (manifest or monolithic).
 pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
@@ -611,5 +622,53 @@ rules: []
         assert_eq!(loaded.files[0].name, "core.yaml");
         assert_eq!(loaded.files[0].allowlist_count, 1);
         assert_eq!(loaded.files[0].rule_count, 0);
+    }
+
+    #[test]
+    fn test_project_config_all_fields() {
+        let yaml = r#"
+override_safety_level: strict
+
+allowlists:
+  commands:
+    - "docker compose"
+
+rules:
+  - id: project-allow-docker-build
+    level: high
+    match:
+      command: docker
+      args:
+        any_of: ["build"]
+    decision: allow
+    reason: "Docker builds are routine in this project"
+
+disable_rules:
+  - npm-install
+  - npx-run
+"#;
+        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.override_safety_level, Some(SafetyLevel::Strict));
+        assert_eq!(config.allowlists.as_ref().unwrap().commands.len(), 1);
+        assert_eq!(config.rules.as_ref().unwrap().len(), 1);
+        assert_eq!(config.disable_rules.as_ref().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_project_config_empty() {
+        let yaml = "{}";
+        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        assert!(config.override_safety_level.is_none());
+        assert!(config.allowlists.is_none());
+        assert!(config.rules.is_none());
+        assert!(config.disable_rules.is_none());
+    }
+
+    #[test]
+    fn test_project_config_partial() {
+        let yaml = "override_safety_level: critical\n";
+        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.override_safety_level, Some(SafetyLevel::Critical));
+        assert!(config.allowlists.is_none());
     }
 }
