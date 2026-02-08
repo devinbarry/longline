@@ -212,6 +212,25 @@ pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Load project config from `.claude/longline.yaml` if it exists.
+/// Walks up from `cwd` to find the project root first.
+#[allow(dead_code)] // Used in later tasks when wired into CLI
+pub fn load_project_config(cwd: &Path) -> Option<ProjectConfig> {
+    let root = find_project_root(cwd)?;
+    let config_path = root.join(".claude").join("longline.yaml");
+    let content = fs::read_to_string(&config_path).ok()?;
+    match serde_yaml::from_str(&content) {
+        Ok(config) => Some(config),
+        Err(e) => {
+            eprintln!(
+                "longline: warning: failed to parse {}: {e}",
+                config_path.display()
+            );
+            None
+        }
+    }
+}
+
 /// Load rules from a YAML file (manifest or monolithic).
 pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
@@ -720,5 +739,61 @@ disable_rules:
         let dir = TempDir::new().unwrap();
         let result = find_project_root(dir.path());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_project_config_found() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+        let claude_dir = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::write(
+            claude_dir.join("longline.yaml"),
+            "override_safety_level: strict\n",
+        )
+        .unwrap();
+
+        let result = load_project_config(dir.path());
+        assert!(result.is_some());
+        let config = result.unwrap();
+        assert_eq!(config.override_safety_level, Some(SafetyLevel::Strict));
+    }
+
+    #[test]
+    fn test_load_project_config_not_found() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+
+        let result = load_project_config(dir.path());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_project_config_walks_up() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+        let claude_dir = dir.path().join(".claude");
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::write(
+            claude_dir.join("longline.yaml"),
+            "override_safety_level: critical\n",
+        )
+        .unwrap();
+
+        let sub = dir.path().join("src").join("deep");
+        std::fs::create_dir_all(&sub).unwrap();
+
+        let result = load_project_config(&sub);
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap().override_safety_level,
+            Some(SafetyLevel::Critical)
+        );
     }
 }
