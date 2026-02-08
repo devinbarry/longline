@@ -772,3 +772,82 @@ fn test_e2e_project_config_unknown_field_exits_2() {
     let (code, _stdout) = run_hook_with_cwd("Bash", "ls -la", &cwd);
     assert_eq!(code, 2, "Malformed project config should exit with code 2");
 }
+
+#[test]
+fn test_e2e_trust_level_minimal_restricts_allowlist() {
+    let (code, stdout) = run_hook_with_flags(
+        "Bash",
+        "git push origin main",
+        &["--trust-level", "minimal"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "git push should ask at minimal trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_trust_level_minimal_allows_readonly() {
+    let (code, stdout) = run_hook_with_flags("Bash", "ls -la", &["--trust-level", "minimal"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "ls should be allowed at minimal trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_trust_level_full_allows_full_tier() {
+    let (code, stdout) = run_hook_with_flags("Bash", "git gc", &["--trust-level", "full"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "git gc should be allowed at full trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_project_config_overrides_trust_level() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_trust_level: minimal\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "git commit -m 'test'", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "git commit should ask at minimal trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_files_shows_trust_level() {
+    let (code, stdout, _) = run_subcommand(&["files", "--config", &rules_path()]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Trust level:"),
+        "Should show trust level: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_rules_shows_trust_level() {
+    let (code, stdout, _) = run_subcommand(&["rules", "--config", &rules_path()]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Trust level:"),
+        "Should show trust level: {stdout}"
+    );
+}
