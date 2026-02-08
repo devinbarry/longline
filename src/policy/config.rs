@@ -231,6 +231,31 @@ pub fn load_project_config(cwd: &Path) -> Option<ProjectConfig> {
     }
 }
 
+/// Merge a project config into a global config (mutates in place).
+/// - override_safety_level replaces safety_level
+/// - allowlists are appended
+/// - rules are appended
+/// - disable_rules filters out matching rule IDs
+#[allow(dead_code)] // Used in later tasks when wired into CLI
+pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
+    if let Some(level) = project.override_safety_level {
+        config.safety_level = level;
+    }
+
+    if let Some(allowlists) = project.allowlists {
+        config.allowlists.commands.extend(allowlists.commands);
+        config.allowlists.paths.extend(allowlists.paths);
+    }
+
+    if let Some(disable) = project.disable_rules {
+        config.rules.retain(|r| !disable.contains(&r.id));
+    }
+
+    if let Some(rules) = project.rules {
+        config.rules.extend(rules);
+    }
+}
+
 /// Load rules from a YAML file (manifest or monolithic).
 pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
@@ -795,5 +820,144 @@ disable_rules:
             result.unwrap().override_safety_level,
             Some(SafetyLevel::Critical)
         );
+    }
+
+    #[test]
+    fn test_merge_project_config_safety_level() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            allowlists: Allowlists::default(),
+            rules: vec![],
+        };
+        let project = ProjectConfig {
+            override_safety_level: Some(SafetyLevel::Strict),
+            allowlists: None,
+            rules: None,
+            disable_rules: None,
+        };
+        merge_project_config(&mut config, project);
+        assert_eq!(config.safety_level, SafetyLevel::Strict);
+    }
+
+    #[test]
+    fn test_merge_project_config_allowlists() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            allowlists: Allowlists {
+                commands: vec!["ls".to_string()],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let project = ProjectConfig {
+            override_safety_level: None,
+            allowlists: Some(Allowlists {
+                commands: vec!["docker compose".to_string()],
+                paths: vec![],
+            }),
+            rules: None,
+            disable_rules: None,
+        };
+        merge_project_config(&mut config, project);
+        assert_eq!(config.allowlists.commands.len(), 2);
+        assert!(config.allowlists.commands.contains(&"ls".to_string()));
+        assert!(config
+            .allowlists
+            .commands
+            .contains(&"docker compose".to_string()));
+    }
+
+    #[test]
+    fn test_merge_project_config_disable_rules() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            allowlists: Allowlists::default(),
+            rules: vec![
+                Rule {
+                    id: "rule-a".to_string(),
+                    level: SafetyLevel::High,
+                    matcher: Matcher::Command {
+                        command: StringOrList::Single("rm".to_string()),
+                        flags: None,
+                        args: None,
+                    },
+                    decision: Decision::Deny,
+                    reason: "test".to_string(),
+                },
+                Rule {
+                    id: "rule-b".to_string(),
+                    level: SafetyLevel::High,
+                    matcher: Matcher::Command {
+                        command: StringOrList::Single("chmod".to_string()),
+                        flags: None,
+                        args: None,
+                    },
+                    decision: Decision::Ask,
+                    reason: "test".to_string(),
+                },
+            ],
+        };
+        let project = ProjectConfig {
+            override_safety_level: None,
+            allowlists: None,
+            rules: None,
+            disable_rules: Some(vec!["rule-a".to_string()]),
+        };
+        merge_project_config(&mut config, project);
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "rule-b");
+    }
+
+    #[test]
+    fn test_merge_project_config_adds_rules() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            allowlists: Allowlists::default(),
+            rules: vec![],
+        };
+        let project_yaml = r#"
+rules:
+  - id: project-rule
+    level: high
+    match:
+      command: docker
+    decision: allow
+    reason: "Project allows docker"
+"#;
+        let project: ProjectConfig = serde_yaml::from_str(project_yaml).unwrap();
+        merge_project_config(&mut config, project);
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "project-rule");
+    }
+
+    #[test]
+    fn test_merge_project_config_empty_is_noop() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            allowlists: Allowlists {
+                commands: vec!["ls".to_string()],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let project = ProjectConfig {
+            override_safety_level: None,
+            allowlists: None,
+            rules: None,
+            disable_rules: None,
+        };
+        merge_project_config(&mut config, project);
+        assert_eq!(config.safety_level, SafetyLevel::High);
+        assert_eq!(config.allowlists.commands.len(), 1);
     }
 }
