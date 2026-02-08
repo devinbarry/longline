@@ -197,6 +197,21 @@ pub struct ProjectConfig {
     pub disable_rules: Option<Vec<String>>,
 }
 
+/// Walk up from `cwd` to find the project root.
+/// Looks for `.git` or `.claude` directory.
+#[allow(dead_code)] // Used in later tasks when wired into CLI
+pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
+    let mut current = cwd.to_path_buf();
+    loop {
+        if current.join(".git").is_dir() || current.join(".claude").is_dir() {
+            return Some(current);
+        }
+        if !current.pop() {
+            return None;
+        }
+    }
+}
+
 /// Load rules from a YAML file (manifest or monolithic).
 pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
@@ -670,5 +685,40 @@ disable_rules:
         let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.override_safety_level, Some(SafetyLevel::Critical));
         assert!(config.allowlists.is_none());
+    }
+
+    #[test]
+    fn test_find_project_root_with_git() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let sub = dir.path().join("a").join("b").join("c");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+
+        let result = find_project_root(&sub);
+        assert_eq!(result, Some(dir.path().to_path_buf()));
+    }
+
+    #[test]
+    fn test_find_project_root_with_claude_dir() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let sub = dir.path().join("src").join("deep");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::create_dir_all(dir.path().join(".claude")).unwrap();
+
+        let result = find_project_root(&sub);
+        assert_eq!(result, Some(dir.path().to_path_buf()));
+    }
+
+    #[test]
+    fn test_find_project_root_none_when_missing() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().unwrap();
+        let result = find_project_root(dir.path());
+        assert!(result.is_none());
     }
 }
