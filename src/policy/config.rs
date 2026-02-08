@@ -118,45 +118,10 @@ impl std::fmt::Display for TrustLevel {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AllowlistEntry {
     pub command: String,
     pub trust: TrustLevel,
-}
-
-/// Support deserializing AllowlistEntry from both a bare string and a tagged object.
-/// Bare string: `"git status"` -> AllowlistEntry { command: "git status", trust: Standard }
-/// Tagged:      `{ command: "git status", trust: minimal }` -> AllowlistEntry { command: "git status", trust: Minimal }
-impl<'de> serde::Deserialize<'de> for AllowlistEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Tagged {
-            command: String,
-            #[serde(default)]
-            trust: TrustLevel,
-        }
-
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum StringOrTagged {
-            Bare(String),
-            Tagged(Tagged),
-        }
-
-        match StringOrTagged::deserialize(deserializer)? {
-            StringOrTagged::Bare(s) => Ok(AllowlistEntry {
-                command: s,
-                trust: TrustLevel::default(),
-            }),
-            StringOrTagged::Tagged(t) => Ok(AllowlistEntry {
-                command: t.command,
-                trust: t.trust,
-            }),
-        }
-    }
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -459,8 +424,8 @@ default_decision: ask
 safety_level: high
 allowlists:
   commands:
-    - "git status"
-    - "git diff"
+    - { command: "git status", trust: standard }
+    - { command: "git diff", trust: standard }
   paths:
     - "/tmp/**"
 rules:
@@ -585,8 +550,8 @@ include:
         let yaml = r#"
 allowlists:
   commands:
-    - ls
-    - cat
+    - { command: ls, trust: minimal }
+    - { command: cat, trust: minimal }
 rules:
   - id: test-rule
     level: high
@@ -646,8 +611,8 @@ include:
             r#"
 allowlists:
   commands:
-    - ls
-    - cat
+    - { command: ls, trust: minimal }
+    - { command: cat, trust: minimal }
 rules: []
 "#,
         )
@@ -659,7 +624,7 @@ rules: []
             r#"
 allowlists:
   commands:
-    - "git status"
+    - { command: "git status", trust: standard }
 rules:
   - id: git-force-push
     level: high
@@ -738,7 +703,8 @@ include:
             dir.path().join("core.yaml"),
             r#"
 allowlists:
-  commands: [ls]
+  commands:
+    - { command: ls, trust: minimal }
 rules: []
 "#,
         )
@@ -759,7 +725,7 @@ override_safety_level: strict
 
 allowlists:
   commands:
-    - "docker compose"
+    - { command: "docker compose", trust: standard }
 
 rules:
   - id: project-allow-docker-build
@@ -1117,18 +1083,16 @@ rules:
     }
 
     #[test]
-    fn test_allowlist_entry_deserialize_bare_string() {
-        let entry: AllowlistEntry = serde_yaml::from_str("\"git status\"").unwrap();
-        assert_eq!(entry.command, "git status");
-        assert_eq!(entry.trust, TrustLevel::Standard);
+    fn test_allowlist_entry_rejects_bare_string() {
+        let result: Result<AllowlistEntry, _> = serde_yaml::from_str("ls");
+        assert!(result.is_err(), "Bare strings should be rejected");
     }
 
     #[test]
-    fn test_allowlist_entry_deserialize_tagged_default_trust() {
+    fn test_allowlist_entry_requires_trust_field() {
         let yaml = "command: \"ls\"\n";
-        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(entry.command, "ls");
-        assert_eq!(entry.trust, TrustLevel::Standard);
+        let result: Result<AllowlistEntry, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "Missing trust field should be rejected");
     }
 
     #[test]

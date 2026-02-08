@@ -169,11 +169,11 @@ default_decision: ask
 safety_level: high
 allowlists:
   commands:
-    - "git status"
-    - "git diff"
-    - "git log"
-    - ls
-    - echo
+    - { command: "git status", trust: standard }
+    - { command: "git diff", trust: standard }
+    - { command: "git log", trust: standard }
+    - { command: ls, trust: minimal }
+    - { command: echo, trust: minimal }
   paths:
     - "/tmp/**"
 rules:
@@ -334,9 +334,9 @@ default_decision: ask
 safety_level: high
 allowlists:
   commands:
-    - cat
-    - head
-    - tail
+    - { command: cat, trust: minimal }
+    - { command: head, trust: minimal }
+    - { command: tail, trust: minimal }
 rules:
   - id: cat-env-file
     level: critical
@@ -393,7 +393,7 @@ default_decision: ask
 safety_level: high
 allowlists:
   commands:
-    - cat
+    - { command: cat, trust: minimal }
 rules:
   - id: cat-env-file
     level: critical

@@ -704,7 +704,7 @@ fn test_e2e_project_config_adds_allowlist() {
     std::fs::create_dir_all(&claude_dir).unwrap();
     std::fs::write(
         claude_dir.join("longline.yaml"),
-        "allowlists:\n  commands:\n    - sometool\n",
+        "allowlists:\n  commands:\n    - { command: sometool, trust: standard }\n",
     )
     .unwrap();
 
