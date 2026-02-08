@@ -3,113 +3,113 @@
 allowlists:
   commands:
     # ── Always safe: read-only / output-only ──────────────────────
-    - cd
-    - ls
-    - echo
-    - pwd
-    - whoami
-    - date
-    - cat
-    - head
-    - tail
-    - wc
-    - file
-    - which
-    - type
-    - basename
-    - dirname
-    - realpath
-    - readlink
-    - stat
-    - du
-    - printf
-    - md5sum
-    - sha256sum
-    - sha1sum
-    - cksum
-    - "true"
-    - "false"
-    - sleep
-    - grep
-    - rg
-    - find
-    - tree
-    - xargs
-    - fd
-    - sort
-    - uniq
-    - tr
-    - cut
-    - diff
-    - jq
-    - yq
-    - test
-    - column
-    - nl
-    - tac
-    - rev
-    - paste
-    - join
-    - comm
-    - cmp
-    - strings
-    - xxd
-    - hexdump
-    - od
-    - base64
-    - time
+    - { command: cd, trust: minimal }
+    - { command: ls, trust: minimal }
+    - { command: echo, trust: minimal }
+    - { command: pwd, trust: minimal }
+    - { command: whoami, trust: minimal }
+    - { command: date, trust: minimal }
+    - { command: cat, trust: minimal }
+    - { command: head, trust: minimal }
+    - { command: tail, trust: minimal }
+    - { command: wc, trust: minimal }
+    - { command: file, trust: minimal }
+    - { command: which, trust: minimal }
+    - { command: type, trust: minimal }
+    - { command: basename, trust: minimal }
+    - { command: dirname, trust: minimal }
+    - { command: realpath, trust: minimal }
+    - { command: readlink, trust: minimal }
+    - { command: stat, trust: minimal }
+    - { command: du, trust: minimal }
+    - { command: printf, trust: minimal }
+    - { command: md5sum, trust: minimal }
+    - { command: sha256sum, trust: minimal }
+    - { command: sha1sum, trust: minimal }
+    - { command: cksum, trust: minimal }
+    - { command: "true", trust: minimal }
+    - { command: "false", trust: minimal }
+    - { command: sleep, trust: minimal }
+    - { command: grep, trust: minimal }
+    - { command: rg, trust: minimal }
+    - { command: find, trust: minimal }
+    - { command: tree, trust: minimal }
+    - { command: xargs, trust: minimal }
+    - { command: fd, trust: minimal }
+    - { command: sort, trust: minimal }
+    - { command: uniq, trust: minimal }
+    - { command: tr, trust: minimal }
+    - { command: cut, trust: minimal }
+    - { command: diff, trust: minimal }
+    - { command: jq, trust: minimal }
+    - { command: yq, trust: minimal }
+    - { command: test, trust: minimal }
+    - { command: column, trust: minimal }
+    - { command: nl, trust: minimal }
+    - { command: tac, trust: minimal }
+    - { command: rev, trust: minimal }
+    - { command: paste, trust: minimal }
+    - { command: join, trust: minimal }
+    - { command: comm, trust: minimal }
+    - { command: cmp, trust: minimal }
+    - { command: strings, trust: minimal }
+    - { command: xxd, trust: minimal }
+    - { command: hexdump, trust: minimal }
+    - { command: od, trust: minimal }
+    - { command: base64, trust: minimal }
+    - { command: time, trust: minimal }
     # ── System info: read-only ───────────────────────────────────────
-    - env
-    - printenv
-    - uname
-    - hostname
-    - id
-    - groups
-    - df
-    - ps
-    - pgrep
-    - lsof
-    - nproc
-    - getconf
-    - locale
-    - uptime
+    - { command: env, trust: minimal }
+    - { command: printenv, trust: minimal }
+    - { command: uname, trust: minimal }
+    - { command: hostname, trust: minimal }
+    - { command: id, trust: minimal }
+    - { command: groups, trust: minimal }
+    - { command: df, trust: minimal }
+    - { command: ps, trust: minimal }
+    - { command: pgrep, trust: minimal }
+    - { command: lsof, trust: minimal }
+    - { command: nproc, trust: minimal }
+    - { command: getconf, trust: minimal }
+    - { command: locale, trust: minimal }
+    - { command: uptime, trust: minimal }
     # ── Pagers and viewers ───────────────────────────────────────────
-    - less
-    - more
-    - man
-    - info
+    - { command: less, trust: minimal }
+    - { command: more, trust: minimal }
+    - { command: man, trust: minimal }
+    - { command: info, trust: minimal }
     # ── Modern CLI alternatives ──────────────────────────────────────
-    - bat
-    - exa
-    - eza
-    - delta
-    - tokei
-    - cloc
-    - scc
-    - hyperfine
-    - ag
-    - ack
+    - { command: bat, trust: minimal }
+    - { command: exa, trust: minimal }
+    - { command: eza, trust: minimal }
+    - { command: delta, trust: minimal }
+    - { command: tokei, trust: minimal }
+    - { command: cloc, trust: minimal }
+    - { command: scc, trust: minimal }
+    - { command: hyperfine, trust: minimal }
+    - { command: ag, trust: minimal }
+    - { command: ack, trust: minimal }
     # ── Always safe: dev tools (no publish risk) ──────────────────
-    - make
-    - cmake
-    - rustc
-    - java
-    - javac
+    - { command: make, trust: standard }
+    - { command: cmake, trust: standard }
+    - { command: rustc, trust: standard }
+    - { command: java, trust: standard }
+    - { command: javac, trust: standard }
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
-    - mkdir
-    - touch
-    - ln
-    - cp
-    - mv
-    - tee
-    - tar
-    - gzip
-    - gunzip
-    - zip
-    - unzip
+    - { command: mkdir, trust: standard }
+    - { command: touch, trust: standard }
+    - { command: ln, trust: standard }
+    - { command: cp, trust: standard }
+    - { command: mv, trust: standard }
+    - { command: tee, trust: standard }
+    - { command: tar, trust: standard }
+    - { command: gzip, trust: standard }
+    - { command: gunzip, trust: standard }
+    - { command: zip, trust: standard }
+    - { command: unzip, trust: standard }
     # ── Always safe: text processing ──────────────────────────────
-    - sed
-    - awk
-    - patch
+    - { command: sed, trust: standard }
+    - { command: awk, trust: standard }
+    - { command: patch, trust: standard }
 
 rules: []

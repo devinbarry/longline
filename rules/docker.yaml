@@ -3,37 +3,38 @@
 allowlists:
   commands:
     # ── Docker: read-only operations ─────────────────────────────
-    - "docker ps"
-    - "docker images"
-    - "docker logs"
-    - "docker inspect"
-    - "docker stats"
-    - "docker top"
-    - "docker port"
-    - "docker version"
-    - "docker info"
+    - { command: "docker ps", trust: minimal }
+    - { command: "docker images", trust: minimal }
+    - { command: "docker logs", trust: minimal }
+    - { command: "docker inspect", trust: minimal }
+    - { command: "docker stats", trust: minimal }
+    - { command: "docker top", trust: minimal }
+    - { command: "docker port", trust: minimal }
+    - { command: "docker version", trust: minimal }
+    - { command: "docker info", trust: minimal }
     # ── Docker network: read-only ────────────────────────────────
-    - "docker network ls"
-    - "docker network inspect"
+    - { command: "docker network ls", trust: minimal }
+    - { command: "docker network inspect", trust: minimal }
     # ── Docker volume: read-only ─────────────────────────────────
-    - "docker volume ls"
-    - "docker volume inspect"
+    - { command: "docker volume ls", trust: minimal }
+    - { command: "docker volume inspect", trust: minimal }
     # ── Docker compose (new plugin): safe operations ─────────────
-    - "docker compose ps"
-    - "docker compose logs"
-    - "docker compose config"
-    - "docker compose images"
-    - "docker compose top"
-    - "docker compose version"
-    - "docker compose down"
+    - { command: "docker compose ps", trust: minimal }
+    - { command: "docker compose logs", trust: minimal }
+    - { command: "docker compose config", trust: minimal }
+    - { command: "docker compose images", trust: minimal }
+    - { command: "docker compose top", trust: minimal }
+    - { command: "docker compose version", trust: minimal }
     # ── Docker-compose (legacy): safe operations ─────────────────
-    - "docker-compose ps"
-    - "docker-compose logs"
-    - "docker-compose config"
-    - "docker-compose images"
-    - "docker-compose top"
-    - "docker-compose version"
-    - "docker-compose down"
+    - { command: "docker-compose ps", trust: minimal }
+    - { command: "docker-compose logs", trust: minimal }
+    - { command: "docker-compose config", trust: minimal }
+    - { command: "docker-compose images", trust: minimal }
+    - { command: "docker-compose top", trust: minimal }
+    - { command: "docker-compose version", trust: minimal }
+    # ── Docker compose: standard operations ──────────────────────
+    - { command: "docker compose down", trust: standard }
+    - { command: "docker-compose down", trust: standard }
 
 rules:
   # ============================================================

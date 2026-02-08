@@ -36,26 +36,26 @@ tests:
   - id: git-gc
     command: "git gc"
     expected:
-      decision: allow
-    note: "Git garbage collection should be allowed"
+      decision: ask
+    note: "Git garbage collection requires full trust level"
 
   - id: git-gc-auto
     command: "git gc --auto"
     expected:
-      decision: allow
-    note: "Git auto garbage collection should be allowed"
+      decision: ask
+    note: "Git auto garbage collection requires full trust level"
 
   - id: git-fsck
     command: "git fsck"
     expected:
-      decision: allow
-    note: "Git filesystem check should be allowed"
+      decision: ask
+    note: "Git filesystem check requires full trust level"
 
   - id: git-fsck-full
     command: "git fsck --full"
     expected:
-      decision: allow
-    note: "Git full filesystem check should be allowed"
+      decision: ask
+    note: "Git full filesystem check requires full trust level"
 
   - id: git-verify-pack
     command: "git verify-pack -v .git/objects/pack/pack-abc.idx"

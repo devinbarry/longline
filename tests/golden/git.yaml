@@ -301,15 +301,15 @@ tests:
       decision: ask
       rule_id: git-clean-force
 
-  # --- git revert (safe - creates new commit) ---
+  # --- git revert (full trust - creates new commit) ---
   - id: git-revert-safe
     command: "git revert HEAD"
     expected:
-      decision: allow
+      decision: ask
   - id: git-revert-commit-safe
     command: "git revert abc123"
     expected:
-      decision: allow
+      decision: ask
 
   # ============================================================
   # 8. CONFIG MODIFICATION
@@ -388,11 +388,11 @@ tests:
   - id: git-gc-safe
     command: "git gc"
     expected:
-      decision: allow
+      decision: ask
   - id: git-gc-auto-safe
     command: "git gc --auto"
     expected:
-      decision: allow
+      decision: ask
   - id: git-gc-prune-now-dangerous
     command: "git gc --prune=now"
     expected:

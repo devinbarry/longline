@@ -3,66 +3,65 @@
 allowlists:
   commands:
     # ── Git: read operations ──────────────────────────────────────
-    - "git status"
-    - "git diff"
-    - "git log"
-    - "git show"
-    - "git branch"
-    - "git stash list"
-    - "git remote"
-    - "git tag"
-    - "git rev-parse"
-    - "git config"
-    # ── Git: safe write operations ────────────────────────────────
-    - "git add"
-    - "git commit"
-    - "git fetch"
-    - "git pull"
-    - "git push"
-    - "git stash"
-    - "git checkout"
-    - "git switch"
-    - "git restore"
-    - "git merge"
-    - "git cherry-pick"
-    - "git worktree"
-    - "git clone"
-    - "git init"
-    # ── Git: read-only extras ─────────────────────────────────────
-    - "git blame"
-    - "git bisect"
-    - "git describe"
-    - "git shortlog"
-    - "git reflog"
-    - "git ls-files"
-    - "git ls-tree"
-    - "git cat-file"
-    - "git grep"
-    - "git archive"
-    - "git check-ignore"
-    - "git symbolic-ref"
-    - "git show-ref"
-    # ── Git: safe file operations ────────────────────────────────────
-    - "git mv"
-    - "git rm"
-    - "git revert"
-    # ── Git: stash operations ────────────────────────────────────────
-    - "git stash pop"
-    - "git stash apply"
+    - { command: "git status", trust: minimal }
+    - { command: "git diff", trust: minimal }
+    - { command: "git log", trust: minimal }
+    - { command: "git show", trust: minimal }
+    - { command: "git branch", trust: minimal }
+    - { command: "git stash list", trust: minimal }
+    - { command: "git remote", trust: minimal }
+    - { command: "git tag", trust: minimal }
+    - { command: "git rev-parse", trust: minimal }
+    - { command: "git config", trust: minimal }
+    - { command: "git blame", trust: minimal }
+    - { command: "git bisect", trust: minimal }
+    - { command: "git describe", trust: minimal }
+    - { command: "git shortlog", trust: minimal }
+    - { command: "git reflog", trust: minimal }
+    - { command: "git ls-files", trust: minimal }
+    - { command: "git ls-tree", trust: minimal }
+    - { command: "git cat-file", trust: minimal }
+    - { command: "git grep", trust: minimal }
+    - { command: "git archive", trust: minimal }
+    - { command: "git check-ignore", trust: minimal }
+    - { command: "git symbolic-ref", trust: minimal }
+    - { command: "git show-ref", trust: minimal }
     # ── Git: info/help commands ───────────────────────────────────
-    - "git --version"
-    - "git -v"
-    - "git help"
-    - "git -h"
-    # ── Git: maintenance/inspection commands ──────────────────────
-    - "git gc"
-    - "git fsck"
-    - "git verify-pack"
+    - { command: "git --version", trust: minimal }
+    - { command: "git -v", trust: minimal }
+    - { command: "git help", trust: minimal }
+    - { command: "git -h", trust: minimal }
     # ── Git: history/ref commands ─────────────────────────────────
-    - "git merge-base"
-    - "git rev-list"
-    - "git for-each-ref"
-    - "git name-rev"
+    - { command: "git merge-base", trust: minimal }
+    - { command: "git rev-list", trust: minimal }
+    - { command: "git for-each-ref", trust: minimal }
+    - { command: "git name-rev", trust: minimal }
+    - { command: "git verify-pack", trust: minimal }
+    # ── Git: safe write operations ────────────────────────────────
+    - { command: "git add", trust: standard }
+    - { command: "git commit", trust: standard }
+    - { command: "git fetch", trust: standard }
+    - { command: "git pull", trust: standard }
+    - { command: "git push", trust: standard }
+    - { command: "git stash", trust: standard }
+    - { command: "git checkout", trust: standard }
+    - { command: "git switch", trust: standard }
+    - { command: "git restore", trust: standard }
+    - { command: "git merge", trust: standard }
+    - { command: "git cherry-pick", trust: standard }
+    - { command: "git worktree", trust: standard }
+    - { command: "git clone", trust: standard }
+    - { command: "git init", trust: standard }
+    # ── Git: safe file operations ────────────────────────────────────
+    - { command: "git mv", trust: standard }
+    - { command: "git rm", trust: standard }
+    # ── Git: stash operations ────────────────────────────────────────
+    - { command: "git stash pop", trust: standard }
+    - { command: "git stash apply", trust: standard }
+    # ── Git: maintenance/inspection commands ──────────────────────
+    - { command: "git revert", trust: full }
+    - { command: "git gc", trust: full }
+    - { command: "git fsck", trust: full }
 
 rules:
   # ============================================================

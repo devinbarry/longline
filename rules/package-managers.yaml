@@ -4,190 +4,190 @@ allowlists:
   commands:
     # ── pip/pip3: safe invocations ────────────────────────────────
     # pip install - covered by rules (ask for confirmation)
-    - "pip list"
-    - "pip show"
-    - "pip freeze"
-    - "pip check"
-    - "pip3 list"
-    - "pip3 show"
-    - "pip3 freeze"
-    - "pip3 check"
+    - { command: "pip list", trust: minimal }
+    - { command: "pip show", trust: minimal }
+    - { command: "pip freeze", trust: minimal }
+    - { command: "pip check", trust: minimal }
+    - { command: "pip3 list", trust: minimal }
+    - { command: "pip3 show", trust: minimal }
+    - { command: "pip3 freeze", trust: minimal }
+    - { command: "pip3 check", trust: minimal }
     # ── gem: safe invocations ─────────────────────────────────────
     # gem install - covered by rules (ask for confirmation)
-    - "gem list"
-    - "gem info"
-    - "gem search"
-    - "gem --version"
-    - "gem -v"
+    - { command: "gem list", trust: minimal }
+    - { command: "gem info", trust: minimal }
+    - { command: "gem search", trust: minimal }
+    - { command: "gem --version", trust: minimal }
+    - { command: "gem -v", trust: minimal }
     # ── bundler: safe invocations ─────────────────────────────────
     # bundle install/add - covered by rules (ask for confirmation)
-    - "bundle list"
-    - "bundle show"
-    - "bundle info"
-    - "bundle check"
-    - "bundle --version"
-    - "bundle -v"
-    - "bundler --version"
+    - { command: "bundle list", trust: minimal }
+    - { command: "bundle show", trust: minimal }
+    - { command: "bundle info", trust: minimal }
+    - { command: "bundle check", trust: minimal }
+    - { command: "bundle --version", trust: minimal }
+    - { command: "bundle -v", trust: minimal }
+    - { command: "bundler --version", trust: minimal }
     # ── go: safe invocations ──────────────────────────────────────
     # go get/install - covered by rules (ask for confirmation)
-    - "go build"
-    - "go test"
-    - "go run"
-    - "go vet"
-    - "go fmt"
-    - "go mod"
-    - "go generate"
-    - "go doc"
-    - "go clean"
-    - "go env"
-    - "go version"
-    - "go work"
+    - { command: "go build", trust: standard }
+    - { command: "go test", trust: standard }
+    - { command: "go run", trust: standard }
+    - { command: "go vet", trust: standard }
+    - { command: "go fmt", trust: standard }
+    - { command: "go mod", trust: standard }
+    - { command: "go generate", trust: standard }
+    - { command: "go doc", trust: standard }
+    - { command: "go clean", trust: standard }
+    - { command: "go env", trust: standard }
+    - { command: "go version", trust: standard }
+    - { command: "go work", trust: standard }
     # ── yarn: safe invocations ────────────────────────────────────
     # yarn add/install - covered by rules (ask for confirmation)
-    - "yarn --version"
-    - "yarn -v"
-    - "yarn list"
-    - "yarn info"
-    - "yarn why"
-    - "yarn run"
-    - "yarn test"
-    - "yarn build"
-    - "yarn start"
-    - "yarn lint"
+    - { command: "yarn --version", trust: minimal }
+    - { command: "yarn -v", trust: minimal }
+    - { command: "yarn list", trust: minimal }
+    - { command: "yarn info", trust: minimal }
+    - { command: "yarn why", trust: minimal }
+    - { command: "yarn run", trust: standard }
+    - { command: "yarn test", trust: standard }
+    - { command: "yarn build", trust: standard }
+    - { command: "yarn start", trust: standard }
+    - { command: "yarn lint", trust: standard }
     # ── pnpm: safe invocations ────────────────────────────────────
     # pnpm add/install - covered by rules (ask for confirmation)
-    - "pnpm --version"
-    - "pnpm -v"
-    - "pnpm list"
-    - "pnpm ls"
-    - "pnpm why"
-    - "pnpm run"
-    - "pnpm test"
-    - "pnpm build"
-    - "pnpm start"
-    - "pnpm audit"
+    - { command: "pnpm --version", trust: minimal }
+    - { command: "pnpm -v", trust: minimal }
+    - { command: "pnpm list", trust: minimal }
+    - { command: "pnpm ls", trust: minimal }
+    - { command: "pnpm why", trust: minimal }
+    - { command: "pnpm audit", trust: minimal }
+    - { command: "pnpm run", trust: standard }
+    - { command: "pnpm test", trust: standard }
+    - { command: "pnpm build", trust: standard }
+    - { command: "pnpm start", trust: standard }
     # ── bun: safe invocations ─────────────────────────────────────
     # bun add/install - covered by rules (ask for confirmation)
-    - "bun --version"
-    - "bun -v"
-    - "bun run"
-    - "bun test"
-    - "bun build"
+    - { command: "bun --version", trust: minimal }
+    - { command: "bun -v", trust: minimal }
+    - { command: "bun run", trust: standard }
+    - { command: "bun test", trust: standard }
+    - { command: "bun build", trust: standard }
     # ── poetry: safe invocations ──────────────────────────────────
     # poetry add/install - covered by rules (ask for confirmation)
-    - "poetry --version"
-    - "poetry -V"
-    - "poetry show"
-    - "poetry list"
-    - "poetry check"
-    - "poetry lock"
-    - "poetry run"
-    - "poetry shell"
-    - "poetry env"
+    - { command: "poetry --version", trust: minimal }
+    - { command: "poetry -V", trust: minimal }
+    - { command: "poetry show", trust: minimal }
+    - { command: "poetry list", trust: minimal }
+    - { command: "poetry check", trust: minimal }
+    - { command: "poetry lock", trust: standard }
+    - { command: "poetry run", trust: standard }
+    - { command: "poetry shell", trust: standard }
+    - { command: "poetry env", trust: standard }
     # ── pipx: safe invocations ────────────────────────────────────
     # pipx install - covered by rules (ask for confirmation)
-    - "pipx --version"
-    - "pipx list"
-    - "pipx run"
+    - { command: "pipx --version", trust: minimal }
+    - { command: "pipx list", trust: minimal }
+    - { command: "pipx run", trust: standard }
     # ── pdm: safe invocations ─────────────────────────────────────
     # pdm add/install - covered by rules (ask for confirmation)
-    - "pdm --version"
-    - "pdm -V"
-    - "pdm list"
-    - "pdm show"
-    - "pdm lock"
-    - "pdm run"
+    - { command: "pdm --version", trust: minimal }
+    - { command: "pdm -V", trust: minimal }
+    - { command: "pdm list", trust: minimal }
+    - { command: "pdm show", trust: minimal }
+    - { command: "pdm lock", trust: standard }
+    - { command: "pdm run", trust: standard }
     # ── rye: safe invocations ─────────────────────────────────────
     # rye add - covered by rules (ask for confirmation)
-    - "rye --version"
-    - "rye -V"
-    - "rye list"
-    - "rye show"
-    - "rye lock"
-    - "rye run"
-    - "rye sync"
+    - { command: "rye --version", trust: minimal }
+    - { command: "rye -V", trust: minimal }
+    - { command: "rye list", trust: minimal }
+    - { command: "rye show", trust: minimal }
+    - { command: "rye lock", trust: standard }
+    - { command: "rye run", trust: standard }
+    - { command: "rye sync", trust: standard }
     # ── conda/mamba: safe invocations ─────────────────────────────
     # conda/mamba install - covered by rules (ask for confirmation)
-    - "conda --version"
-    - "conda -V"
-    - "conda list"
-    - "conda info"
-    - "conda env"
-    - "mamba --version"
-    - "mamba list"
-    - "mamba info"
+    - { command: "conda --version", trust: minimal }
+    - { command: "conda -V", trust: minimal }
+    - { command: "conda list", trust: minimal }
+    - { command: "conda info", trust: minimal }
+    - { command: "conda env", trust: minimal }
+    - { command: "mamba --version", trust: minimal }
+    - { command: "mamba list", trust: minimal }
+    - { command: "mamba info", trust: minimal }
     # ── composer: safe invocations ────────────────────────────────
     # composer require/install - covered by rules (ask for confirmation)
-    - "composer --version"
-    - "composer -V"
-    - "composer show"
-    - "composer list"
-    - "composer info"
-    - "composer check-platform-reqs"
+    - { command: "composer --version", trust: minimal }
+    - { command: "composer -V", trust: minimal }
+    - { command: "composer show", trust: minimal }
+    - { command: "composer list", trust: minimal }
+    - { command: "composer info", trust: minimal }
+    - { command: "composer check-platform-reqs", trust: minimal }
     # ── brew: safe invocations ────────────────────────────────────
     # brew install - covered by rules (ask for confirmation)
-    - "brew --version"
-    - "brew list"
-    - "brew info"
-    - "brew search"
-    - "brew doctor"
-    - "brew outdated"
+    - { command: "brew --version", trust: minimal }
+    - { command: "brew list", trust: minimal }
+    - { command: "brew info", trust: minimal }
+    - { command: "brew search", trust: minimal }
+    - { command: "brew doctor", trust: minimal }
+    - { command: "brew outdated", trust: minimal }
     # ── deno: safe invocations ────────────────────────────────────
     # deno install/add - covered by rules (ask for confirmation)
-    - "deno --version"
-    - "deno -V"
-    - "deno run"
-    - "deno test"
-    - "deno lint"
-    - "deno fmt"
-    - "deno check"
-    - "deno info"
-    - "deno doc"
+    - { command: "deno --version", trust: minimal }
+    - { command: "deno -V", trust: minimal }
+    - { command: "deno run", trust: standard }
+    - { command: "deno test", trust: standard }
+    - { command: "deno lint", trust: standard }
+    - { command: "deno fmt", trust: standard }
+    - { command: "deno check", trust: standard }
+    - { command: "deno info", trust: standard }
+    - { command: "deno doc", trust: standard }
     # ── dotnet: safe invocations ──────────────────────────────────
     # dotnet add - covered by rules (ask for confirmation)
-    - "dotnet --version"
-    - "dotnet --info"
-    - "dotnet build"
-    - "dotnet run"
-    - "dotnet test"
-    - "dotnet clean"
-    - "dotnet restore"
-    - "dotnet list"
+    - { command: "dotnet --version", trust: minimal }
+    - { command: "dotnet --info", trust: minimal }
+    - { command: "dotnet list", trust: minimal }
+    - { command: "dotnet build", trust: standard }
+    - { command: "dotnet run", trust: standard }
+    - { command: "dotnet test", trust: standard }
+    - { command: "dotnet clean", trust: standard }
+    - { command: "dotnet restore", trust: standard }
     # ── nuget: safe invocations ───────────────────────────────────
     # nuget install - covered by rules (ask for confirmation)
-    - "nuget --version"
-    - "nuget list"
-    - "nuget sources"
+    - { command: "nuget --version", trust: minimal }
+    - { command: "nuget list", trust: minimal }
+    - { command: "nuget sources", trust: minimal }
     # ── mix (Elixir): safe invocations ────────────────────────────
     # mix deps.get - covered by rules (ask for confirmation)
-    - "mix --version"
-    - "mix help"
-    - "mix compile"
-    - "mix test"
-    - "mix format"
+    - { command: "mix --version", trust: minimal }
+    - { command: "mix help", trust: minimal }
+    - { command: "mix compile", trust: standard }
+    - { command: "mix test", trust: standard }
+    - { command: "mix format", trust: standard }
     # ── pub (Dart): safe invocations ──────────────────────────────
     # pub get/add - covered by rules (ask for confirmation)
-    - "dart pub --version"
-    - "dart pub deps"
-    - "dart pub outdated"
-    - "flutter pub deps"
-    - "flutter pub outdated"
+    - { command: "dart pub --version", trust: minimal }
+    - { command: "dart pub deps", trust: minimal }
+    - { command: "dart pub outdated", trust: minimal }
+    - { command: "flutter pub deps", trust: minimal }
+    - { command: "flutter pub outdated", trust: minimal }
     # ── cabal (Haskell): safe invocations ─────────────────────────
     # cabal install - covered by rules (ask for confirmation)
-    - "cabal --version"
-    - "cabal -V"
-    - "cabal list"
-    - "cabal info"
-    - "cabal build"
-    - "cabal test"
-    - "cabal run"
+    - { command: "cabal --version", trust: minimal }
+    - { command: "cabal -V", trust: minimal }
+    - { command: "cabal list", trust: minimal }
+    - { command: "cabal info", trust: minimal }
+    - { command: "cabal build", trust: standard }
+    - { command: "cabal test", trust: standard }
+    - { command: "cabal run", trust: standard }
     # ── stack (Haskell): safe invocations ─────────────────────────
     # stack install - covered by rules (ask for confirmation)
-    - "stack --version"
-    - "stack list-dependencies"
-    - "stack build"
-    - "stack test"
-    - "stack run"
+    - { command: "stack --version", trust: minimal }
+    - { command: "stack list-dependencies", trust: minimal }
+    - { command: "stack build", trust: standard }
+    - { command: "stack test", trust: standard }
+    - { command: "stack run", trust: standard }
 
 rules:
   # ============================================================

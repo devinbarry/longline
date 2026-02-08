@@ -2,90 +2,94 @@
 
 allowlists:
   commands:
-    # ── Interpreters: safe invocations only ─────────────────────
-    - "python --version"
-    - "python -V"
-    - "python3 --version"
-    - "python3 -V"
-    - "python -m json.tool"
-    - "python3 -m json.tool"
-    - "python -m py_compile"
-    - "python3 -m py_compile"
-    - "python -m compileall"
-    - "python3 -m compileall"
-    - "node --version"
-    - "node -v"
-    - "ruby --version"
-    - "ruby -v"
-    - "python -m pytest"
-    - "python3 -m pytest"
-    # ── uv: safe tool invocations ───────────────────────────────
-    - "uv run pytest"
-    - "uv run mypy"
-    - "uv run ruff"
-    - "uv run black"
-    - "uv run isort"
-    - "uv run flake8"
-    - "uv run pylint"
-    - "uv run pyright"
-    - "uv run bandit"
-    - "uv run coverage"
-    - "uv run pre-commit"
-    - "uv sync"
-    - "uv lock"
-    - "uv venv"
-    - "uv pip"
-    - "uv pip list"
-    - "uv pip show"
-    - "uv pip freeze"
-    - "uv pip check"
-    - "uv --version"
-    - "uv --help"
-    - "uv -V"
-    # ── Cargo: safe invocations ───────────────────────────────────
-    - "cargo build"
-    - "cargo test"
-    - "cargo check"
-    - "cargo clippy"
-    - "cargo fmt"
-    - "cargo run"
-    - "cargo bench"
-    - "cargo doc"
-    - "cargo clean"
-    - "cargo update"
-    - "cargo remove"
-    - "cargo init"
-    - "cargo new"
-    - "cargo tree"
-    - "cargo metadata"
-    - "cargo vendor"
-    - "cargo release"
-    - "cargo deny"
-    - "cargo audit"
-    - "cargo outdated"
-    - "cargo expand"
-    # ── npm: safe invocations ─────────────────────────────────────
+    # ── Interpreters: version checks and read-only tools ───────────
+    - { command: "python --version", trust: minimal }
+    - { command: "python -V", trust: minimal }
+    - { command: "python3 --version", trust: minimal }
+    - { command: "python3 -V", trust: minimal }
+    - { command: "python -m json.tool", trust: minimal }
+    - { command: "python3 -m json.tool", trust: minimal }
+    - { command: "python -m py_compile", trust: minimal }
+    - { command: "python3 -m py_compile", trust: minimal }
+    - { command: "python -m compileall", trust: minimal }
+    - { command: "python3 -m compileall", trust: minimal }
+    - { command: "node --version", trust: minimal }
+    - { command: "node -v", trust: minimal }
+    - { command: "ruby --version", trust: minimal }
+    - { command: "ruby -v", trust: minimal }
+    - { command: "python -m pytest", trust: minimal }
+    - { command: "python3 -m pytest", trust: minimal }
+    # ── uv: read-only invocations ──────────────────────────────────
+    - { command: "uv pip list", trust: minimal }
+    - { command: "uv pip show", trust: minimal }
+    - { command: "uv pip freeze", trust: minimal }
+    - { command: "uv pip check", trust: minimal }
+    - { command: "uv --version", trust: minimal }
+    - { command: "uv --help", trust: minimal }
+    - { command: "uv -V", trust: minimal }
+    # ── Cargo: read-only invocations ─────────────────────────────────
+    - { command: "cargo tree", trust: minimal }
+    - { command: "cargo metadata", trust: minimal }
+    - { command: "cargo deny", trust: minimal }
+    - { command: "cargo audit", trust: minimal }
+    - { command: "cargo outdated", trust: minimal }
+    # ── npm: read-only invocations ───────────────────────────────────
+    - { command: "npm ls", trust: minimal }
+    - { command: "npm outdated", trust: minimal }
+    - { command: "npm audit", trust: minimal }
+    - { command: "npm info", trust: minimal }
+    # ── just: read-only invocations ──────────────────────────────────
+    - { command: "just --list", trust: minimal }
+    - { command: "just -l", trust: minimal }
+    - { command: "just --version", trust: minimal }
+    - { command: "just --help", trust: minimal }
+    - { command: "just -h", trust: minimal }
+    # ── uv: build/test/run tools ───────────────────────────────────
+    - { command: "uv run pytest", trust: standard }
+    - { command: "uv run mypy", trust: standard }
+    - { command: "uv run ruff", trust: standard }
+    - { command: "uv run black", trust: standard }
+    - { command: "uv run isort", trust: standard }
+    - { command: "uv run flake8", trust: standard }
+    - { command: "uv run pylint", trust: standard }
+    - { command: "uv run pyright", trust: standard }
+    - { command: "uv run bandit", trust: standard }
+    - { command: "uv run coverage", trust: standard }
+    - { command: "uv run pre-commit", trust: standard }
+    - { command: "uv sync", trust: standard }
+    - { command: "uv lock", trust: standard }
+    - { command: "uv venv", trust: standard }
+    - { command: "uv pip", trust: standard }
+    # ── Cargo: build/test/run tools ──────────────────────────────────
+    - { command: "cargo build", trust: standard }
+    - { command: "cargo test", trust: standard }
+    - { command: "cargo check", trust: standard }
+    - { command: "cargo clippy", trust: standard }
+    - { command: "cargo fmt", trust: standard }
+    - { command: "cargo run", trust: standard }
+    - { command: "cargo bench", trust: standard }
+    - { command: "cargo doc", trust: standard }
+    - { command: "cargo clean", trust: standard }
+    - { command: "cargo update", trust: standard }
+    - { command: "cargo remove", trust: standard }
+    - { command: "cargo init", trust: standard }
+    - { command: "cargo new", trust: standard }
+    - { command: "cargo vendor", trust: standard }
+    - { command: "cargo release", trust: standard }
+    - { command: "cargo expand", trust: standard }
+    # ── npm: build/test/run tools ────────────────────────────────────
     # npm install/ci/exec - covered by rules (ask for confirmation)
-    - "npm test"
-    - "npm run"
-    - "npm start"
-    - "npm ls"
-    - "npm outdated"
-    - "npm audit"
-    - "npm init"
-    - "npm info"
-    - "npm pack"
-    # ── just: safe invocations ───────────────────────────────────
-    - "just --list"
-    - "just -l"
-    - "just --version"
-    - "just --help"
-    - "just -h"
-    - "just test"
-    - "just build"
-    - "just check"
-    - "just fmt"
-    - "just lint"
-    - "just release"
+    - { command: "npm test", trust: standard }
+    - { command: "npm run", trust: standard }
+    - { command: "npm start", trust: standard }
+    - { command: "npm init", trust: standard }
+    - { command: "npm pack", trust: standard }
+    # ── just: build/test/run tools ───────────────────────────────────
+    - { command: "just test", trust: standard }
+    - { command: "just build", trust: standard }
+    - { command: "just check", trust: standard }
+    - { command: "just fmt", trust: standard }
+    - { command: "just lint", trust: standard }
+    - { command: "just release", trust: standard }
 
 rules: []

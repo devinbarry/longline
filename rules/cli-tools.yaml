@@ -3,57 +3,58 @@
 allowlists:
   commands:
     # ── glp (GitLab Pipeline CLI): read-only invocations ──────────
-    - "glp status"
-    - "glp jobs"
-    - "glp log"
-    - "glp --version"
-    - "glp --help"
-    - "glp -h"
+    - { command: "glp status", trust: minimal }
+    - { command: "glp jobs", trust: minimal }
+    - { command: "glp log", trust: minimal }
+    - { command: "glp --version", trust: minimal }
+    - { command: "glp --help", trust: minimal }
+    - { command: "glp -h", trust: minimal }
     # ── glab (GitLab CLI): read-only invocations ──────────────────
     # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by glab-api-mutating rule
-    - "glab api"
-    - "glab auth status"
-    - "glab ci status"
-    - "glab ci view"
-    - "glab ci list"
-    - "glab ci trace"
-    - "glab ci get"
-    - "glab repo list"
-    - "glab repo view"
-    - "glab group list"
-    - "glab issue list"
-    - "glab issue view"
-    - "glab mr list"
-    - "glab mr view"
-    - "glab --version"
-    - "glab --help"
+    - { command: "glab auth status", trust: minimal }
+    - { command: "glab ci status", trust: minimal }
+    - { command: "glab ci view", trust: minimal }
+    - { command: "glab ci list", trust: minimal }
+    - { command: "glab ci trace", trust: minimal }
+    - { command: "glab ci get", trust: minimal }
+    - { command: "glab repo list", trust: minimal }
+    - { command: "glab repo view", trust: minimal }
+    - { command: "glab group list", trust: minimal }
+    - { command: "glab issue list", trust: minimal }
+    - { command: "glab issue view", trust: minimal }
+    - { command: "glab mr list", trust: minimal }
+    - { command: "glab mr view", trust: minimal }
+    - { command: "glab --version", trust: minimal }
+    - { command: "glab --help", trust: minimal }
     # ── gh (GitHub CLI): read-only invocations ───────────────────────
     # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by gh-api-mutating rule
-    - "gh api"
-    - "gh pr list"
-    - "gh pr view"
-    - "gh pr status"
-    - "gh pr diff"
-    - "gh pr checks"
-    - "gh issue list"
-    - "gh issue view"
-    - "gh issue status"
-    - "gh repo list"
-    - "gh repo view"
-    - "gh run list"
-    - "gh run view"
-    - "gh run watch"
-    - "gh workflow list"
-    - "gh workflow view"
-    - "gh auth status"
-    - "gh --version"
-    - "gh --help"
-    - "gh -h"
+    - { command: "gh pr list", trust: minimal }
+    - { command: "gh pr view", trust: minimal }
+    - { command: "gh pr status", trust: minimal }
+    - { command: "gh pr diff", trust: minimal }
+    - { command: "gh pr checks", trust: minimal }
+    - { command: "gh issue list", trust: minimal }
+    - { command: "gh issue view", trust: minimal }
+    - { command: "gh issue status", trust: minimal }
+    - { command: "gh repo list", trust: minimal }
+    - { command: "gh repo view", trust: minimal }
+    - { command: "gh auth status", trust: minimal }
+    - { command: "gh --version", trust: minimal }
+    - { command: "gh --help", trust: minimal }
+    - { command: "gh -h", trust: minimal }
+    # ── glab/gh: standard invocations (side-effect potential) ─────
+    - { command: "glab api", trust: standard }
+    - { command: "gh api", trust: standard }
+    - { command: "gh run list", trust: standard }
+    - { command: "gh run view", trust: standard }
+    - { command: "gh run watch", trust: standard }
+    - { command: "gh workflow list", trust: standard }
+    - { command: "gh workflow view", trust: standard }
     # ── git-cliff: stdout-only invocations ────────────────────────
-    - "git-cliff"
-    - "git-cliff --unreleased"
-    - "git-cliff --latest"
-    - "git-cliff --current"
+    - { command: "git-cliff", trust: standard }
+    - { command: "git-cliff --unreleased", trust: standard }
+    - { command: "git-cliff --latest", trust: standard }
+    - { command: "git-cliff --current", trust: standard }
 
 rules:
   # ============================================================

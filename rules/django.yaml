@@ -2,71 +2,76 @@
 
 allowlists:
   commands:
-    # ── Django: safe manage.py commands ─────────────────────────────
-    - "python manage.py check"
-    - "python manage.py showmigrations"
-    - "python manage.py diffsettings"
-    - "python manage.py sqlmigrate"
-    - "python manage.py sqlflush"
-    - "python manage.py sqlsequencereset"
-    - "python manage.py inspectdb"
-    - "python manage.py test"
-    - "python manage.py makemigrations"
-    - "python manage.py runserver"
-    - "python manage.py startapp"
-    - "python manage.py startproject"
-    - "python manage.py dumpdata"
-    - "python manage.py makemessages"
-    - "python manage.py compilemessages"
-    # ── Django: python3 variants ────────────────────────────────────
-    - "python3 manage.py check"
-    - "python3 manage.py showmigrations"
-    - "python3 manage.py diffsettings"
-    - "python3 manage.py sqlmigrate"
-    - "python3 manage.py sqlflush"
-    - "python3 manage.py sqlsequencereset"
-    - "python3 manage.py inspectdb"
-    - "python3 manage.py test"
-    - "python3 manage.py makemigrations"
-    - "python3 manage.py runserver"
-    - "python3 manage.py startapp"
-    - "python3 manage.py startproject"
-    - "python3 manage.py dumpdata"
-    - "python3 manage.py makemessages"
-    - "python3 manage.py compilemessages"
-    # ── Django: uv run variants ─────────────────────────────────────
-    - "uv run python manage.py check"
-    - "uv run python manage.py showmigrations"
-    - "uv run python manage.py diffsettings"
-    - "uv run python manage.py sqlmigrate"
-    - "uv run python manage.py sqlflush"
-    - "uv run python manage.py sqlsequencereset"
-    - "uv run python manage.py inspectdb"
-    - "uv run python manage.py test"
-    - "uv run python manage.py makemigrations"
-    - "uv run python manage.py migrate"
-    - "uv run python manage.py runserver"
-    - "uv run python manage.py startapp"
-    - "uv run python manage.py startproject"
-    - "uv run python manage.py dumpdata"
-    - "uv run python manage.py makemessages"
-    - "uv run python manage.py compilemessages"
-    - "uv run python3 manage.py check"
-    - "uv run python3 manage.py showmigrations"
-    - "uv run python3 manage.py diffsettings"
-    - "uv run python3 manage.py sqlmigrate"
-    - "uv run python3 manage.py sqlflush"
-    - "uv run python3 manage.py sqlsequencereset"
-    - "uv run python3 manage.py inspectdb"
-    - "uv run python3 manage.py test"
-    - "uv run python3 manage.py makemigrations"
-    - "uv run python3 manage.py migrate"
-    - "uv run python3 manage.py runserver"
-    - "uv run python3 manage.py startapp"
-    - "uv run python3 manage.py startproject"
-    - "uv run python3 manage.py dumpdata"
-    - "uv run python3 manage.py makemessages"
-    - "uv run python3 manage.py compilemessages"
+    # ── Django: safe manage.py commands (read-only/inspection) ─────
+    - { command: "python manage.py check", trust: minimal }
+    - { command: "python manage.py showmigrations", trust: minimal }
+    - { command: "python manage.py diffsettings", trust: minimal }
+    - { command: "python manage.py sqlmigrate", trust: minimal }
+    - { command: "python manage.py sqlflush", trust: minimal }
+    - { command: "python manage.py sqlsequencereset", trust: minimal }
+    - { command: "python manage.py inspectdb", trust: minimal }
+    # ── Django: common dev commands ───────────────────────────────────
+    - { command: "python manage.py test", trust: standard }
+    - { command: "python manage.py makemigrations", trust: standard }
+    - { command: "python manage.py runserver", trust: standard }
+    - { command: "python manage.py startapp", trust: standard }
+    - { command: "python manage.py startproject", trust: standard }
+    - { command: "python manage.py dumpdata", trust: standard }
+    - { command: "python manage.py makemessages", trust: standard }
+    - { command: "python manage.py compilemessages", trust: standard }
+    # ── Django: python3 variants (read-only/inspection) ───────────────
+    - { command: "python3 manage.py check", trust: minimal }
+    - { command: "python3 manage.py showmigrations", trust: minimal }
+    - { command: "python3 manage.py diffsettings", trust: minimal }
+    - { command: "python3 manage.py sqlmigrate", trust: minimal }
+    - { command: "python3 manage.py sqlflush", trust: minimal }
+    - { command: "python3 manage.py sqlsequencereset", trust: minimal }
+    - { command: "python3 manage.py inspectdb", trust: minimal }
+    # ── Django: python3 common dev commands ──────────────────────────
+    - { command: "python3 manage.py test", trust: standard }
+    - { command: "python3 manage.py makemigrations", trust: standard }
+    - { command: "python3 manage.py runserver", trust: standard }
+    - { command: "python3 manage.py startapp", trust: standard }
+    - { command: "python3 manage.py startproject", trust: standard }
+    - { command: "python3 manage.py dumpdata", trust: standard }
+    - { command: "python3 manage.py makemessages", trust: standard }
+    - { command: "python3 manage.py compilemessages", trust: standard }
+    # ── Django: uv run variants (read-only/inspection) ────────────────
+    - { command: "uv run python manage.py check", trust: minimal }
+    - { command: "uv run python manage.py showmigrations", trust: minimal }
+    - { command: "uv run python manage.py diffsettings", trust: minimal }
+    - { command: "uv run python manage.py sqlmigrate", trust: minimal }
+    - { command: "uv run python manage.py sqlflush", trust: minimal }
+    - { command: "uv run python manage.py sqlsequencereset", trust: minimal }
+    - { command: "uv run python manage.py inspectdb", trust: minimal }
+    # ── Django: uv run common dev commands ────────────────────────────
+    - { command: "uv run python manage.py test", trust: standard }
+    - { command: "uv run python manage.py makemigrations", trust: standard }
+    - { command: "uv run python manage.py migrate", trust: standard }
+    - { command: "uv run python manage.py runserver", trust: standard }
+    - { command: "uv run python manage.py startapp", trust: standard }
+    - { command: "uv run python manage.py startproject", trust: standard }
+    - { command: "uv run python manage.py dumpdata", trust: standard }
+    - { command: "uv run python manage.py makemessages", trust: standard }
+    - { command: "uv run python manage.py compilemessages", trust: standard }
+    # ── Django: uv run python3 variants (read-only/inspection) ────────
+    - { command: "uv run python3 manage.py check", trust: minimal }
+    - { command: "uv run python3 manage.py showmigrations", trust: minimal }
+    - { command: "uv run python3 manage.py diffsettings", trust: minimal }
+    - { command: "uv run python3 manage.py sqlmigrate", trust: minimal }
+    - { command: "uv run python3 manage.py sqlflush", trust: minimal }
+    - { command: "uv run python3 manage.py sqlsequencereset", trust: minimal }
+    - { command: "uv run python3 manage.py inspectdb", trust: minimal }
+    # ── Django: uv run python3 common dev commands ───────────────────
+    - { command: "uv run python3 manage.py test", trust: standard }
+    - { command: "uv run python3 manage.py makemigrations", trust: standard }
+    - { command: "uv run python3 manage.py migrate", trust: standard }
+    - { command: "uv run python3 manage.py runserver", trust: standard }
+    - { command: "uv run python3 manage.py startapp", trust: standard }
+    - { command: "uv run python3 manage.py startproject", trust: standard }
+    - { command: "uv run python3 manage.py dumpdata", trust: standard }
+    - { command: "uv run python3 manage.py makemessages", trust: standard }
+    - { command: "uv run python3 manage.py compilemessages", trust: standard }
 
 rules:
   # ============================================================
