@@ -233,8 +233,8 @@ pub fn load_project_config(cwd: &Path) -> Result<Option<ProjectConfig>, String> 
 /// Merge a project config into a global config (mutates in place).
 /// - override_safety_level replaces safety_level
 /// - allowlists are appended
-/// - rules are appended
-/// - disable_rules filters out matching rule IDs
+/// - disable_rules filters out matching global rule IDs (applied before rules are appended)
+/// - rules are appended (not affected by disable_rules)
 pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
     if let Some(level) = project.override_safety_level {
         config.safety_level = level;
