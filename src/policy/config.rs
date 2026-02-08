@@ -30,16 +30,16 @@ pub struct PartialRulesConfig {
 
 /// Information about a loaded rule file.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Will be exported in Task 8
 pub struct LoadedFileInfo {
     pub name: String,
     pub allowlist_count: usize,
     pub rule_count: usize,
+    /// Trust tier breakdown: [minimal, standard, full]
+    pub trust_counts: [usize; 3],
 }
 
 /// Extended config with loading metadata.
 #[derive(Debug)]
-#[allow(dead_code)] // Will be exported in Task 8
 pub struct LoadedConfig {
     pub config: RulesConfig,
     pub is_manifest: bool,
@@ -337,8 +337,25 @@ fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, Str
     })
 }
 
+/// Compute trust tier counts from a list of allowlist entries: [minimal, standard, full].
+fn compute_trust_counts(commands: &[AllowlistEntry]) -> [usize; 3] {
+    [
+        commands
+            .iter()
+            .filter(|e| e.trust == TrustLevel::Minimal)
+            .count(),
+        commands
+            .iter()
+            .filter(|e| e.trust == TrustLevel::Standard)
+            .count(),
+        commands
+            .iter()
+            .filter(|e| e.trust == TrustLevel::Full)
+            .count(),
+    ]
+}
+
 /// Load rules with additional metadata about source files.
-#[allow(dead_code)] // Will be exported in Task 8
 pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
@@ -348,6 +365,7 @@ pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
     } else {
         let config: RulesConfig = serde_yaml::from_str(&content)
             .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
+        let trust_counts = compute_trust_counts(&config.allowlists.commands);
         Ok(LoadedConfig {
             is_manifest: false,
             manifest_path: None,
@@ -359,13 +377,13 @@ pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
                     .to_string(),
                 allowlist_count: config.allowlists.commands.len(),
                 rule_count: config.rules.len(),
+                trust_counts,
             }],
             config,
         })
     }
 }
 
-#[allow(dead_code)] // Used by load_rules_with_info
 fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<LoadedConfig, String> {
     let manifest: ManifestConfig = serde_yaml::from_str(content)
         .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
@@ -384,10 +402,12 @@ fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<Loaded
         let partial: PartialRulesConfig = serde_yaml::from_str(&file_content)
             .map_err(|e| format!("Failed to parse included file {}: {e}", file_path.display()))?;
 
+        let trust_counts = compute_trust_counts(&partial.allowlists.commands);
         files.push(LoadedFileInfo {
             name: file_name.clone(),
             allowlist_count: partial.allowlists.commands.len(),
             rule_count: partial.rules.len(),
+            trust_counts,
         });
 
         merged_allowlists.extend(partial.allowlists.commands);

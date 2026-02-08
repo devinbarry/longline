@@ -506,8 +506,13 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
         println!("Included files:");
         for file in &loaded.files {
             println!(
-                "  {:<30} ({} allowlist entries, {} rules)",
-                file.name, file.allowlist_count, file.rule_count
+                "  {:<30} ({} allowlist: {}m/{}s/{}f, {} rules)",
+                file.name,
+                file.allowlist_count,
+                file.trust_counts[0],
+                file.trust_counts[1],
+                file.trust_counts[2],
+                file.rule_count
             );
         }
         println!();
@@ -515,9 +520,15 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
 
     let total_allowlist: usize = loaded.files.iter().map(|f| f.allowlist_count).sum();
     let total_rules: usize = loaded.files.iter().map(|f| f.rule_count).sum();
+    let total_trust: [usize; 3] = loaded.files.iter().fold([0; 3], |mut acc, f| {
+        acc[0] += f.trust_counts[0];
+        acc[1] += f.trust_counts[1];
+        acc[2] += f.trust_counts[2];
+        acc
+    });
     println!(
-        "Total: {} allowlist entries, {} rules",
-        total_allowlist, total_rules
+        "Total: {} allowlist entries ({}m/{}s/{}f), {} rules",
+        total_allowlist, total_trust[0], total_trust[1], total_trust[2], total_rules
     );
 
     0
