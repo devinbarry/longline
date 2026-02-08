@@ -143,6 +143,41 @@ fn run_hook_with_flags(tool_name: &str, command: &str, extra_args: &[&str]) -> (
     (code, stdout)
 }
 
+fn run_hook_with_cwd(tool_name: &str, command: &str, cwd: &str) -> (i32, String) {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool_name,
+        "tool_input": {
+            "command": command,
+        },
+        "session_id": "test-session",
+        "cwd": cwd
+    });
+
+    let config = rules_path();
+    let home = test_home_dir().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    (code, stdout)
+}
+
 #[test]
 fn test_e2e_safe_command_allows() {
     let (code, stdout) = run_hook("Bash", "ls -la");
@@ -634,4 +669,88 @@ fn test_e2e_manifest_config_same_decisions() {
             "Decision should be {expected} for: {cmd}"
         );
     }
+}
+
+#[test]
+fn test_e2e_project_config_overrides_safety_level() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_safety_level: critical\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "chmod 777 /tmp/f", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !reason.contains("chmod-777"),
+        "chmod-777 rule should be skipped at critical safety level: {reason}"
+    );
+}
+
+#[test]
+fn test_e2e_project_config_adds_allowlist() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "allowlists:\n  commands:\n    - sometool\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "sometool --flag", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "sometool should be allowed via project allowlist: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_project_config_disables_rule() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "disable_rules:\n  - chmod-777\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "chmod 777 /tmp/f", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !reason.contains("chmod-777"),
+        "chmod-777 rule should be disabled: {reason}"
+    );
+}
+
+#[test]
+fn test_e2e_project_config_no_file_unchanged() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "ls -la", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
