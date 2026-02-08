@@ -459,20 +459,28 @@ fn run_rules(
         }
     }
 
+    // Filter allowlist entries by trust level
+    let active_commands: Vec<policy::AllowlistEntry> = config
+        .allowlists
+        .commands
+        .iter()
+        .filter(|e| e.trust <= config.trust_level)
+        .cloned()
+        .collect();
+    let active_count = active_commands.len();
+    let total_count = config.allowlists.commands.len();
+
     // Show full allowlist when filtering to allow, compact summary otherwise
     let is_allow_filter = matches!(&filter, Some(DecisionFilter::Allow));
     if is_allow_filter {
-        println!(
-            "{}",
-            crate::output::allowlist_table(&config.allowlists.commands)
-        );
+        println!("{}", crate::output::allowlist_table(&active_commands));
     } else {
-        crate::output::print_allowlist_summary(&config.allowlists.commands);
+        crate::output::print_allowlist_summary(&active_commands);
     }
 
     println!(
-        "Safety level: {} | Trust level: {} | Default decision: {}",
-        config.safety_level, config.trust_level, config.default_decision
+        "Safety level: {} | Trust level: {} ({}/{} allowlist active) | Default decision: {}",
+        config.safety_level, config.trust_level, active_count, total_count, config.default_decision
     );
 
     0
@@ -506,7 +514,7 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
         println!("Included files:");
         for file in &loaded.files {
             println!(
-                "  {:<30} ({} allowlist: {}m/{}s/{}f, {} rules)",
+                "  {:<30} ({} allowlist: {} min/{} std/{} full, {} rules)",
                 file.name,
                 file.allowlist_count,
                 file.trust_counts[0],
@@ -527,7 +535,7 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
         acc
     });
     println!(
-        "Total: {} allowlist entries ({}m/{}s/{}f), {} rules",
+        "Total: {} allowlist entries ({} min/{} std/{} full), {} rules",
         total_allowlist, total_trust[0], total_trust[1], total_trust[2], total_rules
     );
 

@@ -37,10 +37,10 @@ allowlists:
     - { command: "go fmt", trust: standard }
     - { command: "go mod", trust: standard }
     - { command: "go generate", trust: standard }
-    - { command: "go doc", trust: standard }
+    - { command: "go doc", trust: minimal }
     - { command: "go clean", trust: standard }
-    - { command: "go env", trust: standard }
-    - { command: "go version", trust: standard }
+    - { command: "go env", trust: minimal }
+    - { command: "go version", trust: minimal }
     - { command: "go work", trust: standard }
     # ── yarn: safe invocations ────────────────────────────────────
     # yarn add/install - covered by rules (ask for confirmation)

@@ -340,6 +340,90 @@ mod tests {
     }
 
     #[test]
+    fn test_find_allowlist_match_respects_trust_level() {
+        let config_minimal = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Minimal,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![
+                    crate::policy::AllowlistEntry {
+                        command: "ls".to_string(),
+                        trust: crate::policy::TrustLevel::Minimal,
+                    },
+                    crate::policy::AllowlistEntry {
+                        command: "go build".to_string(),
+                        trust: crate::policy::TrustLevel::Standard,
+                    },
+                    crate::policy::AllowlistEntry {
+                        command: "docker run".to_string(),
+                        trust: crate::policy::TrustLevel::Full,
+                    },
+                ],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        // Minimal trust: only minimal entries match
+        let ls_cmd = SimpleCommand {
+            name: Some("ls".to_string()),
+            argv: vec![],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        assert_eq!(
+            find_allowlist_match(&config_minimal, &ls_cmd),
+            Some("ls"),
+            "Minimal-trust entry should match at Minimal trust level"
+        );
+
+        let go_cmd = SimpleCommand {
+            name: Some("go".to_string()),
+            argv: vec!["build".to_string()],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        assert_eq!(
+            find_allowlist_match(&config_minimal, &go_cmd),
+            None,
+            "Standard-trust entry should be skipped at Minimal trust level"
+        );
+
+        let docker_cmd = SimpleCommand {
+            name: Some("docker".to_string()),
+            argv: vec!["run".to_string()],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        assert_eq!(
+            find_allowlist_match(&config_minimal, &docker_cmd),
+            None,
+            "Full-trust entry should be skipped at Minimal trust level"
+        );
+
+        // Standard trust: minimal and standard match, full is skipped
+        let config_standard = RulesConfig {
+            trust_level: crate::policy::TrustLevel::Standard,
+            ..config_minimal
+        };
+        assert_eq!(
+            find_allowlist_match(&config_standard, &go_cmd),
+            Some("go build"),
+            "Standard-trust entry should match at Standard trust level"
+        );
+        assert_eq!(
+            find_allowlist_match(&config_standard, &docker_cmd),
+            None,
+            "Full-trust entry should be skipped at Standard trust level"
+        );
+    }
+
+    #[test]
     fn test_find_allowlist_match_git_c_clean_does_not_match_git_clean_allowlist() {
         let config = RulesConfig {
             version: 1,
