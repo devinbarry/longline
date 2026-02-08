@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-02-08
+
+
+### Added
+
+- add ProjectConfig type for per-project overrides
+- add project root discovery via .git or .claude directory
+- add project config loading from .claude/longline.yaml
+- add merge function for project config into global config
+- wire per-project config into hook mode
+- reject unknown fields in project config with exit code 2
+- add trust level tiered allowlists
+- show trust tier breakdown in files subcommand
+
+
+### Changed
+
+- add per-project config design
+- add per-project config implementation plan
+- add integration tests for per-project config
+- clarify merge order in merge_project_config doc comment
+- migrate all allowlist files to tagged trust format
+- remove bare string backwards-compat from AllowlistEntry
+- add integration tests for trust_level
+- add implementation plan for trust_level tiered allowlists
+
+
+### Fixed
+
+- detect git worktrees in project root discovery
+- address code review findings for trust_level feature
+
 ## [0.2.2] - 2026-02-07
 
 
@@ -15,6 +47,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - update SECURITY.md with resolved items and future work
+- release v0.2.2
 
 
 ### Fixed
