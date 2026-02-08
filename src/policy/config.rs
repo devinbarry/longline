@@ -189,7 +189,6 @@ impl StringOrList {
 /// Per-project config loaded from `.claude/longline.yaml`.
 /// All fields are optional; only specified fields override the global config.
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)] // Used in later tasks when wired into CLI
 pub struct ProjectConfig {
     pub override_safety_level: Option<SafetyLevel>,
     pub allowlists: Option<Allowlists>,
@@ -199,7 +198,6 @@ pub struct ProjectConfig {
 
 /// Walk up from `cwd` to find the project root.
 /// Looks for `.git` or `.claude` directory.
-#[allow(dead_code)] // Used in later tasks when wired into CLI
 pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
     let mut current = cwd.to_path_buf();
     loop {
@@ -214,7 +212,6 @@ pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
 
 /// Load project config from `.claude/longline.yaml` if it exists.
 /// Walks up from `cwd` to find the project root first.
-#[allow(dead_code)] // Used in later tasks when wired into CLI
 pub fn load_project_config(cwd: &Path) -> Option<ProjectConfig> {
     let root = find_project_root(cwd)?;
     let config_path = root.join(".claude").join("longline.yaml");
@@ -236,7 +233,6 @@ pub fn load_project_config(cwd: &Path) -> Option<ProjectConfig> {
 /// - allowlists are appended
 /// - rules are appended
 /// - disable_rules filters out matching rule IDs
-#[allow(dead_code)] // Used in later tasks when wired into CLI
 pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
     if let Some(level) = project.override_safety_level {
         config.safety_level = level;

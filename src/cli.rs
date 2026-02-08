@@ -126,7 +126,7 @@ pub fn run() -> i32 {
         }) => run_rules(&rules_config, verbose, filter, level, group_by),
         Some(Commands::Files) => unreachable!(), // handled above
         None => run_hook(
-            &rules_config,
+            rules_config,
             cli.ask_on_deny,
             cli.ask_ai || cli.ask_ai_lenient,
             cli.ask_ai_lenient,
@@ -136,7 +136,7 @@ pub fn run() -> i32 {
 
 /// Run hook mode: read stdin, evaluate, output decision.
 fn run_hook(
-    rules_config: &policy::RulesConfig,
+    mut rules_config: policy::RulesConfig,
     ask_on_deny: bool,
     ask_ai: bool,
     ask_ai_lenient: bool,
@@ -159,6 +159,13 @@ fn run_hook(
             return 0;
         }
     };
+
+    // Load and merge per-project config
+    if let Some(ref cwd) = hook_input.cwd {
+        if let Some(project_config) = policy::load_project_config(std::path::Path::new(cwd)) {
+            policy::merge_project_config(&mut rules_config, project_config);
+        }
+    }
 
     // Only handle Bash tool - passthrough for everything else
     if hook_input.tool_name != "Bash" {
@@ -199,7 +206,7 @@ fn run_hook(
     };
 
     // Evaluate against policy
-    let result = policy::evaluate(rules_config, &stmt);
+    let result = policy::evaluate(&rules_config, &stmt);
 
     let (initial_decision, overridden) = if ask_on_deny && result.decision == Decision::Deny {
         (Decision::Ask, true)
