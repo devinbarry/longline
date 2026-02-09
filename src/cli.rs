@@ -115,6 +115,20 @@ fn default_config_path() -> PathBuf {
         .join("rules.yaml")
 }
 
+/// Load rules config with fallback: --config flag > default path > embedded.
+fn load_config(explicit_path: Option<&PathBuf>) -> Result<policy::RulesConfig, String> {
+    if let Some(path) = explicit_path {
+        return policy::load_rules(path);
+    }
+
+    let default_path = default_config_path();
+    if default_path.exists() {
+        return policy::load_rules(&default_path);
+    }
+
+    policy::load_embedded_rules()
+}
+
 /// Main entry point. Returns the process exit code.
 pub fn run() -> i32 {
     yansi::whenever(yansi::Condition::TTY_AND_COLOR);
@@ -123,13 +137,11 @@ pub fn run() -> i32 {
 
     // Handle Files command early (needs path before loading)
     if let Some(Commands::Files) = &cli.command {
-        let config_path = cli.config.clone().unwrap_or_else(default_config_path);
-        return run_files(&config_path, cli.trust_level.as_ref());
+        return run_files(cli.config.as_ref(), cli.trust_level.as_ref());
     }
 
     // Load rules config for other commands
-    let config_path = cli.config.unwrap_or_else(default_config_path);
-    let mut rules_config = match policy::load_rules(&config_path) {
+    let mut rules_config = match load_config(cli.config.as_ref()) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("longline: {e}");
@@ -491,19 +503,42 @@ fn run_rules(
     0
 }
 
-fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelArg>) -> i32 {
-    let loaded = match policy::load_rules_with_info(config_path) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("longline: {e}");
-            return 2;
+fn run_files(config_path: Option<&PathBuf>, trust_override: Option<&TrustLevelArg>) -> i32 {
+    let loaded = if let Some(path) = config_path {
+        match policy::load_rules_with_info(path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("longline: {e}");
+                return 2;
+            }
+        }
+    } else {
+        let default_path = default_config_path();
+        if default_path.exists() {
+            match policy::load_rules_with_info(&default_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("longline: {e}");
+                    return 2;
+                }
+            }
+        } else {
+            match policy::load_embedded_rules_with_info() {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("longline: {e}");
+                    return 2;
+                }
+            }
         }
     };
 
-    if loaded.is_rules_manifest {
-        println!("Rules manifest: {}", config_path.display());
+    if let Some(path) = &loaded.rules_manifest_path {
+        println!("Rules manifest: {}", path.display());
+    } else if loaded.is_rules_manifest {
+        println!("Source: embedded defaults");
     } else {
-        println!("Config: {}", config_path.display());
+        println!("Config: (single file)");
     }
     let trust_level = match trust_override {
         Some(level) => level.to_trust_level(),

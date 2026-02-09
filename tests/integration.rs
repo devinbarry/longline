@@ -851,3 +851,83 @@ fn test_e2e_rules_shows_trust_level() {
         "Should show trust level: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_embedded_rules_fallback() {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "ls -la" },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "Should succeed with embedded rules"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "ls should be allowed with embedded rules: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_embedded_rules_deny_works() {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "rm -rf /" },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "deny",
+        "rm -rf / should be denied with embedded rules: {stdout}"
+    );
+}
