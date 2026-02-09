@@ -414,6 +414,11 @@ fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
         Some(path) if path.to_str() != Some("-") => std::fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read {}: {e}", path.display())),
         _ => {
+            if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                return Err(
+                    "No input provided. Use --file <path> or pipe commands to stdin.".to_string(),
+                );
+            }
             let mut buf = String::new();
             std::io::stdin()
                 .read_to_string(&mut buf)
