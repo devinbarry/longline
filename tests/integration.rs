@@ -36,15 +36,15 @@ fn test_home_dir() -> &'static PathBuf {
 fn rules_path() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("rules")
-        .join("manifest.yaml")
+        .join("rules.yaml")
         .to_string_lossy()
         .to_string()
 }
 
-fn manifest_path() -> String {
+fn rules_manifest_path() -> String {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("rules")
-        .join("manifest.yaml")
+        .join("rules.yaml")
         .to_string_lossy()
         .to_string()
 }
@@ -637,8 +637,8 @@ fn test_e2e_files_shows_totals() {
 }
 
 #[test]
-fn test_e2e_manifest_config_same_decisions() {
-    // Test that manifest config produces same decisions as monolithic
+fn test_e2e_rules_manifest_config_same_decisions() {
+    // Test that rules manifest config produces same decisions as monolithic
     let test_commands = vec![
         ("ls -la", "allow"),
         ("rm -rf /", "deny"),
@@ -649,7 +649,7 @@ fn test_e2e_manifest_config_same_decisions() {
 
     for (cmd, expected) in test_commands {
         let (code1, stdout1) = run_hook_with_config("Bash", cmd, &rules_path());
-        let (code2, stdout2) = run_hook_with_config("Bash", cmd, &manifest_path());
+        let (code2, stdout2) = run_hook_with_config("Bash", cmd, &rules_manifest_path());
 
         assert_eq!(code1, code2, "Exit codes should match for: {cmd}");
 

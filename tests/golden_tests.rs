@@ -23,7 +23,7 @@ struct Expected {
 fn rules_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("rules")
-        .join("manifest.yaml")
+        .join("rules.yaml")
 }
 
 fn load_golden_tests(filename: &str) -> TestSuite {

@@ -500,8 +500,8 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
         }
     };
 
-    if loaded.is_manifest {
-        println!("Manifest: {}", config_path.display());
+    if loaded.is_rules_manifest {
+        println!("Rules manifest: {}", config_path.display());
     } else {
         println!("Config: {}", config_path.display());
     }
@@ -515,7 +515,7 @@ fn run_files(config_path: &std::path::Path, trust_override: Option<&TrustLevelAr
     );
     println!();
 
-    if loaded.is_manifest {
+    if loaded.is_rules_manifest {
         println!("Included files:");
         for file in &loaded.files {
             println!(

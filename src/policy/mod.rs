@@ -361,7 +361,7 @@ rules:
 
     #[test]
     fn test_allowlist_match_populates_reason() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("git status").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -374,7 +374,7 @@ rules:
 
     #[test]
     fn test_bare_allowlist_match_reason() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("ls -la").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -418,7 +418,7 @@ rules:
 
     #[test]
     fn test_command_substitution_deny_propagates() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(rm -rf /)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -431,7 +431,7 @@ rules:
 
     #[test]
     fn test_safe_substitution_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(date)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -439,7 +439,7 @@ rules:
 
     #[test]
     fn test_backtick_substitution_deny() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("echo `rm -rf /`").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Deny);
@@ -447,7 +447,7 @@ rules:
 
     #[test]
     fn test_substitution_cat_env_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = crate::parser::parse("echo $(cat .env)").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Deny);
@@ -799,7 +799,7 @@ rules:
 
     #[test]
     fn test_for_loop_with_safe_command_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("for f in *.yaml; do echo $f; done").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -811,7 +811,7 @@ rules:
 
     #[test]
     fn test_for_loop_with_dangerous_command_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("for f in *; do rm -rf /; done").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -824,7 +824,7 @@ rules:
 
     #[test]
     fn test_while_loop_with_safe_command_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("while true; do ls; done").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -837,7 +837,7 @@ rules:
     #[test]
     fn test_while_loop_condition_with_dangerous_command_denies() {
         // The condition itself can be dangerous
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("while cat .env; do echo hi; done").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -849,7 +849,7 @@ rules:
 
     #[test]
     fn test_if_statement_with_safe_commands_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("if true; then echo yes; else echo no; fi").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -861,7 +861,7 @@ rules:
 
     #[test]
     fn test_if_statement_with_dangerous_else_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("if true; then echo ok; else rm -rf /; fi").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -873,7 +873,7 @@ rules:
 
     #[test]
     fn test_case_statement_with_safe_commands_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("case $x in a) echo a;; b) echo b;; esac").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -885,7 +885,7 @@ rules:
 
     #[test]
     fn test_case_statement_with_dangerous_case_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("case $x in a) echo a;; b) rm -rf /;; esac").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -897,7 +897,7 @@ rules:
 
     #[test]
     fn test_function_definition_with_dangerous_body_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("cleanup() { rm -rf /; }").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -909,7 +909,7 @@ rules:
 
     #[test]
     fn test_compound_statement_with_safe_commands_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("{ echo a; echo b; }").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -921,7 +921,7 @@ rules:
 
     #[test]
     fn test_test_command_with_safe_substitution_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("[[ $(date) == today ]]").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -933,7 +933,7 @@ rules:
 
     #[test]
     fn test_test_command_with_dangerous_substitution_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("[[ $(cat .env) == secret ]]").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -945,7 +945,7 @@ rules:
 
     #[test]
     fn test_comment_alone_allows() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("# this is just a comment").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -957,7 +957,7 @@ rules:
 
     #[test]
     fn test_comment_with_command_allows_if_command_safe() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("# comment\necho hello").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1012,7 +1012,7 @@ rules:
 
     #[test]
     fn test_nested_loops_with_dangerous_command_denies() {
-        let config = load_rules(Path::new("rules/manifest.yaml")).unwrap();
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
         let stmt = parse("for i in 1 2 3; do for j in a b c; do rm -rf /; done; done").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
