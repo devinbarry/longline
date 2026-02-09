@@ -101,6 +101,23 @@ fn run_subcommand(args: &[&str]) -> (i32, String, String) {
     (code, stdout, stderr)
 }
 
+fn run_subcommand_with_home(args: &[&str], home: &str) -> (i32, String, String) {
+    let child = Command::new(longline_bin())
+        .args(args)
+        .env("HOME", home)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    (code, stdout, stderr)
+}
+
 fn run_hook(tool_name: &str, command: &str) -> (i32, String) {
     run_hook_with_flags(tool_name, command, &[])
 }
@@ -930,4 +947,66 @@ fn test_e2e_embedded_rules_deny_works() {
         parsed["hookSpecificOutput"]["permissionDecision"], "deny",
         "rm -rf / should be denied with embedded rules: {stdout}"
     );
+}
+
+#[test]
+fn test_e2e_init_creates_files() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let (code, _stdout, stderr) = run_subcommand_with_home(&["init"], &home);
+    assert_eq!(code, 0, "init should succeed: stderr={stderr}");
+
+    let config_dir = dir.path().join(".config").join("longline");
+    assert!(
+        config_dir.join("rules.yaml").exists(),
+        "rules.yaml should exist"
+    );
+    assert!(config_dir.join("core-allowlist.yaml").exists());
+    assert!(config_dir.join("git.yaml").exists());
+
+    let content = std::fs::read_to_string(config_dir.join("rules.yaml")).unwrap();
+    assert!(content.contains("include:"), "Should be a rules manifest");
+}
+
+#[test]
+fn test_e2e_init_refuses_if_exists() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let (code1, _, _) = run_subcommand_with_home(&["init"], &home);
+    assert_eq!(code1, 0);
+
+    let (code2, _, stderr2) = run_subcommand_with_home(&["init"], &home);
+    assert_eq!(code2, 1, "Second init should fail: stderr={stderr2}");
+    assert!(
+        stderr2.contains("already exists"),
+        "Should mention already exists: {stderr2}"
+    );
+}
+
+#[test]
+fn test_e2e_init_force_overwrites() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let (code1, _, _) = run_subcommand_with_home(&["init"], &home);
+    assert_eq!(code1, 0);
+
+    let (code2, _, _) = run_subcommand_with_home(&["init", "--force"], &home);
+    assert_eq!(code2, 0, "Force init should succeed");
+}
+
+#[test]
+fn test_e2e_files_shows_embedded_source() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path().to_string_lossy().to_string();
+
+    let (code, stdout, _) = run_subcommand_with_home(&["files"], &home);
+    assert_eq!(code, 0, "files with embedded rules should succeed");
+    assert!(
+        stdout.contains("embedded"),
+        "Should indicate embedded source: {stdout}"
+    );
+    assert!(stdout.contains("Total:"), "Should show totals: {stdout}");
 }

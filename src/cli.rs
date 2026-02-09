@@ -84,6 +84,12 @@ enum Commands {
     },
     /// Show loaded rule files and their contents
     Files,
+    /// Extract embedded rules to ~/.config/longline/ for customization
+    Init {
+        /// Overwrite existing files
+        #[arg(short, long)]
+        force: bool,
+    },
 }
 
 #[derive(Clone, clap::ValueEnum)]
@@ -140,6 +146,11 @@ pub fn run() -> i32 {
         return run_files(cli.config.as_ref(), cli.trust_level.as_ref());
     }
 
+    // Handle Init command early (no config needed)
+    if let Some(Commands::Init { force }) = &cli.command {
+        return run_init(*force);
+    }
+
     // Load rules config for other commands
     let mut rules_config = match load_config(cli.config.as_ref()) {
         Ok(c) => c,
@@ -163,6 +174,7 @@ pub fn run() -> i32 {
             group_by,
         }) => run_rules(&rules_config, verbose, filter, level, group_by),
         Some(Commands::Files) => unreachable!(), // handled above
+        Some(Commands::Init { .. }) => unreachable!(), // handled above
         None => run_hook(
             rules_config,
             cli.ask_on_deny,
@@ -578,6 +590,40 @@ fn run_files(config_path: Option<&PathBuf>, trust_override: Option<&TrustLevelAr
         "Total: {} allowlist entries ({} min/{} std/{} full), {} rules",
         total_allowlist, total_trust[0], total_trust[1], total_trust[2], total_rules
     );
+
+    0
+}
+
+fn run_init(force: bool) -> i32 {
+    let target_dir = default_config_path()
+        .parent()
+        .expect("default config path has parent")
+        .to_path_buf();
+    let rules_yaml_path = target_dir.join("rules.yaml");
+
+    if rules_yaml_path.exists() && !force {
+        eprintln!(
+            "longline: {} already exists. Use --force to overwrite.",
+            rules_yaml_path.display()
+        );
+        return 1;
+    }
+
+    if let Err(e) = std::fs::create_dir_all(&target_dir) {
+        eprintln!("longline: failed to create {}: {e}", target_dir.display());
+        return 1;
+    }
+
+    for (name, content) in longline::embedded_rules::all_files() {
+        let file_path = target_dir.join(name);
+        if let Err(e) = std::fs::write(&file_path, content) {
+            eprintln!("longline: failed to write {}: {e}", file_path.display());
+            return 1;
+        }
+    }
+
+    println!("Rules written to {}", target_dir.display());
+    println!("Edit {} to customize.", rules_yaml_path.display());
 
     0
 }
