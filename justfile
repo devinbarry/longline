@@ -10,7 +10,7 @@ release level:
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
     mkdir -p ~/.config/longline
-    cp rules/manifest.yaml ~/.config/longline/rules.yaml
+    cp rules/rules.yaml ~/.config/longline/rules.yaml
     @echo "Installed rules to ~/.config/longline/rules.yaml"
 
 # Delete user rules file

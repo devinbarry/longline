@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 
 use crate::types::Decision;
 
-/// Manifest configuration that lists files to include.
+/// Rules manifest configuration that lists files to include.
 #[derive(Debug, Deserialize)]
-pub struct ManifestConfig {
+pub struct RulesManifestConfig {
     pub version: u32,
     #[serde(default = "default_decision")]
     pub default_decision: Decision,
@@ -42,13 +42,13 @@ pub struct LoadedFileInfo {
 #[derive(Debug)]
 pub struct LoadedConfig {
     pub config: RulesConfig,
-    pub is_manifest: bool,
-    pub manifest_path: Option<PathBuf>,
+    pub is_rules_manifest: bool,
+    pub rules_manifest_path: Option<PathBuf>,
     pub files: Vec<LoadedFileInfo>,
 }
 
-/// Check if YAML content is a manifest (has `include:` key).
-fn is_manifest(content: &str) -> bool {
+/// Check if YAML content is a rules manifest (has `include:` key).
+fn is_rules_manifest(content: &str) -> bool {
     // Quick check without full parse - look for include: at start of line
     content.lines().any(|line| {
         let trimmed = line.trim();
@@ -293,8 +293,8 @@ pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
 
-    if is_manifest(&content) {
-        load_manifest(path, &content)
+    if is_rules_manifest(&content) {
+        load_rules_manifest(path, &content)
     } else {
         let config: RulesConfig = serde_yaml::from_str(&content)
             .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
@@ -302,9 +302,9 @@ pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     }
 }
 
-/// Load a manifest file and merge all included files.
-fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, String> {
-    let manifest: ManifestConfig = serde_yaml::from_str(content)
+/// Load a rules manifest file and merge all included files.
+fn load_rules_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, String> {
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
         .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
@@ -337,6 +337,90 @@ fn load_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, Str
     })
 }
 
+/// Load rules from embedded defaults (compiled into the binary).
+pub fn load_embedded_rules() -> Result<RulesConfig, String> {
+    let content = crate::embedded_rules::get("rules.yaml")
+        .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
+
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
+
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_content = crate::embedded_rules::get(file_name)
+            .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+            .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(RulesConfig {
+        version: manifest.version,
+        default_decision: manifest.default_decision,
+        safety_level: manifest.safety_level,
+        trust_level: manifest.trust_level,
+        allowlists: Allowlists {
+            commands: merged_allowlists,
+            paths: Vec::new(),
+        },
+        rules: merged_rules,
+    })
+}
+
+/// Load embedded rules with file metadata.
+pub fn load_embedded_rules_with_info() -> Result<LoadedConfig, String> {
+    let content = crate::embedded_rules::get("rules.yaml")
+        .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
+
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
+
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+    let mut files: Vec<LoadedFileInfo> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_content = crate::embedded_rules::get(file_name)
+            .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+            .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
+
+        let trust_counts = compute_trust_counts(&partial.allowlists.commands);
+        files.push(LoadedFileInfo {
+            name: file_name.clone(),
+            allowlist_count: partial.allowlists.commands.len(),
+            rule_count: partial.rules.len(),
+            trust_counts,
+        });
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(LoadedConfig {
+        config: RulesConfig {
+            version: manifest.version,
+            default_decision: manifest.default_decision,
+            safety_level: manifest.safety_level,
+            trust_level: manifest.trust_level,
+            allowlists: Allowlists {
+                commands: merged_allowlists,
+                paths: Vec::new(),
+            },
+            rules: merged_rules,
+        },
+        is_rules_manifest: true,
+        rules_manifest_path: None,
+        files,
+    })
+}
+
 /// Compute trust tier counts from a list of allowlist entries: [minimal, standard, full].
 fn compute_trust_counts(commands: &[AllowlistEntry]) -> [usize; 3] {
     [
@@ -360,15 +444,15 @@ pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Failed to read rules file {}: {e}", path.display()))?;
 
-    if is_manifest(&content) {
-        load_manifest_with_info(path, &content)
+    if is_rules_manifest(&content) {
+        load_rules_manifest_with_info(path, &content)
     } else {
         let config: RulesConfig = serde_yaml::from_str(&content)
             .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
         let trust_counts = compute_trust_counts(&config.allowlists.commands);
         Ok(LoadedConfig {
-            is_manifest: false,
-            manifest_path: None,
+            is_rules_manifest: false,
+            rules_manifest_path: None,
             files: vec![LoadedFileInfo {
                 name: path
                     .file_name()
@@ -384,8 +468,11 @@ pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
     }
 }
 
-fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<LoadedConfig, String> {
-    let manifest: ManifestConfig = serde_yaml::from_str(content)
+fn load_rules_manifest_with_info(
+    manifest_path: &Path,
+    content: &str,
+) -> Result<LoadedConfig, String> {
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
         .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
@@ -426,8 +513,8 @@ fn load_manifest_with_info(manifest_path: &Path, content: &str) -> Result<Loaded
             },
             rules: merged_rules,
         },
-        is_manifest: true,
-        manifest_path: Some(manifest_path.to_path_buf()),
+        is_rules_manifest: true,
+        rules_manifest_path: Some(manifest_path.to_path_buf()),
         files,
     })
 }
@@ -539,7 +626,7 @@ rules:
     fn test_load_default_rules_file() {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("rules")
-            .join("manifest.yaml");
+            .join("rules.yaml");
         let config = load_rules(&path).expect("Default rules should parse");
         assert!(
             config.rules.len() > 30,
@@ -551,7 +638,7 @@ rules:
     }
 
     #[test]
-    fn test_detect_manifest_has_include() {
+    fn test_detect_rules_manifest_has_include() {
         let yaml = r#"
 version: 1
 default_decision: ask
@@ -560,7 +647,7 @@ include:
   - core.yaml
   - git.yaml
 "#;
-        let config: ManifestConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesManifestConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.include.len(), 2);
         assert_eq!(config.include[0], "core.yaml");
     }
@@ -586,26 +673,26 @@ rules:
     }
 
     #[test]
-    fn test_is_manifest_true_when_has_include() {
+    fn test_is_rules_manifest_true_when_has_include() {
         let yaml = r#"
 version: 1
 include:
   - core.yaml
 "#;
-        assert!(is_manifest(yaml));
+        assert!(is_rules_manifest(yaml));
     }
 
     #[test]
-    fn test_is_manifest_false_when_no_include() {
+    fn test_is_rules_manifest_false_when_no_include() {
         let yaml = r#"
 version: 1
 rules: []
 "#;
-        assert!(!is_manifest(yaml));
+        assert!(!is_rules_manifest(yaml));
     }
 
     #[test]
-    fn test_load_manifest_merges_files() {
+    fn test_load_rules_manifest_merges_files() {
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
@@ -665,7 +752,7 @@ rules:
     }
 
     #[test]
-    fn test_load_manifest_error_on_missing_file() {
+    fn test_load_rules_manifest_error_on_missing_file() {
         use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
@@ -691,7 +778,7 @@ include:
         // Ensure existing monolithic files still work
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("rules")
-            .join("manifest.yaml");
+            .join("rules.yaml");
         let config = load_rules(&path).expect("Monolithic rules should still load");
         assert!(config.rules.len() > 100, "Should have many rules");
         assert!(
@@ -731,7 +818,7 @@ rules: []
         .unwrap();
 
         let loaded = load_rules_with_info(&manifest_path).unwrap();
-        assert!(loaded.is_manifest);
+        assert!(loaded.is_rules_manifest);
         assert_eq!(loaded.files.len(), 1);
         assert_eq!(loaded.files[0].name, "core.yaml");
         assert_eq!(loaded.files[0].allowlist_count, 1);
@@ -1127,5 +1214,46 @@ rules:
         let yaml = "version: 1\ntrust_level: minimal\nallowlists:\n  commands: []\nrules: []\n";
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.trust_level, TrustLevel::Minimal);
+    }
+
+    #[test]
+    fn test_load_embedded_rules_matches_disk() {
+        let disk_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("rules")
+            .join("rules.yaml");
+        let disk_config = load_rules(&disk_path).expect("Disk rules should load");
+        let embedded_config = load_embedded_rules().expect("Embedded rules should load");
+
+        assert_eq!(disk_config.version, embedded_config.version);
+        assert_eq!(
+            disk_config.default_decision,
+            embedded_config.default_decision
+        );
+        assert_eq!(disk_config.safety_level, embedded_config.safety_level);
+        assert_eq!(disk_config.trust_level, embedded_config.trust_level);
+        assert_eq!(
+            disk_config.allowlists.commands.len(),
+            embedded_config.allowlists.commands.len(),
+            "Allowlist count should match"
+        );
+        assert_eq!(
+            disk_config.rules.len(),
+            embedded_config.rules.len(),
+            "Rule count should match"
+        );
+    }
+
+    #[test]
+    fn test_load_embedded_rules_with_info() {
+        let loaded = load_embedded_rules_with_info().expect("Embedded rules with info should load");
+        assert!(loaded.is_rules_manifest);
+        assert!(
+            loaded.rules_manifest_path.is_none(),
+            "Embedded rules have no disk path"
+        );
+        assert!(
+            loaded.files.len() >= 11,
+            "Should have at least 11 included files"
+        );
     }
 }
