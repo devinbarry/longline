@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-02-09
+
+
+### Added
+
+- add embedded_rules module with compile-time rule embedding
+- add load_embedded_rules() for loading rules from compiled-in defaults
+- fall back to embedded rules when no config file found
+- add 'longline init' subcommand to extract embedded rules
+- embed default rules into binary and rename manifest to rules
+
+
+### Changed
+
+- add design for embedded rules and manifest rename
+- add implementation plan for embedded rules
+- rename manifest to rules manifest throughout codebase
+- update CLAUDE.md and justfile for rules.yaml rename and embedded defaults
+
+
+### Fixed
+
+- error on TTY stdin instead of silently blocking in check subcommand
+
 ## [0.3.0] - 2026-02-08
 
 
@@ -27,6 +51,7 @@ All notable changes to this project will be documented in this file.
 - remove bare string backwards-compat from AllowlistEntry
 - add integration tests for trust_level
 - add implementation plan for trust_level tiered allowlists
+- release v0.3.0
 
 
 ### Fixed
