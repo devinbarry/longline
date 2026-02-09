@@ -337,6 +337,90 @@ fn load_rules_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfi
     })
 }
 
+/// Load rules from embedded defaults (compiled into the binary).
+pub fn load_embedded_rules() -> Result<RulesConfig, String> {
+    let content = crate::embedded_rules::get("rules.yaml")
+        .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
+
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
+
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_content = crate::embedded_rules::get(file_name)
+            .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+            .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(RulesConfig {
+        version: manifest.version,
+        default_decision: manifest.default_decision,
+        safety_level: manifest.safety_level,
+        trust_level: manifest.trust_level,
+        allowlists: Allowlists {
+            commands: merged_allowlists,
+            paths: Vec::new(),
+        },
+        rules: merged_rules,
+    })
+}
+
+/// Load embedded rules with file metadata.
+pub fn load_embedded_rules_with_info() -> Result<LoadedConfig, String> {
+    let content = crate::embedded_rules::get("rules.yaml")
+        .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
+
+    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+        .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
+
+    let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
+    let mut merged_rules: Vec<Rule> = Vec::new();
+    let mut files: Vec<LoadedFileInfo> = Vec::new();
+
+    for file_name in &manifest.include {
+        let file_content = crate::embedded_rules::get(file_name)
+            .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
+
+        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+            .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
+
+        let trust_counts = compute_trust_counts(&partial.allowlists.commands);
+        files.push(LoadedFileInfo {
+            name: file_name.clone(),
+            allowlist_count: partial.allowlists.commands.len(),
+            rule_count: partial.rules.len(),
+            trust_counts,
+        });
+
+        merged_allowlists.extend(partial.allowlists.commands);
+        merged_rules.extend(partial.rules);
+    }
+
+    Ok(LoadedConfig {
+        config: RulesConfig {
+            version: manifest.version,
+            default_decision: manifest.default_decision,
+            safety_level: manifest.safety_level,
+            trust_level: manifest.trust_level,
+            allowlists: Allowlists {
+                commands: merged_allowlists,
+                paths: Vec::new(),
+            },
+            rules: merged_rules,
+        },
+        is_rules_manifest: true,
+        rules_manifest_path: None,
+        files,
+    })
+}
+
 /// Compute trust tier counts from a list of allowlist entries: [minimal, standard, full].
 fn compute_trust_counts(commands: &[AllowlistEntry]) -> [usize; 3] {
     [
@@ -1130,5 +1214,46 @@ rules:
         let yaml = "version: 1\ntrust_level: minimal\nallowlists:\n  commands: []\nrules: []\n";
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.trust_level, TrustLevel::Minimal);
+    }
+
+    #[test]
+    fn test_load_embedded_rules_matches_disk() {
+        let disk_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("rules")
+            .join("rules.yaml");
+        let disk_config = load_rules(&disk_path).expect("Disk rules should load");
+        let embedded_config = load_embedded_rules().expect("Embedded rules should load");
+
+        assert_eq!(disk_config.version, embedded_config.version);
+        assert_eq!(
+            disk_config.default_decision,
+            embedded_config.default_decision
+        );
+        assert_eq!(disk_config.safety_level, embedded_config.safety_level);
+        assert_eq!(disk_config.trust_level, embedded_config.trust_level);
+        assert_eq!(
+            disk_config.allowlists.commands.len(),
+            embedded_config.allowlists.commands.len(),
+            "Allowlist count should match"
+        );
+        assert_eq!(
+            disk_config.rules.len(),
+            embedded_config.rules.len(),
+            "Rule count should match"
+        );
+    }
+
+    #[test]
+    fn test_load_embedded_rules_with_info() {
+        let loaded = load_embedded_rules_with_info().expect("Embedded rules with info should load");
+        assert!(loaded.is_rules_manifest);
+        assert!(
+            loaded.rules_manifest_path.is_none(),
+            "Embedded rules have no disk path"
+        );
+        assert!(
+            loaded.files.len() >= 11,
+            "Should have at least 11 included files"
+        );
     }
 }
