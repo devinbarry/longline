@@ -1163,3 +1163,41 @@ rules:
         "Should show project rule count: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_rules_shows_source_column() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        r#"
+rules:
+  - id: source-test-rule
+    level: high
+    match:
+      command: sometool
+    decision: ask
+    reason: "Source test"
+"#,
+    )
+    .unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--dir",
+        dir.path().to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("SOURCE"),
+        "Should have SOURCE header column: {stdout}"
+    );
+    assert!(
+        stdout.contains("project"),
+        "Should show 'project' source for project rules: {stdout}"
+    );
+}

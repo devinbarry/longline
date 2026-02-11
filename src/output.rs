@@ -6,6 +6,23 @@ use comfy_table::{
 use longline::policy;
 use longline::types::Decision;
 
+/// Map a RuleSource to its display color.
+fn source_color(s: policy::RuleSource) -> Color {
+    match s {
+        policy::RuleSource::Global => Color::DarkGrey,
+        policy::RuleSource::Project => Color::Cyan,
+    }
+}
+
+/// Create a colored Cell for a RuleSource value.
+fn source_cell(s: policy::RuleSource) -> Cell {
+    let label = match s {
+        policy::RuleSource::Global => "global",
+        policy::RuleSource::Project => "project",
+    };
+    Cell::new(label).fg(source_color(s))
+}
+
 /// Map a Decision to its display color.
 fn decision_color(d: Decision) -> Color {
     match d {
@@ -20,7 +37,7 @@ fn decision_cell(d: Decision) -> Cell {
     Cell::new(d).fg(decision_color(d))
 }
 
-/// Build a default rules table with 4 columns: DECISION, LEVEL, ID, DESCRIPTION.
+/// Build a default rules table with 5 columns: DECISION, LEVEL, ID, DESCRIPTION, SOURCE.
 pub fn rules_table(rules: &[&policy::Rule]) -> Table {
     let mut table = Table::new();
     table
@@ -32,6 +49,7 @@ pub fn rules_table(rules: &[&policy::Rule]) -> Table {
             Cell::new("LEVEL").add_attribute(Attribute::Bold),
             Cell::new("ID").add_attribute(Attribute::Bold),
             Cell::new("DESCRIPTION").add_attribute(Attribute::Bold),
+            Cell::new("SOURCE").add_attribute(Attribute::Bold),
         ]);
 
     for rule in rules {
@@ -40,13 +58,14 @@ pub fn rules_table(rules: &[&policy::Rule]) -> Table {
             Cell::new(rule.level),
             Cell::new(&rule.id),
             Cell::new(&rule.reason),
+            source_cell(rule.source),
         ]);
     }
 
     table
 }
 
-/// Build a verbose rules table with 6 columns: DECISION, LEVEL, ID, MATCH, PATTERN, DESCRIPTION.
+/// Build a verbose rules table with 7 columns: DECISION, LEVEL, ID, MATCH, PATTERN, DESCRIPTION, SOURCE.
 pub fn rules_table_verbose(rules: &[&policy::Rule]) -> Table {
     let mut table = Table::new();
     table
@@ -60,6 +79,7 @@ pub fn rules_table_verbose(rules: &[&policy::Rule]) -> Table {
             Cell::new("MATCH").add_attribute(Attribute::Bold),
             Cell::new("PATTERN").add_attribute(Attribute::Bold),
             Cell::new("DESCRIPTION").add_attribute(Attribute::Bold),
+            Cell::new("SOURCE").add_attribute(Attribute::Bold),
         ]);
 
     for rule in rules {
@@ -71,6 +91,7 @@ pub fn rules_table_verbose(rules: &[&policy::Rule]) -> Table {
             Cell::new(match_type),
             Cell::new(pattern),
             Cell::new(&rule.reason),
+            source_cell(rule.source),
         ]);
     }
 
@@ -195,7 +216,7 @@ fn trust_color(t: policy::TrustLevel) -> Color {
     }
 }
 
-/// Build a table showing all allowlisted commands with trust level.
+/// Build a table showing all allowlisted commands with trust level and source.
 pub fn allowlist_table(commands: &[policy::AllowlistEntry]) -> Table {
     let mut table = Table::new();
     table
@@ -205,12 +226,14 @@ pub fn allowlist_table(commands: &[policy::AllowlistEntry]) -> Table {
         .set_header(vec![
             Cell::new("ALLOWLISTED COMMANDS").add_attribute(Attribute::Bold),
             Cell::new("TRUST").add_attribute(Attribute::Bold),
+            Cell::new("SOURCE").add_attribute(Attribute::Bold),
         ]);
 
     for entry in commands {
         table.add_row(vec![
             Cell::new(&entry.command).fg(Color::Green),
             Cell::new(entry.trust).fg(trust_color(entry.trust)),
+            source_cell(entry.source),
         ]);
     }
 
