@@ -132,6 +132,13 @@ allowlists:
     - { command: "brew search", trust: minimal }
     - { command: "brew doctor", trust: minimal }
     - { command: "brew outdated", trust: minimal }
+    - { command: "brew services list", trust: minimal }
+    - { command: "brew deps", trust: minimal }
+    - { command: "brew config", trust: minimal }
+    - { command: "brew leaves", trust: minimal }
+    - { command: "brew desc", trust: minimal }
+    - { command: "brew cat", trust: minimal }
+    - { command: "brew home", trust: minimal }
     # ── deno: safe invocations ────────────────────────────────────
     # deno install/add - covered by rules (ask for confirmation)
     - { command: "deno --version", trust: minimal }
