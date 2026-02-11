@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-02-11
+
+
+### Added
+
+- add --dir global CLI flag for project config discovery
+- add RuleSource enum to track global vs project origin
+- tag merged project rules and allowlists with RuleSource::Project
+- wire project config discovery into rules, check, and files subcommands
+- add SOURCE column with cyan color for project items in table output
+- show project config path banner in rules and check output
+- add shasum, network diagnostics, ip/arp/route read-only, and longline to core allowlist
+- add longline-init ask rule to system rules
+- add brew read-only subcommands to package-managers allowlist
+- add brew mutation rules (upgrade/uninstall/update/tap/services/link/cleanup)
+- scaffold wrappers module with types and wrapper table
+- implement unwrap_transparent with unit tests
+- implement extract_inner_commands with chaining and depth limit
+- add wrapper commands to core allowlist
+- integrate wrapper unwrapping into policy evaluation
+
+
+### Changed
+
+- add design and implementation plan for project config discovery
+- add safe command allowlist additions design
+- add allowlist additions and transparent wrappers design docs
+- add safe commands implementation plan
+- add golden tests for network diagnostic commands
+- add golden tests for shasum and longline commands
+- add golden tests for brew read-only and mutation commands
+- add transparent wrappers implementation plan
+- add golden tests for transparent wrapper commands
+
 ## [0.3.1] - 2026-02-09
 
 
@@ -20,6 +54,7 @@ All notable changes to this project will be documented in this file.
 - add implementation plan for embedded rules
 - rename manifest to rules manifest throughout codebase
 - update CLAUDE.md and justfile for rules.yaml rename and embedded defaults
+- release v0.3.1
 
 
 ### Fixed
