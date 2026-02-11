@@ -125,6 +125,14 @@ fn default_config_path() -> PathBuf {
         .join("rules.yaml")
 }
 
+/// Resolve the project directory: --dir flag > process cwd > None.
+fn resolve_dir(explicit: Option<&PathBuf>) -> Option<PathBuf> {
+    if let Some(dir) = explicit {
+        return Some(dir.clone());
+    }
+    std::env::current_dir().ok()
+}
+
 /// Load rules config with fallback: --config flag > default path > embedded.
 fn load_config(explicit_path: Option<&PathBuf>) -> Result<policy::RulesConfig, String> {
     if let Some(path) = explicit_path {
@@ -147,7 +155,11 @@ pub fn run() -> i32 {
 
     // Handle Files command early (needs path before loading)
     if let Some(Commands::Files) = &cli.command {
-        return run_files(cli.config.as_ref(), cli.trust_level.as_ref());
+        return run_files(
+            cli.config.as_ref(),
+            cli.trust_level.as_ref(),
+            cli.dir.as_ref(),
+        );
     }
 
     // Handle Init command early (no config needed)
@@ -167,6 +179,22 @@ pub fn run() -> i32 {
     // Apply CLI trust level override
     if let Some(ref level) = cli.trust_level {
         rules_config.trust_level = level.to_trust_level();
+    }
+
+    // Merge per-project config (for subcommands; hook mode handles this via JSON cwd)
+    if cli.command.is_some() {
+        if let Some(dir) = resolve_dir(cli.dir.as_ref()) {
+            match policy::load_project_config(&dir) {
+                Ok(Some(project_config)) => {
+                    policy::merge_project_config(&mut rules_config, project_config);
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    eprintln!("longline: {e}");
+                    return 2;
+                }
+            }
+        }
     }
 
     match cli.command {
@@ -519,7 +547,11 @@ fn run_rules(
     0
 }
 
-fn run_files(config_path: Option<&PathBuf>, trust_override: Option<&TrustLevelArg>) -> i32 {
+fn run_files(
+    config_path: Option<&PathBuf>,
+    trust_override: Option<&TrustLevelArg>,
+    dir_override: Option<&PathBuf>,
+) -> i32 {
     let loaded = if let Some(path) = config_path {
         match policy::load_rules_with_info(path) {
             Ok(c) => c,
@@ -594,6 +626,36 @@ fn run_files(config_path: Option<&PathBuf>, trust_override: Option<&TrustLevelAr
         "Total: {} allowlist entries ({} min/{} std/{} full), {} rules",
         total_allowlist, total_trust[0], total_trust[1], total_trust[2], total_rules
     );
+
+    // Show project config info if present
+    if let Some(dir) = resolve_dir(dir_override) {
+        match policy::load_project_config(&dir) {
+            Ok(Some(project_config)) => {
+                if let Some(root) = policy::find_project_root(&dir) {
+                    let config_path = root.join(".claude").join("longline.yaml");
+                    let display = config_path.display().to_string();
+                    println!("\nProject config: {}", yansi::Paint::cyan(&display));
+                    if let Some(level) = project_config.override_safety_level {
+                        println!("  override_safety_level: {level}");
+                    }
+                    if let Some(level) = project_config.override_trust_level {
+                        println!("  override_trust_level: {level}");
+                    }
+                    if let Some(ref allowlists) = project_config.allowlists {
+                        println!("  allowlists: {} commands", allowlists.commands.len());
+                    }
+                    if let Some(ref rules) = project_config.rules {
+                        println!("  rules: {}", rules.len());
+                    }
+                    if let Some(ref disable) = project_config.disable_rules {
+                        println!("  disable_rules: {}", disable.len());
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(e) => eprintln!("longline: project config error: {e}"),
+        }
+    }
 
     0
 }

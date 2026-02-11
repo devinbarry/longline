@@ -1010,3 +1010,156 @@ fn test_e2e_files_shows_embedded_source() {
     );
     assert!(stdout.contains("Total:"), "Should show totals: {stdout}");
 }
+
+#[test]
+fn test_e2e_rules_with_dir_shows_project_rules() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        r#"
+rules:
+  - id: project-test-rule
+    level: high
+    match:
+      command: sometool
+    decision: ask
+    reason: "Project test rule"
+"#,
+    )
+    .unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--dir",
+        dir.path().to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("project-test-rule"),
+        "Should show project rule: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_check_with_dir_uses_project_rules() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        r#"
+rules:
+  - id: project-ask-on-push
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["push"]
+    decision: ask
+    reason: "Requires approval before pushing"
+"#,
+    )
+    .unwrap();
+
+    let cmd_file = dir.path().join("cmds.txt");
+    std::fs::write(&cmd_file, "git push origin main\n").unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "check",
+        "--config",
+        &rules_path(),
+        "--dir",
+        dir.path().to_str().unwrap(),
+        cmd_file.to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("project-ask-on-push"),
+        "Should match project rule: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_rules_auto_discovers_project_from_cwd() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        r#"
+rules:
+  - id: cwd-test-rule
+    level: high
+    match:
+      command: mytool
+    decision: deny
+    reason: "CWD discovery test"
+"#,
+    )
+    .unwrap();
+
+    let home = test_home_dir().to_string_lossy().to_string();
+    let child = Command::new(longline_bin())
+        .args(["rules", "--config", &rules_path()])
+        .env("HOME", &home)
+        .current_dir(dir.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("cwd-test-rule"),
+        "Should auto-discover project config from cwd: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_files_with_dir_shows_project_config() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        r#"
+rules:
+  - id: files-test-rule
+    level: high
+    match:
+      command: mytool
+    decision: ask
+    reason: "Files test"
+"#,
+    )
+    .unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "files",
+        "--config",
+        &rules_path(),
+        "--dir",
+        dir.path().to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Project config:"),
+        "Should show project config info: {stdout}"
+    );
+    assert!(
+        stdout.contains("rules: 1"),
+        "Should show project rule count: {stdout}"
+    );
+}
