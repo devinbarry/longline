@@ -89,6 +89,11 @@ allowlists:
     - { command: hyperfine, trust: minimal }
     - { command: ag, trust: minimal }
     - { command: ack, trust: minimal }
+    # ── Transparent wrappers: inner command evaluated separately ──
+    - { command: timeout, trust: minimal }
+    - { command: nice, trust: minimal }
+    - { command: nohup, trust: standard }
+    - { command: strace, trust: standard }
     # ── Always safe: dev tools (no publish risk) ──────────────────
     - { command: make, trust: standard }
     - { command: cmake, trust: standard }
