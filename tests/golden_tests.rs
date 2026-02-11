@@ -256,3 +256,8 @@ fn golden_curl() {
 fn golden_version_check() {
     run_golden_suite("version-check.yaml");
 }
+
+#[test]
+fn golden_wrappers() {
+    run_golden_suite("wrappers.yaml");
+}
