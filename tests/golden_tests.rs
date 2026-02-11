@@ -261,3 +261,8 @@ fn golden_version_check() {
 fn golden_network_diagnostics() {
     run_golden_suite("network-diagnostics.yaml");
 }
+
+#[test]
+fn golden_wrappers() {
+    run_golden_suite("wrappers.yaml");
+}

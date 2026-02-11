@@ -10,7 +10,8 @@ tests:
   - id: abs-path-env-rm
     command: "/usr/bin/env rm -rf /"
     expected:
-      decision: ask
+      decision: deny
+      rule_id: rm-recursive-root
 
   # ── Shell interpreter bypass ────────────────────────────────
   - id: echo-pipe-bash
