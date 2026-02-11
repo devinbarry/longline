@@ -111,5 +111,32 @@ allowlists:
     - { command: sed, trust: standard }
     - { command: awk, trust: standard }
     - { command: patch, trust: standard }
+    # ── Checksums ──────────────────────────────────────────────────
+    - { command: shasum, trust: minimal }
+    # ── Network diagnostics: read-only ─────────────────────────────
+    - { command: ping, trust: minimal }
+    - { command: dig, trust: minimal }
+    - { command: nslookup, trust: minimal }
+    - { command: host, trust: minimal }
+    - { command: traceroute, trust: minimal }
+    - { command: tracepath, trust: minimal }
+    - { command: netstat, trust: minimal }
+    - { command: ss, trust: minimal }
+    # ── Network tools: read-only subcommands only ──────────────────
+    - { command: "ip addr show", trust: minimal }
+    - { command: "ip addr list", trust: minimal }
+    - { command: "ip link show", trust: minimal }
+    - { command: "ip link list", trust: minimal }
+    - { command: "ip route show", trust: minimal }
+    - { command: "ip route list", trust: minimal }
+    - { command: "ip route get", trust: minimal }
+    - { command: "ip neigh show", trust: minimal }
+    - { command: "ip neigh list", trust: minimal }
+    - { command: "ip rule show", trust: minimal }
+    - { command: "ip rule list", trust: minimal }
+    - { command: "arp -a", trust: minimal }
+    - { command: "route -n", trust: minimal }
+    # ── longline: project CLI ──────────────────────────────────────
+    - { command: longline, trust: minimal }
 
 rules: []
