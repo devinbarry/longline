@@ -292,3 +292,41 @@ tests:
     command: "tree -L 3 -I 'target|.git' /path"
     expected:
       decision: allow
+
+  # ── shasum ───────────────────────────────────────────────────
+  - id: shasum-safe
+    command: "shasum -a 256 file.txt"
+    expected:
+      decision: allow
+
+  # ── longline ─────────────────────────────────────────────────
+  - id: longline-check-allow
+    command: "longline check 'ls -la'"
+    expected:
+      decision: allow
+  - id: longline-rules-allow
+    command: "longline rules"
+    expected:
+      decision: allow
+  - id: longline-files-allow
+    command: "longline files"
+    expected:
+      decision: allow
+  - id: longline-version-allow
+    command: "longline --version"
+    expected:
+      decision: allow
+  - id: longline-help-allow
+    command: "longline --help"
+    expected:
+      decision: allow
+  - id: longline-init-ask
+    command: "longline init"
+    expected:
+      decision: ask
+      rule_id: longline-init
+  - id: longline-init-config-ask
+    command: "longline --config rules.yaml init"
+    expected:
+      decision: ask
+      rule_id: longline-init
