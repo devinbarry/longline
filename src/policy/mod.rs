@@ -21,6 +21,7 @@ use matching::{matches_pipeline, matches_rule};
 /// Returns the most restrictive decision across all leaves and pipeline rules.
 pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
     let leaves = parser::flatten(stmt);
+    let extra_leaves = parser::wrappers::extract_inner_commands(stmt);
     let mut worst = PolicyResult::allow();
 
     // Check pipeline rules against all pipelines in the statement tree
@@ -45,8 +46,8 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         }
     }
 
-    // Then evaluate each leaf node
-    for leaf in &leaves {
+    // Evaluate original leaves + unwrapped inner commands
+    for leaf in leaves.iter().copied().chain(extra_leaves.iter()) {
         let result = evaluate_leaf(config, leaf);
         if result.decision > worst.decision {
             worst = result;
@@ -61,7 +62,8 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
 
     // If nothing matched and not all leaves are allowlisted, use default decision
     if worst.decision == Decision::Allow && worst.rule_id.is_none() {
-        let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf));
+        let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf))
+            && extra_leaves.iter().all(|leaf| is_allowlisted(config, leaf));
         if !all_allowlisted {
             return PolicyResult {
                 decision: config.default_decision,
@@ -1021,5 +1023,96 @@ rules:
             Decision::Deny,
             "Nested loops with dangerous command should deny"
         );
+    }
+
+    // --- Wrapper unwrapping policy tests ---
+
+    #[test]
+    fn test_timeout_safe_inner_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("timeout 30 ls -la").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_timeout_dangerous_inner_denies() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("timeout 30 rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny);
+    }
+
+    #[test]
+    fn test_timeout_unknown_inner_asks() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("timeout 10 some_unknown_command").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+    }
+
+    #[test]
+    fn test_env_safe_inner_allows() {
+        // Note: bare `env` matches the printenv rule (ask) in the real ruleset,
+        // so we use a minimal config where env is just allowlisted.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: env, trust: minimal }
+    - { command: ls, trust: minimal }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env FOO=bar ls").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_env_dangerous_inner_denies() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("env VAR=val rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny);
+    }
+
+    #[test]
+    fn test_chained_wrappers_safe_allows() {
+        // Note: bare `env` matches the printenv rule (ask) in the real ruleset,
+        // so we use a minimal config where env is just allowlisted.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: env, trust: minimal }
+    - { command: timeout, trust: minimal }
+    - { command: ls, trust: minimal }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env VAR=1 timeout 30 ls").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_chained_wrappers_dangerous_denies() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("env VAR=1 timeout 30 rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Deny);
+    }
+
+    #[test]
+    fn test_bare_wrapper_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("timeout 30").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
     }
 }
