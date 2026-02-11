@@ -7,7 +7,8 @@ pub use config::{
     load_embedded_rules, load_embedded_rules_with_info, load_project_config, load_rules,
     load_rules_with_info, merge_project_config, AllowlistEntry, Allowlists, ArgsMatcher,
     FlagsMatcher, LoadedConfig, LoadedFileInfo, Matcher, PipelineMatcher, ProjectConfig,
-    RedirectMatcher, Rule, RulesConfig, SafetyLevel, StageMatcher, StringOrList, TrustLevel,
+    RedirectMatcher, Rule, RuleSource, RulesConfig, SafetyLevel, StageMatcher, StringOrList,
+    TrustLevel,
 };
 
 use crate::parser::{self, Statement};

@@ -6,6 +6,14 @@ use std::path::{Path, PathBuf};
 
 use crate::types::Decision;
 
+/// Tracks whether a rule/entry came from global config or project config.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RuleSource {
+    #[default]
+    Global,
+    Project,
+}
+
 /// Rules manifest configuration that lists files to include.
 #[derive(Debug, Deserialize)]
 pub struct RulesManifestConfig {
@@ -122,6 +130,8 @@ impl std::fmt::Display for TrustLevel {
 pub struct AllowlistEntry {
     pub command: String,
     pub trust: TrustLevel,
+    #[serde(skip)]
+    pub source: RuleSource,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -141,6 +151,8 @@ pub struct Rule {
     pub matcher: Matcher,
     pub decision: Decision,
     pub reason: String,
+    #[serde(skip)]
+    pub source: RuleSource,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1038,6 +1050,7 @@ disable_rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
+                    source: RuleSource::default(),
                 }],
                 paths: vec![],
             },
@@ -1050,6 +1063,7 @@ disable_rules:
                 commands: vec![AllowlistEntry {
                     command: "docker compose".to_string(),
                     trust: TrustLevel::Standard,
+                    source: RuleSource::default(),
                 }],
                 paths: vec![],
             }),
@@ -1085,6 +1099,7 @@ disable_rules:
                     },
                     decision: Decision::Deny,
                     reason: "test".to_string(),
+                    source: RuleSource::default(),
                 },
                 Rule {
                     id: "rule-b".to_string(),
@@ -1096,6 +1111,7 @@ disable_rules:
                     },
                     decision: Decision::Ask,
                     reason: "test".to_string(),
+                    source: RuleSource::default(),
                 },
             ],
         };
@@ -1147,6 +1163,7 @@ rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
+                    source: RuleSource::default(),
                 }],
                 paths: vec![],
             },
@@ -1255,5 +1272,21 @@ rules:
             loaded.files.len() >= 11,
             "Should have at least 11 included files"
         );
+    }
+
+    #[test]
+    fn test_rule_source_default_is_global() {
+        let yaml = r#"
+version: 1
+rules:
+  - id: test-rule
+    level: high
+    match:
+      command: rm
+    decision: ask
+    reason: "Test"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.rules[0].source, RuleSource::Global);
     }
 }
