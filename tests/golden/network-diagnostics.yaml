@@ -1,0 +1,124 @@
+tests:
+  # ── Pure read-only tools (allow) ─────────────────────────────
+  - id: ping-safe
+    command: "ping -c 4 192.168.1.1"
+    expected:
+      decision: allow
+  - id: dig-safe
+    command: "dig example.com +short"
+    expected:
+      decision: allow
+  - id: dig-trace-safe
+    command: "dig example.com +trace"
+    expected:
+      decision: allow
+  - id: nslookup-safe
+    command: "nslookup example.com"
+    expected:
+      decision: allow
+  - id: host-safe
+    command: "host example.com"
+    expected:
+      decision: allow
+  - id: traceroute-safe
+    command: "traceroute -m 15 192.168.1.1"
+    expected:
+      decision: allow
+  - id: netstat-safe
+    command: "netstat -rn"
+    expected:
+      decision: allow
+  - id: ss-safe
+    command: "ss -tulnp"
+    expected:
+      decision: allow
+
+  # ── ip: read-only subcommands (allow) ────────────────────────
+  - id: ip-addr-show
+    command: "ip addr show"
+    expected:
+      decision: allow
+  - id: ip-addr-show-eth0
+    command: "ip addr show eth0"
+    expected:
+      decision: allow
+  - id: ip-link-show
+    command: "ip link show"
+    expected:
+      decision: allow
+  - id: ip-route-show
+    command: "ip route show"
+    expected:
+      decision: allow
+  - id: ip-route-get
+    command: "ip route get 8.8.8.8"
+    expected:
+      decision: allow
+  - id: ip-neigh-show
+    command: "ip neigh show"
+    expected:
+      decision: allow
+
+  # ── ip: mutating subcommands (ask) ──────────────────────────
+  - id: ip-addr-add-ask
+    command: "ip addr add 192.168.1.1/24 dev eth0"
+    expected:
+      decision: ask
+  - id: ip-addr-del-ask
+    command: "ip addr del 192.168.1.1/24 dev eth0"
+    expected:
+      decision: ask
+  - id: ip-link-set-ask
+    command: "ip link set eth0 up"
+    expected:
+      decision: ask
+  - id: ip-route-add-ask
+    command: "ip route add default via 192.168.1.1"
+    expected:
+      decision: ask
+  - id: ip-route-del-ask
+    command: "ip route del default"
+    expected:
+      decision: ask
+  - id: ip-bare-ask
+    command: "ip addr"
+    expected:
+      decision: ask
+
+  # ── arp: read-only (allow) vs mutating (ask) ────────────────
+  - id: arp-show
+    command: "arp -a"
+    expected:
+      decision: allow
+  - id: arp-add-ask
+    command: "arp -s 192.168.1.1 00:11:22:33:44:55"
+    expected:
+      decision: ask
+  - id: arp-del-ask
+    command: "arp -d 192.168.1.1"
+    expected:
+      decision: ask
+
+  # ── route: read-only (allow) vs mutating (ask) ──────────────
+  - id: route-show
+    command: "route -n"
+    expected:
+      decision: allow
+  - id: route-add-ask
+    command: "route add default gw 192.168.1.1"
+    expected:
+      decision: ask
+  - id: route-del-ask
+    command: "route del default"
+    expected:
+      decision: ask
+
+  # ── ifconfig: always ask (not allowlisted) ──────────────────
+  - id: ifconfig-bare-ask
+    command: "ifconfig"
+    expected:
+      decision: ask
+  - id: ifconfig-mutate-ask
+    command: "ifconfig eth0 up"
+    expected:
+      decision: ask
