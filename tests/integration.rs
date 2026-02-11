@@ -1201,3 +1201,38 @@ rules:
         "Should show 'project' source for project rules: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_rules_shows_project_banner() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "rules:\n  - id: banner-test\n    level: high\n    match:\n      command: foo\n    decision: ask\n    reason: test\n",
+    ).unwrap();
+
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--dir",
+        dir.path().to_str().unwrap(),
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Project config:"),
+        "Should show project config banner: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_rules_no_banner_without_project_config() {
+    let (code, stdout, _) = run_subcommand(&["rules", "--config", &rules_path(), "--dir", "/tmp"]);
+    assert_eq!(code, 0);
+    assert!(
+        !stdout.contains("Project config:"),
+        "Should NOT show project config banner when no project config: {stdout}"
+    );
+}

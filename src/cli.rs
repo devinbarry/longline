@@ -182,10 +182,17 @@ pub fn run() -> i32 {
     }
 
     // Merge per-project config (for subcommands; hook mode handles this via JSON cwd)
+    let mut project_config_path: Option<PathBuf> = None;
     if cli.command.is_some() {
         if let Some(dir) = resolve_dir(cli.dir.as_ref()) {
             match policy::load_project_config(&dir) {
                 Ok(Some(project_config)) => {
+                    if let Some(root) = policy::find_project_root(&dir) {
+                        let path = root.join(".claude").join("longline.yaml");
+                        if path.exists() {
+                            project_config_path = Some(path);
+                        }
+                    }
                     policy::merge_project_config(&mut rules_config, project_config);
                 }
                 Ok(None) => {}
@@ -198,13 +205,22 @@ pub fn run() -> i32 {
     }
 
     match cli.command {
-        Some(Commands::Check { file, filter }) => run_check(&rules_config, file, filter),
+        Some(Commands::Check { file, filter }) => {
+            run_check(&rules_config, file, filter, project_config_path.as_ref())
+        }
         Some(Commands::Rules {
             verbose,
             filter,
             level,
             group_by,
-        }) => run_rules(&rules_config, verbose, filter, level, group_by),
+        }) => run_rules(
+            &rules_config,
+            verbose,
+            filter,
+            level,
+            group_by,
+            project_config_path.as_ref(),
+        ),
         Some(Commands::Files) => unreachable!(), // handled above
         Some(Commands::Init { .. }) => unreachable!(), // handled above
         None => run_hook(
@@ -408,7 +424,13 @@ fn run_check(
     config: &policy::RulesConfig,
     file: Option<PathBuf>,
     filter: Option<DecisionFilter>,
+    project_config_path: Option<&PathBuf>,
 ) -> i32 {
+    if let Some(path) = project_config_path {
+        let display = path.display().to_string();
+        println!("Project config: {}", yansi::Paint::cyan(&display));
+    }
+
     let input = match read_check_input(file) {
         Ok(s) => s,
         Err(e) => {
@@ -490,7 +512,13 @@ fn run_rules(
     filter: Option<DecisionFilter>,
     level: Option<LevelFilter>,
     group_by: Option<GroupBy>,
+    project_config_path: Option<&PathBuf>,
 ) -> i32 {
+    if let Some(path) = project_config_path {
+        let display = path.display().to_string();
+        println!("Project config: {}", yansi::Paint::cyan(&display));
+    }
+
     let rules: Vec<&policy::Rule> = config
         .rules
         .iter()
