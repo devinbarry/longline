@@ -107,3 +107,11 @@ rules:
         any_of: ["-r"]
     decision: deny
     reason: "Removing all cron jobs"
+
+  - id: longline-init
+    level: high
+    match:
+      command: longline
+      args: { any_of: ["init"] }
+    decision: ask
+    reason: "Extracting embedded rules to config directory"
