@@ -287,7 +287,10 @@ pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
     }
 
     if let Some(allowlists) = project.allowlists {
-        config.allowlists.commands.extend(allowlists.commands);
+        for mut entry in allowlists.commands {
+            entry.source = RuleSource::Project;
+            config.allowlists.commands.push(entry);
+        }
         config.allowlists.paths.extend(allowlists.paths);
     }
 
@@ -296,7 +299,10 @@ pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
     }
 
     if let Some(rules) = project.rules {
-        config.rules.extend(rules);
+        for mut rule in rules {
+            rule.source = RuleSource::Project;
+            config.rules.push(rule);
+        }
     }
 }
 
@@ -1288,5 +1294,65 @@ rules:
 "#;
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.rules[0].source, RuleSource::Global);
+    }
+
+    #[test]
+    fn test_merge_project_config_tags_rules_as_project() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
+            allowlists: Allowlists::default(),
+            rules: vec![],
+        };
+        let project_yaml = r#"
+rules:
+  - id: project-rule
+    level: high
+    match:
+      command: docker
+    decision: allow
+    reason: "Project allows docker"
+"#;
+        let project: ProjectConfig = serde_yaml::from_str(project_yaml).unwrap();
+        merge_project_config(&mut config, project);
+        assert_eq!(config.rules[0].source, RuleSource::Project);
+    }
+
+    #[test]
+    fn test_merge_project_config_tags_allowlist_as_project() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
+            allowlists: Allowlists {
+                commands: vec![AllowlistEntry {
+                    command: "ls".to_string(),
+                    trust: TrustLevel::Standard,
+                    source: RuleSource::Global,
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let project = ProjectConfig {
+            override_safety_level: None,
+            override_trust_level: None,
+            allowlists: Some(Allowlists {
+                commands: vec![AllowlistEntry {
+                    command: "docker compose".to_string(),
+                    trust: TrustLevel::Standard,
+                    source: RuleSource::default(),
+                }],
+                paths: vec![],
+            }),
+            rules: None,
+            disable_rules: None,
+        };
+        merge_project_config(&mut config, project);
+        assert_eq!(config.allowlists.commands[0].source, RuleSource::Global);
+        assert_eq!(config.allowlists.commands[1].source, RuleSource::Project);
     }
 }
