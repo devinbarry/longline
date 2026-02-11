@@ -10,7 +10,6 @@ use super::{SimpleCommand, Statement};
 
 /// Maximum recursion depth for chained wrappers.
 /// If exceeded, evaluation falls back to ask via an Opaque node.
-#[allow(dead_code)]
 const MAX_UNWRAP_DEPTH: usize = 16;
 
 /// How to skip past wrapper-specific arguments to find the inner command.
@@ -189,8 +188,49 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
 
 /// Walk a statement tree, find all wrapper SimpleCommands, unwrap them
 /// recursively (max depth 16, then ask), return all synthesized inner commands.
-pub fn extract_inner_commands(_stmt: &Statement) -> Vec<Statement> {
-    todo!()
+pub fn extract_inner_commands(stmt: &Statement) -> Vec<Statement> {
+    let mut results = Vec::new();
+    collect_inner_commands(stmt, &mut results);
+    results
+}
+
+fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
+    match stmt {
+        Statement::SimpleCommand(cmd) => {
+            unwrap_recursive(cmd, out, 0);
+            for sub in &cmd.embedded_substitutions {
+                collect_inner_commands(sub, out);
+            }
+        }
+        Statement::Pipeline(p) => {
+            for stage in &p.stages {
+                collect_inner_commands(stage, out);
+            }
+        }
+        Statement::List(l) => {
+            collect_inner_commands(&l.first, out);
+            for (_, s) in &l.rest {
+                collect_inner_commands(s, out);
+            }
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            collect_inner_commands(inner, out);
+        }
+        Statement::Opaque(_) | Statement::Empty => {}
+    }
+}
+
+fn unwrap_recursive(cmd: &SimpleCommand, out: &mut Vec<Statement>, depth: usize) {
+    if let Some(inner) = unwrap_transparent(cmd) {
+        if depth >= MAX_UNWRAP_DEPTH {
+            out.push(Statement::Opaque(
+                "wrapper depth limit exceeded".to_string(),
+            ));
+            return;
+        }
+        out.push(Statement::SimpleCommand(inner.clone()));
+        unwrap_recursive(&inner, out, depth + 1);
+    }
 }
 
 #[cfg(test)]
@@ -629,5 +669,136 @@ mod tests {
         assert_eq!(inner.name.as_deref(), Some("ls"));
         assert_eq!(inner.redirects.len(), 1);
         assert_eq!(inner.redirects[0].target, "/tmp/out");
+    }
+
+    // ── extract_inner_commands tests ────────────────────────────
+
+    #[test]
+    fn test_extract_from_simple_wrapper() {
+        let stmt = Statement::SimpleCommand(make_cmd("timeout", &["30", "ls"]));
+        let inners = extract_inner_commands(&stmt);
+        assert_eq!(inners.len(), 1);
+        if let Statement::SimpleCommand(ref cmd) = inners[0] {
+            assert_eq!(cmd.name.as_deref(), Some("ls"));
+        } else {
+            panic!("Expected SimpleCommand");
+        }
+    }
+
+    #[test]
+    fn test_extract_from_non_wrapper() {
+        let stmt = Statement::SimpleCommand(make_cmd("ls", &["-la"]));
+        let inners = extract_inner_commands(&stmt);
+        assert!(inners.is_empty());
+    }
+
+    #[test]
+    fn test_extract_chained_two_deep() {
+        // env VAR=1 timeout 30 ls
+        let stmt = Statement::SimpleCommand(make_cmd("env", &["VAR=1", "timeout", "30", "ls"]));
+        let inners = extract_inner_commands(&stmt);
+        // Should have: "timeout 30 ls" and "ls"
+        assert_eq!(inners.len(), 2);
+        if let Statement::SimpleCommand(ref cmd) = inners[0] {
+            assert_eq!(cmd.name.as_deref(), Some("timeout"));
+        } else {
+            panic!("Expected SimpleCommand at [0]");
+        }
+        if let Statement::SimpleCommand(ref cmd) = inners[1] {
+            assert_eq!(cmd.name.as_deref(), Some("ls"));
+        } else {
+            panic!("Expected SimpleCommand at [1]");
+        }
+    }
+
+    #[test]
+    fn test_extract_chained_three_deep() {
+        // env VAR=1 timeout 30 nice -n 5 ls
+        let stmt = Statement::SimpleCommand(make_cmd(
+            "env",
+            &["VAR=1", "timeout", "30", "nice", "-n", "5", "ls"],
+        ));
+        let inners = extract_inner_commands(&stmt);
+        // Should have: "timeout 30 nice -n 5 ls", "nice -n 5 ls", "ls"
+        assert_eq!(inners.len(), 3);
+        if let Statement::SimpleCommand(ref cmd) = inners[2] {
+            assert_eq!(cmd.name.as_deref(), Some("ls"));
+        } else {
+            panic!("Expected SimpleCommand at [2]");
+        }
+    }
+
+    #[test]
+    fn test_extract_from_pipeline() {
+        use crate::parser::Pipeline;
+        let stmt = Statement::Pipeline(Pipeline {
+            stages: vec![
+                Statement::SimpleCommand(make_cmd("timeout", &["30", "cat", "file.txt"])),
+                Statement::SimpleCommand(make_cmd("grep", &["pattern"])),
+            ],
+            negated: false,
+        });
+        let inners = extract_inner_commands(&stmt);
+        // Only the timeout stage has an inner command
+        assert_eq!(inners.len(), 1);
+        if let Statement::SimpleCommand(ref cmd) = inners[0] {
+            assert_eq!(cmd.name.as_deref(), Some("cat"));
+        } else {
+            panic!("Expected SimpleCommand");
+        }
+    }
+
+    #[test]
+    fn test_extract_from_list() {
+        use crate::parser::{List, ListOp};
+        let stmt = Statement::List(List {
+            first: Box::new(Statement::SimpleCommand(make_cmd("timeout", &["30", "ls"]))),
+            rest: vec![(
+                ListOp::And,
+                Statement::SimpleCommand(make_cmd("nice", &["echo", "done"])),
+            )],
+        });
+        let inners = extract_inner_commands(&stmt);
+        assert_eq!(inners.len(), 2); // ls from timeout, echo from nice
+    }
+
+    #[test]
+    fn test_extract_depth_limit() {
+        // Build 18 layers: nice nohup nice nohup ... rm -rf /
+        let mut argv: Vec<&str> = Vec::new();
+        for i in 0..18 {
+            if i % 2 == 0 {
+                argv.push("nice");
+            } else {
+                argv.push("nohup");
+            }
+        }
+        argv.extend_from_slice(&["rm", "-rf", "/"]);
+
+        let stmt = Statement::SimpleCommand(make_cmd("nice", &argv[1..]));
+        let inners = extract_inner_commands(&stmt);
+
+        // Should hit depth limit -- last entry should be Opaque
+        let last = inners.last().unwrap();
+        assert!(
+            matches!(last, Statement::Opaque(_)),
+            "Depth limit should produce Opaque, got: {:?}",
+            last
+        );
+    }
+
+    #[test]
+    fn test_extract_within_depth_limit() {
+        // 3 layers: nice nice nice ls
+        let stmt = Statement::SimpleCommand(make_cmd("nice", &["nice", "nice", "ls"]));
+        let inners = extract_inner_commands(&stmt);
+        // Should get: "nice nice ls", "nice ls", "ls"
+        assert_eq!(inners.len(), 3);
+        // Last should be SimpleCommand(ls), not Opaque
+        if let Statement::SimpleCommand(ref cmd) = inners[2] {
+            assert_eq!(cmd.name.as_deref(), Some("ls"));
+        } else {
+            panic!("Expected SimpleCommand(ls)");
+        }
     }
 }
