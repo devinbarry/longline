@@ -511,6 +511,62 @@ rules:
     decision: ask
     reason: "Installing package via Homebrew"
 
+  - id: brew-upgrade
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["upgrade"] }
+    decision: ask
+    reason: "Upgrading packages via Homebrew"
+
+  - id: brew-uninstall
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["uninstall", "remove", "rm"] }
+    decision: ask
+    reason: "Uninstalling package via Homebrew"
+
+  - id: brew-update
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["update"] }
+    decision: ask
+    reason: "Updating Homebrew package index"
+
+  - id: brew-tap
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["tap", "untap"] }
+    decision: ask
+    reason: "Modifying Homebrew taps"
+
+  - id: brew-services-mutate
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["start", "stop", "restart"] }
+    decision: ask
+    reason: "Managing Homebrew services"
+
+  - id: brew-link
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["link", "unlink"] }
+    decision: ask
+    reason: "Linking/unlinking Homebrew packages"
+
+  - id: brew-cleanup
+    level: high
+    match:
+      command: brew
+      args: { any_of: ["cleanup", "autoremove"] }
+    decision: ask
+    reason: "Cleaning up Homebrew packages"
+
   - id: apt-install
     level: high
     match:
