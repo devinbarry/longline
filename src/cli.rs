@@ -20,6 +20,10 @@ struct Cli {
     #[arg(long, value_name = "LEVEL", global = true)]
     trust_level: Option<TrustLevelArg>,
 
+    /// Project directory for .claude/longline.yaml discovery (defaults to cwd)
+    #[arg(long, value_name = "DIR", global = true)]
+    dir: Option<PathBuf>,
+
     /// Downgrade deny decisions to ask (hook mode only)
     #[arg(long)]
     ask_on_deny: bool,
@@ -660,5 +664,17 @@ mod tests {
     fn test_cli_parses_lenient_alias_flag() {
         let cli = Cli::try_parse_from(["longline", "--lenient"]).unwrap();
         assert!(cli.ask_ai_lenient);
+    }
+
+    #[test]
+    fn test_cli_parses_dir_flag() {
+        let cli = Cli::try_parse_from(["longline", "--dir", "/tmp/myproject", "rules"]).unwrap();
+        assert_eq!(cli.dir.unwrap(), PathBuf::from("/tmp/myproject"));
+    }
+
+    #[test]
+    fn test_cli_dir_flag_is_optional() {
+        let cli = Cli::try_parse_from(["longline", "rules"]).unwrap();
+        assert!(cli.dir.is_none());
     }
 }
