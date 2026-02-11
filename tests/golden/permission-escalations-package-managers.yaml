@@ -438,3 +438,93 @@ tests:
     expected:
       decision: ask
       rule_id: doas-package-install
+
+  # ── brew read-only (allow) ──────────────────────────────────
+  - id: brew-services-list-safe
+    command: "brew services list"
+    expected:
+      decision: allow
+  - id: brew-deps-safe
+    command: "brew deps wget"
+    expected:
+      decision: allow
+  - id: brew-config-safe
+    command: "brew config"
+    expected:
+      decision: allow
+  - id: brew-leaves-safe
+    command: "brew leaves"
+    expected:
+      decision: allow
+
+  # ── brew mutations (ask) ────────────────────────────────────
+  - id: brew-upgrade-ask
+    command: "brew upgrade"
+    expected:
+      decision: ask
+      rule_id: brew-upgrade
+  - id: brew-upgrade-pkg-ask
+    command: "brew upgrade wget"
+    expected:
+      decision: ask
+      rule_id: brew-upgrade
+  - id: brew-uninstall-ask
+    command: "brew uninstall wget"
+    expected:
+      decision: ask
+      rule_id: brew-uninstall
+  - id: brew-remove-ask
+    command: "brew remove wget"
+    expected:
+      decision: ask
+      rule_id: brew-uninstall
+  - id: brew-update-ask
+    command: "brew update"
+    expected:
+      decision: ask
+      rule_id: brew-update
+  - id: brew-tap-ask
+    command: "brew tap homebrew/cask"
+    expected:
+      decision: ask
+      rule_id: brew-tap
+  - id: brew-untap-ask
+    command: "brew untap homebrew/cask"
+    expected:
+      decision: ask
+      rule_id: brew-tap
+  - id: brew-services-start-ask
+    command: "brew services start postgresql"
+    expected:
+      decision: ask
+      rule_id: brew-services-mutate
+  - id: brew-services-stop-ask
+    command: "brew services stop postgresql"
+    expected:
+      decision: ask
+      rule_id: brew-services-mutate
+  - id: brew-services-restart-ask
+    command: "brew services restart postgresql"
+    expected:
+      decision: ask
+      rule_id: brew-services-mutate
+  - id: brew-link-ask
+    command: "brew link python@3.12"
+    expected:
+      decision: ask
+      rule_id: brew-link
+  - id: brew-unlink-ask
+    command: "brew unlink python@3.12"
+    expected:
+      decision: ask
+      rule_id: brew-link
+  - id: brew-cleanup-ask
+    command: "brew cleanup"
+    expected:
+      decision: ask
+      rule_id: brew-cleanup
+  - id: brew-autoremove-ask
+    command: "brew autoremove"
+    expected:
+      decision: ask
+      rule_id: brew-cleanup
