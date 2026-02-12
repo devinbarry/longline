@@ -353,13 +353,6 @@ rules:
     decision: ask
     reason: "npm exec runs arbitrary package code"
 
-  - id: npx-run
-    level: high
-    match:
-      command: npx
-    decision: ask
-    reason: "npx can execute arbitrary npm packages"
-
   - id: yarn-add
     level: high
     match:

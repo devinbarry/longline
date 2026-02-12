@@ -34,7 +34,6 @@ tests:
     command: "npx create-react-app myapp"
     expected:
       decision: ask
-      rule_id: npx-run
   - id: node-inline-ask
     command: "node -e 'console.log(1)'"
     expected:

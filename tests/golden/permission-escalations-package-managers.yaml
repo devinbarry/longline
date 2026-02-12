@@ -298,27 +298,23 @@ tests:
       decision: ask
       rule_id: conda-install
 
-  # --- npx (runs arbitrary packages) ---
+  # --- npx (unknown packages still get default ask) ---
   - id: npx-create-react-app-asks
     command: "npx create-react-app my-app"
     expected:
       decision: ask
-      rule_id: npx-run
   - id: npx-prettier-check-asks
     command: "npx prettier --check ."
     expected:
       decision: ask
-      rule_id: npx-run
   - id: npx-arbitrary-package-asks
     command: "npx some-random-package"
     expected:
       decision: ask
-      rule_id: npx-run
   - id: npx-typosquat-asks
     command: "npx loadash"
     expected:
       decision: ask
-      rule_id: npx-run
     # typosquatting risk (lodash vs loadash)
 
   # --- python -m pip (explicit rule) ---
