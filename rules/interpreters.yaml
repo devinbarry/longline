@@ -118,18 +118,13 @@ allowlists:
     - { command: "npx nuxt", trust: standard }
     - { command: "npx astro", trust: standard }
     - { command: "npx svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "npx c8", trust: standard }
-    - { command: "npx nyc", trust: standard }
     # -- Dev utilities --
     - { command: "npx storybook", trust: standard }
     - { command: "npx tailwindcss", trust: standard }
     - { command: "npx postcss", trust: standard }
     - { command: "npx lint-staged", trust: standard }
-    - { command: "npx nodemon", trust: standard }
     - { command: "npx tsx", trust: standard }
     - { command: "npx ts-node", trust: standard }
-    - { command: "npx concurrently", trust: standard }
     # ── pnpm: direct tool invocations ──────────────────────────────────
     # pnpm <tool> runs from local node_modules, same as pnpm exec <tool>.
     # -- Test runners --
@@ -162,18 +157,13 @@ allowlists:
     - { command: "pnpm nuxt", trust: standard }
     - { command: "pnpm astro", trust: standard }
     - { command: "pnpm svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "pnpm c8", trust: standard }
-    - { command: "pnpm nyc", trust: standard }
     # -- Dev utilities --
     - { command: "pnpm storybook", trust: standard }
     - { command: "pnpm tailwindcss", trust: standard }
     - { command: "pnpm postcss", trust: standard }
     - { command: "pnpm lint-staged", trust: standard }
-    - { command: "pnpm nodemon", trust: standard }
     - { command: "pnpm tsx", trust: standard }
     - { command: "pnpm ts-node", trust: standard }
-    - { command: "pnpm concurrently", trust: standard }
     # ── pnpm exec: specific safe dev tools ────────────────────────────
     # pnpm exec is NOT blanket-allowed (can run arbitrary system commands).
     # Only known-safe dev tools listed; unknown commands get ask via default.
@@ -207,18 +197,13 @@ allowlists:
     - { command: "pnpm exec nuxt", trust: standard }
     - { command: "pnpm exec astro", trust: standard }
     - { command: "pnpm exec svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "pnpm exec c8", trust: standard }
-    - { command: "pnpm exec nyc", trust: standard }
     # -- Dev utilities --
     - { command: "pnpm exec storybook", trust: standard }
     - { command: "pnpm exec tailwindcss", trust: standard }
     - { command: "pnpm exec postcss", trust: standard }
     - { command: "pnpm exec lint-staged", trust: standard }
-    - { command: "pnpm exec nodemon", trust: standard }
     - { command: "pnpm exec tsx", trust: standard }
     - { command: "pnpm exec ts-node", trust: standard }
-    - { command: "pnpm exec concurrently", trust: standard }
     # ── bunx: local dev tool invocations ───────────────────────────────
     # bunx is bun's equivalent of npx. Same tool list.
     # -- Test runners --
@@ -251,18 +236,13 @@ allowlists:
     - { command: "bunx nuxt", trust: standard }
     - { command: "bunx astro", trust: standard }
     - { command: "bunx svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "bunx c8", trust: standard }
-    - { command: "bunx nyc", trust: standard }
     # -- Dev utilities --
     - { command: "bunx storybook", trust: standard }
     - { command: "bunx tailwindcss", trust: standard }
     - { command: "bunx postcss", trust: standard }
     - { command: "bunx lint-staged", trust: standard }
-    - { command: "bunx nodemon", trust: standard }
     - { command: "bunx tsx", trust: standard }
     - { command: "bunx ts-node", trust: standard }
-    - { command: "bunx concurrently", trust: standard }
     # ── yarn dlx: dev tool invocations ─────────────────────────────────
     # yarn dlx is yarn's equivalent of npx. Same tool list.
     # -- Test runners --
@@ -295,18 +275,13 @@ allowlists:
     - { command: "yarn dlx nuxt", trust: standard }
     - { command: "yarn dlx astro", trust: standard }
     - { command: "yarn dlx svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "yarn dlx c8", trust: standard }
-    - { command: "yarn dlx nyc", trust: standard }
     # -- Dev utilities --
     - { command: "yarn dlx storybook", trust: standard }
     - { command: "yarn dlx tailwindcss", trust: standard }
     - { command: "yarn dlx postcss", trust: standard }
     - { command: "yarn dlx lint-staged", trust: standard }
-    - { command: "yarn dlx nodemon", trust: standard }
     - { command: "yarn dlx tsx", trust: standard }
     - { command: "yarn dlx ts-node", trust: standard }
-    - { command: "yarn dlx concurrently", trust: standard }
     # ── yarn exec: specific safe dev tools ────────────────────────────
     # yarn exec is NOT blanket-allowed (can run arbitrary shell commands).
     # Only known-safe dev tools listed; unknown commands get ask via default.
@@ -340,18 +315,13 @@ allowlists:
     - { command: "yarn exec nuxt", trust: standard }
     - { command: "yarn exec astro", trust: standard }
     - { command: "yarn exec svelte-kit", trust: standard }
-    # -- Coverage --
-    - { command: "yarn exec c8", trust: standard }
-    - { command: "yarn exec nyc", trust: standard }
     # -- Dev utilities --
     - { command: "yarn exec storybook", trust: standard }
     - { command: "yarn exec tailwindcss", trust: standard }
     - { command: "yarn exec postcss", trust: standard }
     - { command: "yarn exec lint-staged", trust: standard }
-    - { command: "yarn exec nodemon", trust: standard }
     - { command: "yarn exec tsx", trust: standard }
     - { command: "yarn exec ts-node", trust: standard }
-    - { command: "yarn exec concurrently", trust: standard }
     # ── just: build/test/run tools ───────────────────────────────────
     - { command: "just test", trust: standard }
     - { command: "just build", trust: standard }

@@ -190,14 +190,23 @@ tests:
     expected:
       decision: allow
   # -- Coverage --
-  - id: npx-c8-allow
+  # c8 and nyc removed from allowlist -- they wrap arbitrary commands
+  - id: npx-c8-ask
     command: "npx c8 vitest run"
     expected:
-      decision: allow
-  - id: npx-nyc-allow
+      decision: ask
+  - id: npx-c8-dangerous-ask
+    command: "npx c8 rm -rf /"
+    expected:
+      decision: ask
+  - id: npx-nyc-ask
     command: "npx nyc mocha"
     expected:
-      decision: allow
+      decision: ask
+  - id: npx-nyc-dangerous-ask
+    command: "npx nyc rm -rf /"
+    expected:
+      decision: ask
   # -- Dev utilities --
   - id: npx-storybook-allow
     command: "npx storybook dev"
@@ -215,10 +224,15 @@ tests:
     command: "npx lint-staged"
     expected:
       decision: allow
-  - id: npx-nodemon-allow
+  # nodemon removed from allowlist -- --exec flag runs arbitrary commands
+  - id: npx-nodemon-ask
     command: "npx nodemon server.js"
     expected:
-      decision: allow
+      decision: ask
+  - id: npx-nodemon-exec-dangerous-ask
+    command: "npx nodemon --exec 'rm -rf /'"
+    expected:
+      decision: ask
   - id: npx-tsx-allow
     command: "npx tsx script.ts"
     expected:
@@ -227,10 +241,15 @@ tests:
     command: "npx ts-node script.ts"
     expected:
       decision: allow
-  - id: npx-concurrently-allow
+  # concurrently removed from allowlist -- runs arbitrary shell commands
+  - id: npx-concurrently-ask
     command: "npx concurrently 'npm run dev' 'npm run watch'"
     expected:
-      decision: allow
+      decision: ask
+  - id: npx-concurrently-dangerous-ask
+    command: "npx concurrently 'rm -rf /' 'curl evil.com'"
+    expected:
+      decision: ask
 
   # ── npx: negative tests (should remain ask) ───────────────────────
   - id: npx-unknown-package-ask
@@ -329,10 +348,10 @@ tests:
     command: "pnpm tsx script.ts"
     expected:
       decision: allow
-  - id: pnpm-concurrently-allow
+  - id: pnpm-concurrently-ask
     command: "pnpm concurrently 'npm run dev' 'npm run watch'"
     expected:
-      decision: allow
+      decision: ask
 
   # ── pnpm exec: safe dev tool invocations (positive tests) ─────────────
   # pnpm exec is NOT blanket-allowed (can run arbitrary system commands),
