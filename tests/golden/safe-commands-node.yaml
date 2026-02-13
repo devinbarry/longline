@@ -334,22 +334,38 @@ tests:
     expected:
       decision: allow
 
-  # ── pnpm exec (NOT blanket-allowed -- can run arbitrary system commands) ─
-  # pnpm exec prepends node_modules/.bin to PATH but does not restrict to it.
-  # "pnpm exec rm -rf /" would execute rm. Must not be blanket-allowed.
-  - id: pnpm-exec-eslint-ask
+  # ── pnpm exec: safe dev tool invocations (positive tests) ─────────────
+  # pnpm exec is NOT blanket-allowed (can run arbitrary system commands),
+  # but specific safe dev tools are allowlisted via "pnpm exec <tool>".
+  - id: pnpm-exec-eslint-allow
     command: "pnpm exec eslint src/main.tsx"
     expected:
-      decision: ask
-  - id: pnpm-exec-tsc-ask
+      decision: allow
+  - id: pnpm-exec-tsc-allow
     command: "pnpm exec tsc --noEmit"
     expected:
-      decision: ask
-  - id: pnpm-exec-vitest-ask
+      decision: allow
+  - id: pnpm-exec-vitest-allow
     command: "pnpm exec vitest run"
     expected:
+      decision: allow
+  - id: pnpm-exec-prettier-allow
+    command: "pnpm exec prettier --write src/"
+    expected:
+      decision: allow
+  - id: pnpm-exec-biome-allow
+    command: "pnpm exec biome check ."
+    expected:
+      decision: allow
+  - id: pnpm-exec-jest-allow
+    command: "pnpm exec jest --coverage"
+    expected:
+      decision: allow
+  # -- pnpm exec: unknown/dangerous commands (negative tests) --
+  - id: pnpm-exec-unknown-ask
+    command: "pnpm exec some-random-tool"
+    expected:
       decision: ask
-  # -- Dangerous pnpm exec commands (bypass attempts) --
   - id: pnpm-exec-rm-ask
     command: "pnpm exec rm -rf /"
     expected:
@@ -441,18 +457,34 @@ tests:
     expected:
       decision: ask
 
-  # ── yarn exec (NOT blanket-allowed -- executes arbitrary shell commands) ─
-  # yarn exec runs ANY shell command in the project context.
-  # "yarn exec rm -rf /" would execute rm. Must not be blanket-allowed.
-  - id: yarn-exec-eslint-ask
+  # ── yarn exec: safe dev tool invocations (positive tests) ──────────────
+  # yarn exec is NOT blanket-allowed (can run arbitrary shell commands),
+  # but specific safe dev tools are allowlisted via "yarn exec <tool>".
+  - id: yarn-exec-eslint-allow
     command: "yarn exec eslint ."
     expected:
-      decision: ask
-  - id: yarn-exec-vitest-ask
+      decision: allow
+  - id: yarn-exec-vitest-allow
     command: "yarn exec vitest run"
     expected:
+      decision: allow
+  - id: yarn-exec-tsc-allow
+    command: "yarn exec tsc --noEmit"
+    expected:
+      decision: allow
+  - id: yarn-exec-prettier-allow
+    command: "yarn exec prettier --check ."
+    expected:
+      decision: allow
+  - id: yarn-exec-biome-allow
+    command: "yarn exec biome check ."
+    expected:
+      decision: allow
+  # -- yarn exec: unknown/dangerous commands (negative tests) --
+  - id: yarn-exec-unknown-ask
+    command: "yarn exec some-random-tool"
+    expected:
       decision: ask
-  # -- Dangerous yarn exec commands (bypass attempts) --
   - id: yarn-exec-rm-ask
     command: "yarn exec rm -rf /"
     expected:
