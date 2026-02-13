@@ -174,6 +174,94 @@ allowlists:
     - { command: "pnpm tsx", trust: standard }
     - { command: "pnpm ts-node", trust: standard }
     - { command: "pnpm concurrently", trust: standard }
+    # ── bunx: local dev tool invocations ───────────────────────────────
+    # bunx is bun's equivalent of npx. Same tool list.
+    # -- Test runners --
+    - { command: "bunx vitest", trust: standard }
+    - { command: "bunx jest", trust: standard }
+    - { command: "bunx mocha", trust: standard }
+    - { command: "bunx playwright", trust: standard }
+    - { command: "bunx cypress", trust: standard }
+    - { command: "bunx ava", trust: standard }
+    # -- Linters --
+    - { command: "bunx eslint", trust: standard }
+    - { command: "bunx biome", trust: standard }
+    - { command: "bunx stylelint", trust: standard }
+    - { command: "bunx markdownlint", trust: standard }
+    - { command: "bunx oxlint", trust: standard }
+    # -- Formatters --
+    - { command: "bunx prettier", trust: standard }
+    # -- Type checkers --
+    - { command: "bunx tsc", trust: standard }
+    - { command: "bunx vue-tsc", trust: standard }
+    - { command: "bunx svelte-check", trust: standard }
+    # -- Build/dev tools --
+    - { command: "bunx vite", trust: standard }
+    - { command: "bunx webpack", trust: standard }
+    - { command: "bunx rollup", trust: standard }
+    - { command: "bunx esbuild", trust: standard }
+    - { command: "bunx turbo", trust: standard }
+    - { command: "bunx nx", trust: standard }
+    - { command: "bunx next", trust: standard }
+    - { command: "bunx nuxt", trust: standard }
+    - { command: "bunx astro", trust: standard }
+    - { command: "bunx svelte-kit", trust: standard }
+    # -- Coverage --
+    - { command: "bunx c8", trust: standard }
+    - { command: "bunx nyc", trust: standard }
+    # -- Dev utilities --
+    - { command: "bunx storybook", trust: standard }
+    - { command: "bunx tailwindcss", trust: standard }
+    - { command: "bunx postcss", trust: standard }
+    - { command: "bunx lint-staged", trust: standard }
+    - { command: "bunx nodemon", trust: standard }
+    - { command: "bunx tsx", trust: standard }
+    - { command: "bunx ts-node", trust: standard }
+    - { command: "bunx concurrently", trust: standard }
+    # ── yarn dlx: dev tool invocations ─────────────────────────────────
+    # yarn dlx is yarn's equivalent of npx. Same tool list.
+    # -- Test runners --
+    - { command: "yarn dlx vitest", trust: standard }
+    - { command: "yarn dlx jest", trust: standard }
+    - { command: "yarn dlx mocha", trust: standard }
+    - { command: "yarn dlx playwright", trust: standard }
+    - { command: "yarn dlx cypress", trust: standard }
+    - { command: "yarn dlx ava", trust: standard }
+    # -- Linters --
+    - { command: "yarn dlx eslint", trust: standard }
+    - { command: "yarn dlx biome", trust: standard }
+    - { command: "yarn dlx stylelint", trust: standard }
+    - { command: "yarn dlx markdownlint", trust: standard }
+    - { command: "yarn dlx oxlint", trust: standard }
+    # -- Formatters --
+    - { command: "yarn dlx prettier", trust: standard }
+    # -- Type checkers --
+    - { command: "yarn dlx tsc", trust: standard }
+    - { command: "yarn dlx vue-tsc", trust: standard }
+    - { command: "yarn dlx svelte-check", trust: standard }
+    # -- Build/dev tools --
+    - { command: "yarn dlx vite", trust: standard }
+    - { command: "yarn dlx webpack", trust: standard }
+    - { command: "yarn dlx rollup", trust: standard }
+    - { command: "yarn dlx esbuild", trust: standard }
+    - { command: "yarn dlx turbo", trust: standard }
+    - { command: "yarn dlx nx", trust: standard }
+    - { command: "yarn dlx next", trust: standard }
+    - { command: "yarn dlx nuxt", trust: standard }
+    - { command: "yarn dlx astro", trust: standard }
+    - { command: "yarn dlx svelte-kit", trust: standard }
+    # -- Coverage --
+    - { command: "yarn dlx c8", trust: standard }
+    - { command: "yarn dlx nyc", trust: standard }
+    # -- Dev utilities --
+    - { command: "yarn dlx storybook", trust: standard }
+    - { command: "yarn dlx tailwindcss", trust: standard }
+    - { command: "yarn dlx postcss", trust: standard }
+    - { command: "yarn dlx lint-staged", trust: standard }
+    - { command: "yarn dlx nodemon", trust: standard }
+    - { command: "yarn dlx tsx", trust: standard }
+    - { command: "yarn dlx ts-node", trust: standard }
+    - { command: "yarn dlx concurrently", trust: standard }
     # ── just: build/test/run tools ───────────────────────────────────
     - { command: "just test", trust: standard }
     - { command: "just build", trust: standard }

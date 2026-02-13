@@ -369,3 +369,61 @@ tests:
     command: "pnpm check"
     expected:
       decision: allow
+
+  # ── bunx: dev tool invocations (positive tests) ───────────────────
+  - id: bunx-vitest-allow
+    command: "bunx vitest run"
+    expected:
+      decision: allow
+  - id: bunx-eslint-allow
+    command: "bunx eslint ."
+    expected:
+      decision: allow
+  - id: bunx-prettier-allow
+    command: "bunx prettier --check ."
+    expected:
+      decision: allow
+  - id: bunx-tsc-allow
+    command: "bunx tsc --noEmit"
+    expected:
+      decision: allow
+  - id: bunx-biome-allow
+    command: "bunx biome check ."
+    expected:
+      decision: allow
+  - id: bunx-unknown-ask
+    command: "bunx unknown-tool"
+    expected:
+      decision: ask
+
+  # ── yarn dlx: dev tool invocations (positive tests) ────────────────
+  - id: yarn-dlx-vitest-allow
+    command: "yarn dlx vitest run"
+    expected:
+      decision: allow
+  - id: yarn-dlx-eslint-allow
+    command: "yarn dlx eslint ."
+    expected:
+      decision: allow
+  - id: yarn-dlx-prettier-allow
+    command: "yarn dlx prettier --check ."
+    expected:
+      decision: allow
+  - id: yarn-dlx-tsc-allow
+    command: "yarn dlx tsc --noEmit"
+    expected:
+      decision: allow
+  - id: yarn-dlx-unknown-ask
+    command: "yarn dlx unknown-tool"
+    expected:
+      decision: ask
+
+  # ── yarn exec: tool invocations ────────────────────────────────────
+  - id: yarn-exec-eslint-allow
+    command: "yarn exec eslint ."
+    expected:
+      decision: allow
+  - id: yarn-exec-vitest-allow
+    command: "yarn exec vitest run"
+    expected:
+      decision: allow
