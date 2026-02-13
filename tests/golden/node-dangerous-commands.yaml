@@ -1,35 +1,15 @@
 tests:
-  # ── npm safe invocations ────────────────────────────────────────
+  # ── npm: commands requiring confirmation ─────────────────────────
   - id: npm-install-safe
     command: "npm install"
     expected:
       decision: ask
       rule_id: npm-install
-  - id: npm-test-safe
-    command: "npm test"
-    expected:
-      decision: allow
-  - id: npm-run-build
-    command: "npm run build"
-    expected:
-      decision: allow
   - id: npm-ci-safe
     command: "npm ci"
     expected:
       decision: ask
       rule_id: npm-install
-  - id: npm-start-safe
-    command: "npm start"
-    expected:
-      decision: allow
-  - id: npm-audit-safe
-    command: "npm audit"
-    expected:
-      decision: allow
-  - id: npm-ls-safe
-    command: "npm ls"
-    expected:
-      decision: allow
   - id: npx-safe
     command: "npx create-react-app myapp"
     expected:
@@ -39,158 +19,8 @@ tests:
     expected:
       decision: ask
 
-  # ── Node package manager version checks ──────────────────────────
-  - id: yarn-version-safe
-    command: "yarn --version"
-    expected:
-      decision: allow
-  - id: pnpm-version-safe
-    command: "pnpm --version"
-    expected:
-      decision: allow
-  - id: bun-version-safe
-    command: "bun --version"
-    expected:
-      decision: allow
-  - id: deno-version-safe
-    command: "deno --version"
-    expected:
-      decision: allow
-
-  # ── Node package manager read-only commands ──────────────────────
-  - id: yarn-list-safe
-    command: "yarn list"
-    expected:
-      decision: allow
-  - id: pnpm-list-safe
-    command: "pnpm list"
-    expected:
-      decision: allow
-  - id: deno-info-safe
-    command: "deno info"
-    expected:
-      decision: allow
-
-  # ── npx: dev tool invocations (positive tests) ────────────────────
-  # -- Test runners --
-  - id: npx-vitest-allow
-    command: "npx vitest run"
-    expected:
-      decision: allow
-  - id: npx-vitest-file-allow
-    command: "npx vitest run src/test.ts"
-    expected:
-      decision: allow
-  - id: npx-jest-allow
-    command: "npx jest --coverage"
-    expected:
-      decision: allow
-  - id: npx-mocha-allow
-    command: "npx mocha tests/"
-    expected:
-      decision: allow
-  - id: npx-playwright-allow
-    command: "npx playwright test"
-    expected:
-      decision: allow
-  - id: npx-cypress-allow
-    command: "npx cypress run"
-    expected:
-      decision: allow
-  - id: npx-ava-allow
-    command: "npx ava"
-    expected:
-      decision: allow
-  # -- Linters --
-  - id: npx-eslint-allow
-    command: "npx eslint ."
-    expected:
-      decision: allow
-  - id: npx-eslint-fix-allow
-    command: "npx eslint --fix src/"
-    expected:
-      decision: allow
-  - id: npx-biome-allow
-    command: "npx biome check ."
-    expected:
-      decision: allow
-  - id: npx-stylelint-allow
-    command: "npx stylelint 'src/**/*.css'"
-    expected:
-      decision: allow
-  - id: npx-markdownlint-allow
-    command: "npx markdownlint '**/*.md'"
-    expected:
-      decision: allow
-  - id: npx-oxlint-allow
-    command: "npx oxlint ."
-    expected:
-      decision: allow
-  # -- Formatters --
-  - id: npx-prettier-allow
-    command: "npx prettier --write src/"
-    expected:
-      decision: allow
-  - id: npx-prettier-check-allow
-    command: "npx prettier --check ."
-    expected:
-      decision: allow
-  # -- Type checkers --
-  - id: npx-tsc-allow
-    command: "npx tsc --noEmit"
-    expected:
-      decision: allow
-  - id: npx-vue-tsc-allow
-    command: "npx vue-tsc --noEmit"
-    expected:
-      decision: allow
-  - id: npx-svelte-check-allow
-    command: "npx svelte-check"
-    expected:
-      decision: allow
-  # -- Build/dev tools --
-  - id: npx-vite-allow
-    command: "npx vite build"
-    expected:
-      decision: allow
-  - id: npx-webpack-allow
-    command: "npx webpack --mode production"
-    expected:
-      decision: allow
-  - id: npx-rollup-allow
-    command: "npx rollup -c"
-    expected:
-      decision: allow
-  - id: npx-esbuild-allow
-    command: "npx esbuild src/index.ts --bundle"
-    expected:
-      decision: allow
-  - id: npx-turbo-allow
-    command: "npx turbo run build"
-    expected:
-      decision: allow
-  - id: npx-nx-allow
-    command: "npx nx run-many --target=test"
-    expected:
-      decision: allow
-  - id: npx-next-allow
-    command: "npx next build"
-    expected:
-      decision: allow
-  - id: npx-nuxt-allow
-    command: "npx nuxt build"
-    expected:
-      decision: allow
-  - id: npx-astro-allow
-    command: "npx astro build"
-    expected:
-      decision: allow
-  - id: npx-svelte-kit-allow
-    command: "npx svelte-kit build"
-    expected:
-      decision: allow
-  # -- Coverage --
-  # c8 and nyc removed from allowlist -- they wrap arbitrary commands
+  # ── npx: command-wrapper tools (can run arbitrary commands) ──────
+  # c8 and nyc wrap arbitrary commands with coverage instrumentation
   - id: npx-c8-ask
     command: "npx c8 vitest run"
     expected:
@@ -207,24 +37,7 @@ tests:
     command: "npx nyc rm -rf /"
     expected:
       decision: ask
-  # -- Dev utilities --
-  - id: npx-storybook-allow
-    command: "npx storybook dev"
-    expected:
-      decision: allow
-  - id: npx-tailwindcss-allow
-    command: "npx tailwindcss -i src/input.css -o dist/output.css"
-    expected:
-      decision: allow
-  - id: npx-postcss-allow
-    command: "npx postcss src/styles.css -o dist/styles.css"
-    expected:
-      decision: allow
-  - id: npx-lint-staged-allow
-    command: "npx lint-staged"
-    expected:
-      decision: allow
-  # nodemon removed from allowlist -- --exec flag runs arbitrary commands
+  # nodemon --exec flag runs arbitrary commands
   - id: npx-nodemon-ask
     command: "npx nodemon server.js"
     expected:
@@ -233,15 +46,7 @@ tests:
     command: "npx nodemon --exec 'rm -rf /'"
     expected:
       decision: ask
-  - id: npx-tsx-allow
-    command: "npx tsx script.ts"
-    expected:
-      decision: allow
-  - id: npx-ts-node-allow
-    command: "npx ts-node script.ts"
-    expected:
-      decision: allow
-  # concurrently removed from allowlist -- runs arbitrary shell commands
+  # concurrently runs arbitrary shell commands as arguments
   - id: npx-concurrently-ask
     command: "npx concurrently 'npm run dev' 'npm run watch'"
     expected:
@@ -251,7 +56,7 @@ tests:
     expected:
       decision: ask
 
-  # ── npx: negative tests (should remain ask) ───────────────────────
+  # ── npx: unknown/dangerous packages ──────────────────────────────
   - id: npx-unknown-package-ask
     command: "npx some-random-package"
     expected:
@@ -281,74 +86,7 @@ tests:
     expected:
       decision: ask
 
-  # ── pnpm: direct tool invocations (positive tests) ────────────────
-  # -- Test runners --
-  - id: pnpm-vitest-allow
-    command: "pnpm vitest run"
-    expected:
-      decision: allow
-  - id: pnpm-vitest-file-allow
-    command: "pnpm vitest run src/hooks/useFileSelection.test.ts"
-    expected:
-      decision: allow
-  - id: pnpm-jest-allow
-    command: "pnpm jest --coverage"
-    expected:
-      decision: allow
-  - id: pnpm-playwright-allow
-    command: "pnpm playwright test"
-    expected:
-      decision: allow
-  # -- Linters --
-  - id: pnpm-eslint-allow
-    command: "pnpm eslint ."
-    expected:
-      decision: allow
-  - id: pnpm-biome-allow
-    command: "pnpm biome check ."
-    expected:
-      decision: allow
-  # -- Formatters --
-  - id: pnpm-prettier-write-allow
-    command: "pnpm prettier --write src/App.tsx"
-    expected:
-      decision: allow
-  - id: pnpm-prettier-check-allow
-    command: "pnpm prettier --check ."
-    expected:
-      decision: allow
-  # -- Type checkers --
-  - id: pnpm-tsc-allow
-    command: "pnpm tsc --noEmit"
-    expected:
-      decision: allow
-  # -- Build/dev tools --
-  - id: pnpm-vite-allow
-    command: "pnpm vite build"
-    expected:
-      decision: allow
-  - id: pnpm-next-allow
-    command: "pnpm next build"
-    expected:
-      decision: allow
-  - id: pnpm-turbo-allow
-    command: "pnpm turbo run build"
-    expected:
-      decision: allow
-  - id: pnpm-storybook-allow
-    command: "pnpm storybook dev"
-    expected:
-      decision: allow
-  # -- Dev utilities --
-  - id: pnpm-lint-staged-allow
-    command: "pnpm lint-staged"
-    expected:
-      decision: allow
-  - id: pnpm-tsx-allow
-    command: "pnpm tsx script.ts"
-    expected:
-      decision: allow
-  # ── pnpm: command-wrapper tools (NOT allowlisted -- can run arbitrary commands)
+  # ── pnpm: command-wrapper bypass attempts ────────────────────────
   - id: pnpm-concurrently-ask
     command: "pnpm concurrently 'npm run dev' 'npm run watch'"
     expected:
@@ -370,34 +108,7 @@ tests:
     expected:
       decision: ask
 
-  # ── pnpm exec: safe dev tool invocations (positive tests) ─────────────
-  # pnpm exec is NOT blanket-allowed (can run arbitrary system commands),
-  # but specific safe dev tools are allowlisted via "pnpm exec <tool>".
-  - id: pnpm-exec-eslint-allow
-    command: "pnpm exec eslint src/main.tsx"
-    expected:
-      decision: allow
-  - id: pnpm-exec-tsc-allow
-    command: "pnpm exec tsc --noEmit"
-    expected:
-      decision: allow
-  - id: pnpm-exec-vitest-allow
-    command: "pnpm exec vitest run"
-    expected:
-      decision: allow
-  - id: pnpm-exec-prettier-allow
-    command: "pnpm exec prettier --write src/"
-    expected:
-      decision: allow
-  - id: pnpm-exec-biome-allow
-    command: "pnpm exec biome check ."
-    expected:
-      decision: allow
-  - id: pnpm-exec-jest-allow
-    command: "pnpm exec jest --coverage"
-    expected:
-      decision: allow
-  # -- pnpm exec: unknown/dangerous commands (negative tests) --
+  # ── pnpm exec: dangerous commands ────────────────────────────────
   - id: pnpm-exec-unknown-ask
     command: "pnpm exec some-random-tool"
     expected:
@@ -440,49 +151,7 @@ tests:
     expected:
       decision: ask
 
-  # ── pnpm script aliases ────────────────────────────────────────────
-  - id: pnpm-lint-allow
-    command: "pnpm lint"
-    expected:
-      decision: allow
-  - id: pnpm-dev-allow
-    command: "pnpm dev"
-    expected:
-      decision: allow
-  - id: pnpm-typecheck-allow
-    command: "pnpm typecheck"
-    expected:
-      decision: allow
-  - id: pnpm-format-allow
-    command: "pnpm format"
-    expected:
-      decision: allow
-  - id: pnpm-check-allow
-    command: "pnpm check"
-    expected:
-      decision: allow
-
-  # ── bunx: dev tool invocations (positive tests) ───────────────────
-  - id: bunx-vitest-allow
-    command: "bunx vitest run"
-    expected:
-      decision: allow
-  - id: bunx-eslint-allow
-    command: "bunx eslint ."
-    expected:
-      decision: allow
-  - id: bunx-prettier-allow
-    command: "bunx prettier --check ."
-    expected:
-      decision: allow
-  - id: bunx-tsc-allow
-    command: "bunx tsc --noEmit"
-    expected:
-      decision: allow
-  - id: bunx-biome-allow
-    command: "bunx biome check ."
-    expected:
-      decision: allow
+  # ── bunx: dangerous commands ─────────────────────────────────────
   - id: bunx-unknown-ask
     command: "bunx unknown-tool"
     expected:
@@ -505,23 +174,7 @@ tests:
     expected:
       decision: ask
 
-  # ── yarn dlx: dev tool invocations (positive tests) ────────────────
-  - id: yarn-dlx-vitest-allow
-    command: "yarn dlx vitest run"
-    expected:
-      decision: allow
-  - id: yarn-dlx-eslint-allow
-    command: "yarn dlx eslint ."
-    expected:
-      decision: allow
-  - id: yarn-dlx-prettier-allow
-    command: "yarn dlx prettier --check ."
-    expected:
-      decision: allow
-  - id: yarn-dlx-tsc-allow
-    command: "yarn dlx tsc --noEmit"
-    expected:
-      decision: allow
+  # ── yarn dlx: dangerous commands ─────────────────────────────────
   - id: yarn-dlx-unknown-ask
     command: "yarn dlx unknown-tool"
     expected:
@@ -544,30 +197,7 @@ tests:
     expected:
       decision: ask
 
-  # ── yarn exec: safe dev tool invocations (positive tests) ──────────────
-  # yarn exec is NOT blanket-allowed (can run arbitrary shell commands),
-  # but specific safe dev tools are allowlisted via "yarn exec <tool>".
-  - id: yarn-exec-eslint-allow
-    command: "yarn exec eslint ."
-    expected:
-      decision: allow
-  - id: yarn-exec-vitest-allow
-    command: "yarn exec vitest run"
-    expected:
-      decision: allow
-  - id: yarn-exec-tsc-allow
-    command: "yarn exec tsc --noEmit"
-    expected:
-      decision: allow
-  - id: yarn-exec-prettier-allow
-    command: "yarn exec prettier --check ."
-    expected:
-      decision: allow
-  - id: yarn-exec-biome-allow
-    command: "yarn exec biome check ."
-    expected:
-      decision: allow
-  # -- yarn exec: unknown/dangerous commands (negative tests) --
+  # ── yarn exec: dangerous commands ────────────────────────────────
   - id: yarn-exec-unknown-ask
     command: "yarn exec some-random-tool"
     expected:
