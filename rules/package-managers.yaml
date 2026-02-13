@@ -54,7 +54,6 @@ allowlists:
     - { command: "yarn build", trust: standard }
     - { command: "yarn start", trust: standard }
     - { command: "yarn lint", trust: standard }
-    - { command: "yarn exec", trust: standard }
     # ── pnpm: safe invocations ────────────────────────────────────
     # pnpm add/install - covered by rules (ask for confirmation)
     - { command: "pnpm --version", trust: minimal }
@@ -67,7 +66,6 @@ allowlists:
     - { command: "pnpm test", trust: standard }
     - { command: "pnpm build", trust: standard }
     - { command: "pnpm start", trust: standard }
-    - { command: "pnpm exec", trust: standard }
     - { command: "pnpm lint", trust: standard }
     - { command: "pnpm dev", trust: standard }
     - { command: "pnpm check", trust: standard }
