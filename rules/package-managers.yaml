@@ -86,7 +86,6 @@ allowlists:
     - { command: "poetry list", trust: minimal }
     - { command: "poetry check", trust: minimal }
     - { command: "poetry lock", trust: standard }
-    - { command: "poetry run", trust: standard }
     - { command: "poetry shell", trust: standard }
     - { command: "poetry env", trust: standard }
     # ── pipx: safe invocations ────────────────────────────────────
@@ -101,7 +100,6 @@ allowlists:
     - { command: "pdm list", trust: minimal }
     - { command: "pdm show", trust: minimal }
     - { command: "pdm lock", trust: standard }
-    - { command: "pdm run", trust: standard }
     # ── rye: safe invocations ─────────────────────────────────────
     # rye add - covered by rules (ask for confirmation)
     - { command: "rye --version", trust: minimal }
@@ -109,7 +107,6 @@ allowlists:
     - { command: "rye list", trust: minimal }
     - { command: "rye show", trust: minimal }
     - { command: "rye lock", trust: standard }
-    - { command: "rye run", trust: standard }
     - { command: "rye sync", trust: standard }
     # ── conda/mamba: safe invocations ─────────────────────────────
     # conda/mamba install - covered by rules (ask for confirmation)
