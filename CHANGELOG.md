@@ -2,225 +2,536 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.0] - 2026-02-11
+## [0.4.1] - 2026-02-13
+
 
 ### Added
 
-- **Project config discovery via `--dir` flag**: Rules, check, and files subcommands can now discover and merge per-project configs, with a SOURCE column in table output distinguishing global vs project rules
-- **Transparent wrapper unwrapping**: Commands like `env`, `nice`, `timeout`, `nohup`, etc. are now recognized as transparent wrappers; their inner commands are extracted (with chaining and depth limits) and evaluated against policy rules
-- **Expanded core allowlist**: Added shasum, network diagnostics (ip/arp/route read-only), longline self-reference, and brew (read-only subcommands plus mutation rules for upgrade/uninstall/update/tap/services/link/cleanup)
+- add npx allowlist for common JS dev tools
+- add pnpm allowlist for direct tool invocations
+- add bunx and yarn dlx/exec allowlists for JS dev tools
+- add pnpm exec and yarn exec allowlists for safe dev tools
+
 
 ### Changed
 
-- Golden tests added for network diagnostics, shasum, longline, brew, and transparent wrapper commands
+- clean up changelog with contextual descriptions
+- add JS dev tool allowlisting design
+- add JS dev tool allowlisting implementation plan
+- remove blanket npx-run rule
+- add command-wrapper bypass tests for all runners
+- rename safe-commands-node.yaml and duplicate for split
+- split node golden tests into safe and dangerous files
+
+
+### Fixed
+
+- remove blanket pnpm exec and yarn exec allowlist entries
+- remove blanket poetry run, pdm run, and rye run allowlist entries
+- remove command-wrapper tools from allowlists
+
+## [0.4.0] - 2026-02-11
+
+
+### Added
+
+- add --dir global CLI flag for project config discovery
+- add RuleSource enum to track global vs project origin
+- tag merged project rules and allowlists with RuleSource::Project
+- wire project config discovery into rules, check, and files subcommands
+- add SOURCE column with cyan color for project items in table output
+- show project config path banner in rules and check output
+- add shasum, network diagnostics, ip/arp/route read-only, and longline to core allowlist
+- add longline-init ask rule to system rules
+- add brew read-only subcommands to package-managers allowlist
+- add brew mutation rules (upgrade/uninstall/update/tap/services/link/cleanup)
+- scaffold wrappers module with types and wrapper table
+- implement unwrap_transparent with unit tests
+- implement extract_inner_commands with chaining and depth limit
+- add wrapper commands to core allowlist
+- integrate wrapper unwrapping into policy evaluation
+
+
+### Changed
+
+- add design and implementation plan for project config discovery
+- add safe command allowlist additions design
+- add allowlist additions and transparent wrappers design docs
+- add safe commands implementation plan
+- add golden tests for network diagnostic commands
+- add golden tests for shasum and longline commands
+- add golden tests for brew read-only and mutation commands
+- add transparent wrappers implementation plan
+- add golden tests for transparent wrapper commands
+- release v0.4.0
 
 ## [0.3.1] - 2026-02-09
 
+
 ### Added
 
-- **Embedded default rules**: Rules are now compiled into the binary at build time; longline works out of the box without a config file, falling back to embedded defaults
-- **`longline init` subcommand**: Extracts the embedded rules to disk for customization
-- Renamed "manifest" to "rules" throughout the codebase for clarity
+- add embedded_rules module with compile-time rule embedding
+- add load_embedded_rules() for loading rules from compiled-in defaults
+- fall back to embedded rules when no config file found
+- add 'longline init' subcommand to extract embedded rules
+- embed default rules into binary and rename manifest to rules
+
+
+### Changed
+
+- add design for embedded rules and manifest rename
+- add implementation plan for embedded rules
+- rename manifest to rules manifest throughout codebase
+- update CLAUDE.md and justfile for rules.yaml rename and embedded defaults
+- release v0.3.1
+
 
 ### Fixed
 
-- `check` subcommand now errors on TTY stdin instead of silently blocking
+- error on TTY stdin instead of silently blocking in check subcommand
 
 ## [0.3.0] - 2026-02-08
 
+
 ### Added
 
-- **Per-project config**: Projects can place `.claude/longline.yaml` in their repo root to add project-specific rules and allowlists, discovered via `.git` or `.claude` directory; unknown fields produce exit code 2
-- **Trust-level tiered allowlists**: Allowlist entries now carry a trust tier, shown as a breakdown in the `files` subcommand; all allowlist files migrated to the tagged trust format (bare string backwards-compat removed)
+- add ProjectConfig type for per-project overrides
+- add project root discovery via .git or .claude directory
+- add project config loading from .claude/longline.yaml
+- add merge function for project config into global config
+- wire per-project config into hook mode
+- reject unknown fields in project config with exit code 2
+- add trust level tiered allowlists
+- show trust tier breakdown in files subcommand
+
+
+### Changed
+
+- add per-project config design
+- add per-project config implementation plan
+- add integration tests for per-project config
+- clarify merge order in merge_project_config doc comment
+- migrate all allowlist files to tagged trust format
+- remove bare string backwards-compat from AllowlistEntry
+- add integration tests for trust_level
+- add implementation plan for trust_level tiered allowlists
+- release v0.3.0
+
 
 ### Fixed
 
-- Project root discovery now detects git worktrees correctly
+- detect git worktrees in project root discovery
+- address code review findings for trust_level feature
 
 ## [0.2.2] - 2026-02-07
 
+
 ### Added
 
-- Log rotation with 10-file retention
-- Allowlisted `curl` with rules for unsafe flags (data exfiltration)
-- Bare `--version` / `-V` now allowed on any command
+- add log rotation with 10-file retention
+- allowlist curl and add rules for unsafe flags
+- allow bare --version and -V on any command
+
+
+### Changed
+
+- update SECURITY.md with resolved items and future work
+- release v0.2.2
+
 
 ### Fixed
 
-- AI judge subprocesses are killed on timeout instead of orphaned
-- Raw stdout/stderr logged on unparseable AI judge responses
+- kill judge subprocesses on timeout
+- log raw stdout/stderr on unparseable response
 
 ## [0.2.1] - 2026-02-07
 
+
 ### Added
 
-- **Docker rules**: Allowlist for safe Docker/Compose commands, with destructive operation rules for `docker compose down --rmi`, `--remove-orphans`, etc.
-- Expanded git allowlist with read-only commands (`check-ignore`, `symbolic-ref`, `show-ref`)
-- Allowlisted `git-cliff`, `just release`, and `uv run python manage.py migrate`
+- add git read-only commands check-ignore, symbolic-ref, show-ref
+- add git-cliff base command with safety rules
+- add just release to safe commands
+- allow uv run python manage.py migrate
+- add Docker allowlist and destructive operation rules
+- add docker compose down --rmi and --remove-orphans rules
+
+
+### Changed
+
+- add design for fixing duplicate test execution
+- add .worktrees/ to gitignore
+- remove duplicate module declarations from main.rs
+- add implementation plan for duplicate test fix
+- release v0.2.1
+
 
 ### Fixed
 
-- AI judge now uses gpt-5.1-codex-mini with medium reasoning effort
-- git-cliff dash-prefixed options handled via flags matcher
-- Removed duplicate module declarations and test execution issues
+- use gpt-5.1-codex-mini with medium reasoning effort
+- use flags matcher for git-cliff dash-prefixed options
 
 ## [0.2.0] - 2026-02-05
 
+
 ### Added
 
-- **Compound bash statement support**: Pipelines, lists, and other compound constructs are now parsed and evaluated as individual leaf nodes
+- add support for compound bash statements
+
+
+### Changed
+
+- update documentation for recent features
+- release v0.2.0
+
 
 ### Fixed
 
-- Eliminated flaky AI judge script execution tests
+- eliminate flaky AI judge script execution tests
 
 ## [0.1.14] - 2026-02-04
 
+
 ### Added
 
-- **Lenient AI judge mode**: New `--ask-ai-lenient` flag for a less strict AI evaluation threshold
+- add lenient AI judge mode
+
+
+### Changed
+
+- release v0.1.14
+
 
 ### Fixed
 
-- Increased AI judge timeout to 30s
+- increase timeout to 30s
 
 ## [0.1.13] - 2026-02-04
 
+
 ### Added
 
-- **AI judge for Python scripts**: Python script executions (via interpreter invocations) are now sent to the AI judge for safety evaluation
+- send Python script executions to AI judge
+
+
+### Changed
+
+- split ai_judge.rs into module directory
+- release v0.1.13
+
 
 ### Fixed
 
-- GitLab CI: use `pull_policy: always` for runner compatibility
-- Hook logs no longer truncated
+- use pull_policy: always for GitLab runner compatibility
+- stop truncating hook logs
 
 ## [0.1.12] - 2026-02-04
 
+
 ### Added
 
-- Expanded Python code extraction to cover more execution forms (`python -c`, heredocs, etc.)
+- extract Python code from more execution forms
+
+
+### Changed
+
+- remove superseded design and plan files
+- release v0.1.12
+
 
 ### Fixed
 
-- Consistent `longline:` prefix on all AI judge decision reasons
+- consistent 'longline:' prefix for AI judge reasons
 
 ## [0.1.11] - 2026-02-04
 
+
+### Changed
+
+- rename allowlist-bypass golden suites
+- release v0.1.11
+
+
 ### Fixed
 
-- Tightened git/just allowlists to prevent overly broad matches
-- Removed duplicate test IDs across golden test files
+- tighten git/just allowlists
+- remove duplicate test IDs across golden test files
 
 ## [0.1.10] - 2026-02-04
 
+
 ### Changed
 
-- **Middle-ground policy for ln/cp/mv/tee**: These commands now ask instead of blanket allow/deny, balancing usability with safety
+- middle-ground policy for ln/cp/mv/tee
+- add git -C flag tests to verify rules still fire
+- release v0.1.10
+
 
 ### Fixed
 
-- Bare `git` and `just` added to allowlist so `-C` flag variations still work
+- add bare git and just to allowlist for -C flag support
 
 ## [0.1.9] - 2026-02-02
 
+
 ### Added
 
-- **Multi-file rule loading**: Rules config now supports a manifest format that includes multiple domain-specific YAML files, with backwards compatibility for monolithic configs
-- **`files` subcommand**: Shows all loaded rule files with counts
-- **Domain-split rules**: Monolithic rules file split into `git.yaml`, `filesystem.yaml`, `secrets.yaml`, `network.yaml`, `docker.yaml`, `system.yaml`, `interpreters.yaml`, etc.
-- Comprehensive package installation security rules
+- add comprehensive package installation security rules
+- expand package installation rules with explicit coverage
+- add ManifestConfig type for multi-file rule loading
+- add PartialRulesConfig for individual rule files
+- add is_manifest detection function
+- implement manifest-based multi-file rule loading
+- add load_rules_with_info to track source files
+- export LoadedConfig and LoadedFileInfo from policy module
+- add files subcommand to show loaded rule files
+- create manifest and core-allowlist.yaml
+- split rules into domain files
+
+
+### Changed
+
+- add design for splitting rules and tests into domain files
+- add detailed implementation plan for splitting rules
+- add test for missing included file error
+- verify backwards compatibility with monolithic rules file
+- add integration test for files subcommand
+- record baseline rule counts before splitting
+- add integration test verifying manifest produces same decisions
+- update CLAUDE.md with new rules structure
+- split large golden test files by domain
+- merge allowlist-bypass-git.yaml into git.yaml
+- update allowlist-bypass-filesystem tests to expect ask for dangerous commands
+- release v0.1.9
+
 
 ### Fixed
 
-- All `git rebase` commands now require ask
+- require ask for ALL git rebase commands
 
 ## [0.1.8] - 2026-02-02
 
+
 ### Added
 
-- Expanded allowlist for CI/CD tooling (gh, glab, glp) with API mutation rules
+- expand allowlist for CI/CD tooling and add API mutation rules
+
+
+### Changed
+
+- lock allowlist path matching design after security review
+- release v0.1.8
+
 
 ### Fixed
 
-- Secured allowlist matching with positional argument checking and path normalization to prevent bypasses
+- secure allowlist matching with positional args and path normalization
 
 ## [0.1.7] - 2026-02-02
 
+
 ### Added
 
-- Django `manage.py` command safety rules (destructive management commands require ask/deny)
+- add Django manage.py command safety rules
+
 
 ### Changed
 
-- Allowlist path matching now applies subdirectory-only constraints and normalizes only path-like arguments
+- add allowlist path matching design exploration
+- add subdirectory-only constraint and security analysis
+- add constraint to only normalize path-like arguments
+- release v0.1.7
 
 ## [0.1.6] - 2026-02-01
 
-### Fixed
-
-- Handle BrokenPipe gracefully in missing config test
-
-## [0.1.5] - 2026-02-01
-
-### Fixed
-
-- Module structure and rule example corrections
-
-## [0.1.4] - 2026-02-01
-
-### Fixed
-
-- Non-Bash tools now get passthrough (`{}`) instead of an explicit allow decision
-- Restored filter-repo replacement rule in CI
-
-## [0.1.3] - 2026-02-01
-
-### Added
-
-- **GitLab CI pipeline** and README for public release
-- Expanded allowlist with common safe commands (cd, sleep, just, glp, glab, git-cliff)
 
 ### Changed
 
-- **Module refactoring**: Parser and policy converted from single files to directory modules, extracting helpers, converters, config types, matchers, and allowlist logic into focused submodules
+- release v0.1.6
+
 
 ### Fixed
 
-- CI fixes: Docker tag for runners, rustfmt/clippy installation, cargo-husky hook disabled in CI
+- handle BrokenPipe in missing config test
+
+## [0.1.5] - 2026-02-01
+
+
+### Changed
+
+- update module names and test case count
+- fix rule example structure and add missing modules
+- release v0.1.5
+
+## [0.1.4] - 2026-02-01
+
+
+### Changed
+
+- add release command to CLAUDE.md
+- release v0.1.4
+
+
+### Fixed
+
+- restore filter-repo replacement rule in CI
+- return passthrough for non-Bash tools instead of allow decision
+
+## [0.1.3] - 2026-02-01
+
+
+### Added
+
+- add cd to allowlist for compound commands
+- add GitLab CI pipeline and README for public release
+- add dev tool allowlist entries for sleep, just, glp, glab, git-cliff
+- expand allowlist with common safe commands
+
+
+### Changed
+
+- ignore .claude directory and remove settings.json
+- add module refactoring design plan
+- add module refactoring implementation plan
+- convert parser to directory module
+- extract parser helper functions
+- extract parser convert functions
+- convert policy to directory module
+- extract policy config types
+- extract policy matching functions
+- extract policy allowlist logic
+- release v0.1.3
+
+
+### Fixed
+
+- use docker tag for CI runners
+- install rustfmt and clippy in CI before_script
+- disable cargo-husky hook installation in CI
 
 ## [0.1.2] - 2026-01-30
 
+
+### Changed
+
+- release v0.1.2
+
+
 ### Fixed
 
-- Changelog formatting consistency
+- consistent changelog version format and section spacing
+- add style commits to changelog and regenerate
 
 ## [0.1.1] - 2026-01-30
 
+
 ### Added
 
-- **New flag matchers**: `none_of` for inverse matching and `starts_with` for combined flag prefixes
-- **Security rules**: Filesystem destructive operations, git destructive operations, and package manager install rules
-- **Release tooling**: Justfile with dev commands and release workflow, cargo-release and git-cliff configuration
-- Version field in log entries
+- add none_of flag matcher for inverse flag matching
+- add starts_with prefix matching for combined flags
+- add filesystem destructive operation rules
+- add git destructive operation rules
+- add package manager security rules
+- add version field to log entries
+- add justfile for dev commands and release workflow
+- add cargo-release configuration
+- add git-cliff configuration for changelog generation
+
+
+### Changed
+
+- add allowlist bypass security audit tests
+- fix npm run/start expectations (dev tasks are allowed)
+- update safe-commands expectations for new security rules
+- add sed -n print lines test to ensure read-only sed is allowed
+- add versioning design plan
+- add versioning implementation plan
+- update plan and design to reflect cargo-release hook limitations
+- remove install.sh (replaced by justfile)
+- add license, repository, and publish=false to Cargo.toml
+- add CHANGELOG.md for v0.1.0
+- release v0.1.1
+
 
 ### Fixed
 
-- AI judge now handles pipelines correctly and returns decision reasons
+- AI judge now handles pipelines and returns reasons
+- add --no-confirm and --force flags to justfile release
 
 ## [0.1.0] - 2026-01-28
 
+
 ### Added
 
-- **Core engine**: Tree-sitter bash parser converting CST to a normalized Statement AST, policy engine with YAML rule loading and evaluation, JSONL decision logger, and CLI adapter implementing the Claude Code hook protocol
-- **Rule matchers**: Command (name + flags/args globs), pipeline (stage subsequence), and redirect (operator + target glob) matchers
-- **Safety rules**: 40+ default rules across 8 categories covering filesystem destruction, secrets exposure, git history rewriting, network exfiltration, and more
-- **Diagnostic subcommands**: `rules` for config inspection and `check` for testing commands against the loaded ruleset, with colored table output and NO_COLOR support
-- **AI judge**: Optional `--ask-ai` flag that sends ambiguous commands to an LLM for safety evaluation
-- **Command substitution handling**: Embedded command substitutions (`$(...)`) detected, extracted, and evaluated against policy
-- **Allowlist with rules-override**: Rules evaluate before allowlist so dangerous patterns (e.g., `cat .env`) are caught even for allowlisted commands
-- `--ask-on-deny` flag to downgrade deny decisions to ask
-- Explicit allow decisions emitted to bypass Claude Code's built-in permission prompts
-- Git hooks via cargo-husky for fmt, clippy, and test
-- Golden test framework with 307+ cases across 11 categories
-- End-to-end integration tests for the binary hook protocol
+- scaffold longline project with dependencies
+- add normalized AST model types and flatten function
+- add hook protocol types with serialization tests
+- add policy engine rule types and YAML loading
+- implement tree-sitter bash parser with CST-to-model conversion
+- implement JSONL decision logger
+- implement policy engine rule evaluation with matchers
+- implement CLI adapter with stdin/stdout hook protocol
+- add default safety rules file with 40+ rules across 8 categories
+- add end-to-end integration tests for binary hook protocol
+- add golden test framework with initial test cases across 6 categories
+- expand golden test corpus to 307 cases across 11 categories
+- add cp/mv/tee/rm secrets rules and expand safe command allowlist
+- add golden tests for secrets rules and new allowlist commands
+- add git-commit-amend rule to catch history rewriting
+- wire --ask-on-deny flag to downgrade deny decisions to ask
+- add rules subcommand for config inspection
+- add check subcommand for command testing
+- add comfy-table and yansi deps, create output module skeleton
+- implement rules table output with comfy-table
+- add check table, allowlist display, NO_COLOR support, and test updates
+- add install script for binary and default rules
+- remove interpreters from bare allowlist, add safe patterns
+- add --ask-ai CLI flag (wiring pending)
+- add ai_judge module with config, trigger detection, and prompt
+- wire --ask-ai flag into hook evaluation flow
+- support explicit allow in HookOutput serialization
+- emit explicit allow decisions to bypass CC permissions
+- populate allowlist match info in PolicyResult reason
+- add git hooks via cargo-husky for fmt, clippy, and test
+- detect command substitutions embedded in command arguments
+- flatten embedded command substitutions for policy evaluation
+- add rules for find -delete, find -exec rm, xargs rm
+- remove find and xargs from bare allowlist
+
+
+### Changed
+
+- add project brief and design documents for longline
+- add MVP implementation plan
+- final cleanup and lint fixes
+- add CLAUDE.md with project guidance for Claude Code
+- add rules override and secrets hardening plans
+- split allowlist into always-safe and conditionally-safe groups
+- update git golden tests for allowlist classification
+- add golden tests for expanded build tool safe invocations
+- add golden tests for non-allowlisted build tool commands
+- remove superseded design doc
+- add design for diagnostic and override modes
+- add allowlist classification plan
+- restructure CLI for subcommand support
+- apply cargo fmt
+- move claude permissions to settings.json and gitignore settings.local
+- apply cargo fmt formatting
+- add git hooks design plan
+- apply cargo fmt to ai_judge and output modules
+- add design plans for diagnostics, table formatting, and ai-judge
+- add bypass attempt golden tests for security audit
+- add command substitution golden tests
+- add integration tests for explicit allow and security bypasses
+- add log-derived regression and real-world find/xargs tests
+
+
+### Fixed
+
+- evaluate rules before allowlist so rules can override safe commands
+- update git golden tests for rules-override-allowlist behavior
+- update secrets golden tests for rules-override-allowlist behavior
+- use f.pad() in Display impls to respect format width specifiers
+- re-add find and xargs to bare allowlist
+- do not install rules by default in install script
+
