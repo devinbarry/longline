@@ -261,3 +261,111 @@ tests:
     command: "npx semantic-release"
     expected:
       decision: ask
+
+  # ── pnpm: direct tool invocations (positive tests) ────────────────
+  # -- Test runners --
+  - id: pnpm-vitest-allow
+    command: "pnpm vitest run"
+    expected:
+      decision: allow
+  - id: pnpm-vitest-file-allow
+    command: "pnpm vitest run src/hooks/useFileSelection.test.ts"
+    expected:
+      decision: allow
+  - id: pnpm-jest-allow
+    command: "pnpm jest --coverage"
+    expected:
+      decision: allow
+  - id: pnpm-playwright-allow
+    command: "pnpm playwright test"
+    expected:
+      decision: allow
+  # -- Linters --
+  - id: pnpm-eslint-allow
+    command: "pnpm eslint ."
+    expected:
+      decision: allow
+  - id: pnpm-biome-allow
+    command: "pnpm biome check ."
+    expected:
+      decision: allow
+  # -- Formatters --
+  - id: pnpm-prettier-write-allow
+    command: "pnpm prettier --write src/App.tsx"
+    expected:
+      decision: allow
+  - id: pnpm-prettier-check-allow
+    command: "pnpm prettier --check ."
+    expected:
+      decision: allow
+  # -- Type checkers --
+  - id: pnpm-tsc-allow
+    command: "pnpm tsc --noEmit"
+    expected:
+      decision: allow
+  # -- Build/dev tools --
+  - id: pnpm-vite-allow
+    command: "pnpm vite build"
+    expected:
+      decision: allow
+  - id: pnpm-next-allow
+    command: "pnpm next build"
+    expected:
+      decision: allow
+  - id: pnpm-turbo-allow
+    command: "pnpm turbo run build"
+    expected:
+      decision: allow
+  - id: pnpm-storybook-allow
+    command: "pnpm storybook dev"
+    expected:
+      decision: allow
+  # -- Dev utilities --
+  - id: pnpm-lint-staged-allow
+    command: "pnpm lint-staged"
+    expected:
+      decision: allow
+  - id: pnpm-tsx-allow
+    command: "pnpm tsx script.ts"
+    expected:
+      decision: allow
+  - id: pnpm-concurrently-allow
+    command: "pnpm concurrently 'npm run dev' 'npm run watch'"
+    expected:
+      decision: allow
+
+  # ── pnpm exec (blanket, like pnpm run) ─────────────────────────────
+  - id: pnpm-exec-eslint-allow
+    command: "pnpm exec eslint src/main.tsx"
+    expected:
+      decision: allow
+  - id: pnpm-exec-tsc-allow
+    command: "pnpm exec tsc --noEmit"
+    expected:
+      decision: allow
+  - id: pnpm-exec-vitest-allow
+    command: "pnpm exec vitest run"
+    expected:
+      decision: allow
+
+  # ── pnpm script aliases ────────────────────────────────────────────
+  - id: pnpm-lint-allow
+    command: "pnpm lint"
+    expected:
+      decision: allow
+  - id: pnpm-dev-allow
+    command: "pnpm dev"
+    expected:
+      decision: allow
+  - id: pnpm-typecheck-allow
+    command: "pnpm typecheck"
+    expected:
+      decision: allow
+  - id: pnpm-format-allow
+    command: "pnpm format"
+    expected:
+      decision: allow
+  - id: pnpm-check-allow
+    command: "pnpm check"
+    expected:
+      decision: allow

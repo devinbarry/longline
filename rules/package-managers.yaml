@@ -66,6 +66,12 @@ allowlists:
     - { command: "pnpm test", trust: standard }
     - { command: "pnpm build", trust: standard }
     - { command: "pnpm start", trust: standard }
+    - { command: "pnpm exec", trust: standard }
+    - { command: "pnpm lint", trust: standard }
+    - { command: "pnpm dev", trust: standard }
+    - { command: "pnpm check", trust: standard }
+    - { command: "pnpm format", trust: standard }
+    - { command: "pnpm typecheck", trust: standard }
     # ── bun: safe invocations ─────────────────────────────────────
     # bun add/install - covered by rules (ask for confirmation)
     - { command: "bun --version", trust: minimal }

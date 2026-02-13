@@ -130,6 +130,50 @@ allowlists:
     - { command: "npx tsx", trust: standard }
     - { command: "npx ts-node", trust: standard }
     - { command: "npx concurrently", trust: standard }
+    # ── pnpm: direct tool invocations ──────────────────────────────────
+    # pnpm <tool> runs from local node_modules, same as pnpm exec <tool>.
+    # -- Test runners --
+    - { command: "pnpm vitest", trust: standard }
+    - { command: "pnpm jest", trust: standard }
+    - { command: "pnpm mocha", trust: standard }
+    - { command: "pnpm playwright", trust: standard }
+    - { command: "pnpm cypress", trust: standard }
+    - { command: "pnpm ava", trust: standard }
+    # -- Linters --
+    - { command: "pnpm eslint", trust: standard }
+    - { command: "pnpm biome", trust: standard }
+    - { command: "pnpm stylelint", trust: standard }
+    - { command: "pnpm markdownlint", trust: standard }
+    - { command: "pnpm oxlint", trust: standard }
+    # -- Formatters --
+    - { command: "pnpm prettier", trust: standard }
+    # -- Type checkers --
+    - { command: "pnpm tsc", trust: standard }
+    - { command: "pnpm vue-tsc", trust: standard }
+    - { command: "pnpm svelte-check", trust: standard }
+    # -- Build/dev tools --
+    - { command: "pnpm vite", trust: standard }
+    - { command: "pnpm webpack", trust: standard }
+    - { command: "pnpm rollup", trust: standard }
+    - { command: "pnpm esbuild", trust: standard }
+    - { command: "pnpm turbo", trust: standard }
+    - { command: "pnpm nx", trust: standard }
+    - { command: "pnpm next", trust: standard }
+    - { command: "pnpm nuxt", trust: standard }
+    - { command: "pnpm astro", trust: standard }
+    - { command: "pnpm svelte-kit", trust: standard }
+    # -- Coverage --
+    - { command: "pnpm c8", trust: standard }
+    - { command: "pnpm nyc", trust: standard }
+    # -- Dev utilities --
+    - { command: "pnpm storybook", trust: standard }
+    - { command: "pnpm tailwindcss", trust: standard }
+    - { command: "pnpm postcss", trust: standard }
+    - { command: "pnpm lint-staged", trust: standard }
+    - { command: "pnpm nodemon", trust: standard }
+    - { command: "pnpm tsx", trust: standard }
+    - { command: "pnpm ts-node", trust: standard }
+    - { command: "pnpm concurrently", trust: standard }
     # ── just: build/test/run tools ───────────────────────────────────
     - { command: "just test", trust: standard }
     - { command: "just build", trust: standard }
