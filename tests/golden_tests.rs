@@ -118,8 +118,13 @@ fn golden_safe_commands_rust() {
 }
 
 #[test]
-fn golden_safe_commands_node() {
-    run_golden_suite("safe-commands-node.yaml");
+fn golden_node_safe_commands() {
+    run_golden_suite("node-safe-commands.yaml");
+}
+
+#[test]
+fn golden_node_dangerous_commands() {
+    run_golden_suite("node-dangerous-commands.yaml");
 }
 
 #[test]
