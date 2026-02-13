@@ -306,7 +306,7 @@ tests:
   - id: npx-prettier-check-asks
     command: "npx prettier --check ."
     expected:
-      decision: ask
+      decision: allow
   - id: npx-arbitrary-package-asks
     command: "npx some-random-package"
     expected:

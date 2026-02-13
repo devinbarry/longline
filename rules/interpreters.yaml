@@ -84,6 +84,52 @@ allowlists:
     - { command: "npm start", trust: standard }
     - { command: "npm init", trust: standard }
     - { command: "npm pack", trust: standard }
+    # ── npx: local dev tool invocations ────────────────────────────────
+    # npx runs tools from local node_modules or downloads them.
+    # Only known-safe dev tools are listed here; unknown packages
+    # still get ask via default_decision.
+    # -- Test runners --
+    - { command: "npx vitest", trust: standard }
+    - { command: "npx jest", trust: standard }
+    - { command: "npx mocha", trust: standard }
+    - { command: "npx playwright", trust: standard }
+    - { command: "npx cypress", trust: standard }
+    - { command: "npx ava", trust: standard }
+    # -- Linters --
+    - { command: "npx eslint", trust: standard }
+    - { command: "npx biome", trust: standard }
+    - { command: "npx stylelint", trust: standard }
+    - { command: "npx markdownlint", trust: standard }
+    - { command: "npx oxlint", trust: standard }
+    # -- Formatters --
+    - { command: "npx prettier", trust: standard }
+    # -- Type checkers --
+    - { command: "npx tsc", trust: standard }
+    - { command: "npx vue-tsc", trust: standard }
+    - { command: "npx svelte-check", trust: standard }
+    # -- Build/dev tools --
+    - { command: "npx vite", trust: standard }
+    - { command: "npx webpack", trust: standard }
+    - { command: "npx rollup", trust: standard }
+    - { command: "npx esbuild", trust: standard }
+    - { command: "npx turbo", trust: standard }
+    - { command: "npx nx", trust: standard }
+    - { command: "npx next", trust: standard }
+    - { command: "npx nuxt", trust: standard }
+    - { command: "npx astro", trust: standard }
+    - { command: "npx svelte-kit", trust: standard }
+    # -- Coverage --
+    - { command: "npx c8", trust: standard }
+    - { command: "npx nyc", trust: standard }
+    # -- Dev utilities --
+    - { command: "npx storybook", trust: standard }
+    - { command: "npx tailwindcss", trust: standard }
+    - { command: "npx postcss", trust: standard }
+    - { command: "npx lint-staged", trust: standard }
+    - { command: "npx nodemon", trust: standard }
+    - { command: "npx tsx", trust: standard }
+    - { command: "npx ts-node", trust: standard }
+    - { command: "npx concurrently", trust: standard }
     # ── just: build/test/run tools ───────────────────────────────────
     - { command: "just test", trust: standard }
     - { command: "just build", trust: standard }
