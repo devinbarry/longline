@@ -147,7 +147,7 @@ Example rule:
 
 ### Rules organization
 
-Rules are split across multiple files referenced by a top-level manifest:
+Rules are split across multiple files referenced by `rules.yaml`:
 
 ```
 rules/
