@@ -5,6 +5,7 @@ default:
 # Release and install a new version (patch/minor/major)
 release level:
     cargo release {{level}} --execute --no-confirm
+    git push && git push --tags
     cargo install --path . --root ~/.local --force
 
 # Install rules to ~/.config/longline/rules.yaml
