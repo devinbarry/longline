@@ -220,6 +220,30 @@ fn convert_redirected_statement(node: Node, source: &str) -> Statement {
     stmt
 }
 
+/// Inject redirects into all SimpleCommand leaves of a statement tree.
+/// Used when redirects are attached to compound statements (subshells, brace groups).
+#[allow(dead_code)]
+fn inject_redirects_into_leaves(stmt: &mut Statement, redirects: &[Redirect]) {
+    match stmt {
+        Statement::SimpleCommand(cmd) => cmd.redirects.extend_from_slice(redirects),
+        Statement::Pipeline(p) => {
+            for stage in &mut p.stages {
+                inject_redirects_into_leaves(stage, redirects);
+            }
+        }
+        Statement::List(l) => {
+            inject_redirects_into_leaves(&mut l.first, redirects);
+            for (_, s) in &mut l.rest {
+                inject_redirects_into_leaves(s, redirects);
+            }
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            inject_redirects_into_leaves(inner, redirects);
+        }
+        Statement::Opaque(_) | Statement::Empty => {}
+    }
+}
+
 /// Convert a "negated_command" node (! cmd).
 fn convert_negated_command(node: Node, source: &str) -> Statement {
     let mut cursor = node.walk();
