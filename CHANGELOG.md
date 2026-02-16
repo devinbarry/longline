@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.5] - 2026-02-16
+
+
+### Changed
+
+- add golden tests for all gh/glab remote-write commands
+
+
+### Fixed
+
+- reclassify trust levels for git and cli-tool allowlists
+
 ## [0.4.4] - 2026-02-16
 
 
@@ -15,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - add typed filter system design for longline rules
 - add typed filter system implementation plan
 - add integration tests for typed filter system
+- release v0.4.4
 
 ## [0.4.3] - 2026-02-16
 
