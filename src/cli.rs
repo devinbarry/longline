@@ -584,6 +584,7 @@ fn run_rules(
     }
 
     // Extract filter dimensions
+    // First match wins -- duplicate dimensions (e.g. --filter trust:full --filter trust:minimal) use the first value.
     let decision_filter: Option<DecisionFilter> = filters.iter().find_map(|f| match f {
         RulesFilter::Decision(d) => Some(d.clone()),
         _ => None,

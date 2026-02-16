@@ -1292,3 +1292,85 @@ fn test_e2e_rules_no_banner_without_project_config() {
         "Should NOT show project config banner when no project config: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_rules_filter_trust_full() {
+    let (code, stdout, _) =
+        run_subcommand(&["rules", "--config", &rules_path(), "--filter", "trust:full"]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("ALLOWLISTED COMMANDS"),
+        "Should show allowlist table: {stdout}"
+    );
+    for line in stdout.lines() {
+        if line.contains("minimal") && !line.contains("Trust level") {
+            panic!("Should not contain minimal trust entries: {line}");
+        }
+        if line.contains("standard") && !line.contains("Trust level") {
+            panic!("Should not contain standard trust entries: {line}");
+        }
+    }
+}
+
+#[test]
+fn test_e2e_rules_filter_trust_minimal() {
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--filter",
+        "trust:minimal",
+    ]);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("ALLOWLISTED COMMANDS"),
+        "Should show allowlist table: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_rules_filter_decision_colon_syntax() {
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--filter",
+        "decision:deny",
+    ]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("deny"), "Should have deny rules: {stdout}");
+}
+
+#[test]
+fn test_e2e_rules_filter_bare_deny_backwards_compat() {
+    let (code, stdout, _) =
+        run_subcommand(&["rules", "--config", &rules_path(), "--filter", "deny"]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("deny"), "Should have deny rules: {stdout}");
+}
+
+#[test]
+fn test_e2e_rules_filter_multiple() {
+    let (code, stdout, _) = run_subcommand(&[
+        "rules",
+        "--config",
+        &rules_path(),
+        "--filter",
+        "deny",
+        "--filter",
+        "source:global",
+    ]);
+    assert_eq!(code, 0);
+    assert!(stdout.contains("deny"), "Should have deny rules: {stdout}");
+}
+
+#[test]
+fn test_e2e_rules_filter_invalid() {
+    let (code, _, stderr) =
+        run_subcommand(&["rules", "--config", &rules_path(), "--filter", "trust:mega"]);
+    assert_ne!(code, 0);
+    assert!(
+        stderr.contains("trust") || stderr.contains("invalid"),
+        "Should show error for invalid filter: {stderr}"
+    );
+}
