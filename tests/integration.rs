@@ -828,6 +828,62 @@ fn test_e2e_trust_level_full_allows_full_tier() {
 }
 
 #[test]
+fn test_e2e_trust_level_full_allows_git_push() {
+    let (code, stdout) = run_hook_with_flags(
+        "Bash",
+        "git push origin feature-branch",
+        &["--trust-level", "full"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "git push should be allowed at full trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_trust_level_full_still_asks_force_push() {
+    let (code, stdout) = run_hook_with_flags(
+        "Bash",
+        "git push --force origin feature-branch",
+        &["--trust-level", "full"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "git push --force should ask even at full trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_trust_level_full_still_asks_force_with_lease() {
+    let (code, stdout) = run_hook_with_flags(
+        "Bash",
+        "git push --force-with-lease origin feature-branch",
+        &["--trust-level", "full"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "git push --force-with-lease should ask even at full trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_trust_level_standard_asks_git_push() {
+    let (code, stdout) = run_hook("Bash", "git push origin main");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "git push should ask at default standard trust: {stdout}"
+    );
+}
+
+#[test]
 fn test_e2e_project_config_overrides_trust_level() {
     let dir = tempfile::TempDir::new().unwrap();
     std::fs::create_dir_all(dir.path().join(".git")).unwrap();

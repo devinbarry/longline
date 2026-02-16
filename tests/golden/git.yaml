@@ -19,7 +19,7 @@
 #   14. Archive operations
 #   15. Repository setup (clone, init)
 #   16. Merge and cherry-pick
-#   17. Force push (deny)
+#   17. Force push (always ask)
 #   18. Rebase (representative tests - see git-rebase.yaml for comprehensive coverage)
 #   19. Special cases (symbolic-ref)
 #
@@ -194,7 +194,8 @@ tests:
   - id: git-push
     command: "git push origin feature-branch"
     expected:
-      decision: allow
+      decision: ask
+    # git push requires full trust; default trust is standard
 
   # ============================================================
   # 5. TAG OPERATIONS
@@ -496,19 +497,122 @@ tests:
       decision: allow
 
   # ============================================================
-  # 17. FORCE PUSH (deny)
+  # 17. FORCE PUSH (always ask)
   # ============================================================
 
+  # --- Force push to main/master (--force) ---
   - id: git-force-push-main
     command: "git push --force origin main"
     expected:
-      decision: deny
+      decision: ask
       rule_id: git-force-push-main
   - id: git-force-push-master
     command: "git push -f origin master"
     expected:
-      decision: deny
+      decision: ask
       rule_id: git-force-push-main
+
+  # --- Force push to main/master (--force-with-lease) ---
+  - id: git-force-with-lease-push-main
+    command: "git push --force-with-lease origin main"
+    expected:
+      decision: ask
+      rule_id: git-force-push-main
+  - id: git-force-with-lease-push-master
+    command: "git push --force-with-lease origin master"
+    expected:
+      decision: ask
+      rule_id: git-force-push-main
+
+  # --- Force push to non-main branches (--force) ---
+  - id: git-force-push-feature
+    command: "git push --force origin feature-branch"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+  - id: git-force-push-feature-short
+    command: "git push -f origin feature-branch"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+
+  # --- Force push to non-main branches (--force-with-lease) ---
+  - id: git-force-with-lease-push-feature
+    command: "git push --force-with-lease origin feature-branch"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+  - id: git-force-with-lease-push-refspec
+    command: "git push --force-with-lease=origin/main origin feature-branch"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+    # --force-with-lease=<refspec> variant
+
+  # --- Force push with --force-if-includes (Git 2.30+) ---
+  - id: git-force-if-includes-push-main
+    command: "git push --force-if-includes origin main"
+    expected:
+      decision: ask
+      rule_id: git-force-push-main
+  - id: git-force-if-includes-push-feature
+    command: "git push --force-if-includes origin feature-branch"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+
+  # --- Combined force flags ---
+  - id: git-force-with-lease-and-force-push-main
+    command: "git push --force-with-lease --force origin main"
+    expected:
+      decision: ask
+      rule_id: git-force-push-main
+
+  # --- Force push bare (no remote/branch specified) ---
+  - id: git-force-push-bare
+    command: "git push --force"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+  - id: git-force-push-bare-short
+    command: "git push -f"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+  - id: git-force-with-lease-bare
+    command: "git push --force-with-lease"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+
+  # --- Force push with -C flag ---
+  - id: git-C-force-push-main
+    command: "git -C /tmp push --force origin main"
+    expected:
+      decision: ask
+      rule_id: git-force-push-main
+  - id: git-C-force-with-lease-push
+    command: "git -C /tmp push --force-with-lease origin feature"
+    expected:
+      decision: ask
+      rule_id: git-force-push-any
+
+  # --- Plain push (no force) - ask at default standard trust ---
+  - id: git-push-plain
+    command: "git push"
+    expected:
+      decision: ask
+    # No force flags, but git push requires full trust
+  - id: git-push-origin
+    command: "git push origin"
+    expected:
+      decision: ask
+    # No force flags, but git push requires full trust
+  - id: git-push-upstream
+    command: "git push -u origin feature-branch"
+    expected:
+      decision: ask
+    # -u/--set-upstream is not a force flag
 
   # ============================================================
   # 18. REBASE
@@ -622,12 +726,12 @@ tests:
       decision: ask
       rule_id: git-rebase
     # Destructive command with -C flag, rule still fires
-  - id: git-C-push-force-deny
+  - id: git-C-push-force-ask
     command: "git -C /tmp push --force origin main"
     expected:
-      decision: deny
+      decision: ask
       rule_id: git-force-push-main
-    # Destructive command with -C flag, rule still fires
+    # Force push with -C flag, rule still fires
 
   # --- git combined short flags (should still match rules) ---
   - id: git-clean-ffd-ask

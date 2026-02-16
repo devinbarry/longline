@@ -42,7 +42,7 @@ allowlists:
     - { command: "git commit", trust: standard }
     - { command: "git fetch", trust: standard }
     - { command: "git pull", trust: standard }
-    - { command: "git push", trust: standard }
+    - { command: "git push", trust: full }
     - { command: "git stash", trust: standard }
     - { command: "git checkout", trust: standard }
     - { command: "git switch", trust: standard }
@@ -72,10 +72,10 @@ rules:
     match:
       command: git
       flags:
-        any_of: ["--force", "-f"]
+        any_of: ["--force", "-f", "--force-with-lease", "--force-if-includes"]
       args:
         any_of: ["main", "master"]
-    decision: deny
+    decision: ask
     reason: "Force pushing to main/master branch"
 
   - id: git-reset-hard
@@ -250,20 +250,20 @@ rules:
     decision: ask
     reason: "git symbolic-ref --delete removes symbolic references"
 
-  # ============================================================
-  # STRICT: Cautionary git operations
-  # ============================================================
   - id: git-force-push-any
-    level: strict
+    level: high
     match:
       command: git
       flags:
-        any_of: ["--force", "-f"]
+        any_of: ["--force", "-f", "--force-with-lease", "--force-if-includes"]
       args:
         any_of: ["push"]
     decision: ask
     reason: "Force pushing (any branch)"
 
+  # ============================================================
+  # STRICT: Cautionary git operations
+  # ============================================================
   - id: git-checkout-dot
     level: strict
     match:
