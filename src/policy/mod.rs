@@ -90,6 +90,13 @@ fn collect_pipelines(stmt: &Statement) -> Vec<&parser::Pipeline> {
         Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
             collect_pipelines(inner)
         }
+        Statement::SimpleCommand(cmd) => {
+            let mut out = vec![];
+            for sub in &cmd.embedded_substitutions {
+                out.extend(collect_pipelines(sub));
+            }
+            out
+        }
         _ => vec![],
     }
 }
