@@ -66,6 +66,7 @@ fn is_rules_manifest(content: &str) -> bool {
 
 /// Top-level rules configuration loaded from YAML.
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RulesConfig {
     #[allow(dead_code)]
     pub version: u32,
