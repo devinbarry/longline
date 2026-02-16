@@ -233,6 +233,13 @@ fn convert_redirected_statement(node: Node, source: &str) -> Statement {
         if !redirects.is_empty() {
             inject_redirects_into_leaves(&mut stmt, &redirects);
         }
+        // Propagate redirect substitutions for compound bodies by wrapping
+        // body + substitutions into a List so both get evaluated.
+        if !redirect_substitutions.is_empty() {
+            let mut parts = vec![stmt];
+            parts.extend(redirect_substitutions);
+            return wrap_as_list(parts);
+        }
     }
 
     stmt
@@ -286,17 +293,20 @@ fn convert_negated_command(node: Node, source: &str) -> Statement {
 /// Convert a bare "variable_assignment" or "variable_assignments" node (no command).
 fn convert_bare_assignment(node: Node, source: &str) -> Statement {
     let mut assignments = Vec::new();
+    let mut embedded_substitutions = Vec::new();
 
     if node.kind() == "variable_assignment" {
-        let (assignment, _subs) = parse_assignment(node, source);
+        let (assignment, subs) = parse_assignment(node, source);
         assignments.push(assignment);
+        embedded_substitutions.extend(subs);
     } else {
         // variable_assignments: multiple assignments
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             if child.kind() == "variable_assignment" {
-                let (assignment, _subs) = parse_assignment(child, source);
+                let (assignment, subs) = parse_assignment(child, source);
                 assignments.push(assignment);
+                embedded_substitutions.extend(subs);
             }
         }
     }
@@ -306,7 +316,7 @@ fn convert_bare_assignment(node: Node, source: &str) -> Statement {
         argv: vec![],
         redirects: vec![],
         assignments,
-        embedded_substitutions: vec![],
+        embedded_substitutions,
     })
 }
 

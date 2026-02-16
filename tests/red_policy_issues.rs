@@ -324,3 +324,33 @@ fn red_uv_pip_install_is_not_unwrapped() {
         "should match the uv-pip-install rule, not be unwrapped"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Follow-up: bare assignment + compound redirect substitution gaps
+// ---------------------------------------------------------------------------
+
+#[test]
+fn red_bare_assignment_substitution_is_evaluated() {
+    // FOO=$(rm -rf /) with no command should still catch the dangerous substitution
+    let cmd = "FOO=$(rm -rf /)";
+    let result = eval_cmd(cmd);
+    assert_eq!(
+        result.decision,
+        Decision::Deny,
+        "cmd={cmd} result={result:?}"
+    );
+}
+
+#[test]
+fn red_compound_redirect_substitution_is_evaluated() {
+    // { echo hi; echo bye; } > $(cat .env) -- the substitution in the redirect target
+    // should be evaluated. With multiple commands, the compound body is a List (not a
+    // SimpleCommand), so redirect_substitutions are dropped in the else branch.
+    let cmd = "{ echo hi; echo bye; } > $(cat .env)";
+    let result = eval_cmd(cmd);
+    assert_eq!(
+        result.decision,
+        Decision::Deny,
+        "cmd={cmd} result={result:?}"
+    );
+}
