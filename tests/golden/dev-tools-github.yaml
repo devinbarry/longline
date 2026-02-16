@@ -110,11 +110,12 @@ tests:
       decision: ask
     note: "gh api requires full trust (remote API access)"
 
-  # Negative tests (should ask - not allowlisted or potentially destructive)
+  # Remote-write operations (should ask at standard trust, require full trust)
   - id: gh-bare-ask
     command: "gh"
     expected:
       decision: ask
+  # ── gh pr remote-write ──────────────────────────────────────────
   - id: gh-pr-create-ask
     command: "gh pr create"
     expected:
@@ -127,6 +128,27 @@ tests:
     command: "gh pr close 123"
     expected:
       decision: ask
+  - id: gh-pr-reopen-ask
+    command: "gh pr reopen 123"
+    expected:
+      decision: ask
+  - id: gh-pr-comment-ask
+    command: "gh pr comment 123 --body 'LGTM'"
+    expected:
+      decision: ask
+  - id: gh-pr-review-ask
+    command: "gh pr review 123 --approve"
+    expected:
+      decision: ask
+  - id: gh-pr-edit-ask
+    command: "gh pr edit 123 --title 'New title'"
+    expected:
+      decision: ask
+  - id: gh-pr-ready-ask
+    command: "gh pr ready 123"
+    expected:
+      decision: ask
+  # ── gh issue remote-write ───────────────────────────────────────
   - id: gh-issue-create-ask
     command: "gh issue create"
     expected:
@@ -135,12 +157,84 @@ tests:
     command: "gh issue close 42"
     expected:
       decision: ask
+  - id: gh-issue-reopen-ask
+    command: "gh issue reopen 42"
+    expected:
+      decision: ask
+  - id: gh-issue-comment-ask
+    command: "gh issue comment 42 --body 'Fixed'"
+    expected:
+      decision: ask
+  - id: gh-issue-edit-ask
+    command: "gh issue edit 42 --title 'Updated'"
+    expected:
+      decision: ask
+  - id: gh-issue-delete-ask
+    command: "gh issue delete 42"
+    expected:
+      decision: ask
+  # ── gh release remote-write ─────────────────────────────────────
+  - id: gh-release-create-ask
+    command: "gh release create v1.0.0"
+    expected:
+      decision: ask
+  - id: gh-release-delete-ask
+    command: "gh release delete v1.0.0"
+    expected:
+      decision: ask
+  - id: gh-release-edit-ask
+    command: "gh release edit v1.0.0 --notes 'Updated'"
+    expected:
+      decision: ask
+  # ── gh repo remote-write ────────────────────────────────────────
   - id: gh-repo-create-ask
     command: "gh repo create myrepo"
     expected:
       decision: ask
   - id: gh-repo-delete-ask
     command: "gh repo delete myrepo"
+    expected:
+      decision: ask
+  - id: gh-repo-edit-ask
+    command: "gh repo edit --description 'New desc'"
+    expected:
+      decision: ask
+  - id: gh-repo-fork-ask
+    command: "gh repo fork owner/repo"
+    expected:
+      decision: ask
+  # ── gh label remote-write ───────────────────────────────────────
+  - id: gh-label-create-ask
+    command: "gh label create bug"
+    expected:
+      decision: ask
+  - id: gh-label-edit-ask
+    command: "gh label edit bug --name bugfix"
+    expected:
+      decision: ask
+  - id: gh-label-delete-ask
+    command: "gh label delete bug"
+    expected:
+      decision: ask
+  # ── gh run/workflow remote-write ────────────────────────────────
+  - id: gh-run-rerun-ask
+    command: "gh run rerun 123"
+    expected:
+      decision: ask
+  - id: gh-run-cancel-ask
+    command: "gh run cancel 123"
+    expected:
+      decision: ask
+  - id: gh-workflow-run-ask
+    command: "gh workflow run deploy.yml"
+    expected:
+      decision: ask
+  - id: gh-workflow-enable-ask
+    command: "gh workflow enable deploy.yml"
+    expected:
+      decision: ask
+  - id: gh-workflow-disable-ask
+    command: "gh workflow disable deploy.yml"
     expected:
       decision: ask
   # gh api mutating operations (should ask - caught by rule)

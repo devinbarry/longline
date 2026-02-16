@@ -157,12 +157,126 @@ tests:
       decision: ask
     note: "glab api requires full trust (remote API access)"
 
-  # Negative tests (should ask - not allowlisted or potentially destructive)
+  # Remote-write operations (should ask at standard trust, require full trust)
   - id: glab-bare-ask
     command: "glab"
     expected:
       decision: ask
-  # glab api mutating operations (should ask - caught by rule)
+  # ── glab mr remote-write ────────────────────────────────────────
+  - id: glab-mr-create-ask
+    command: "glab mr create"
+    expected:
+      decision: ask
+  - id: glab-mr-merge-ask
+    command: "glab mr merge 123"
+    expected:
+      decision: ask
+  - id: glab-mr-close-ask
+    command: "glab mr close 123"
+    expected:
+      decision: ask
+  - id: glab-mr-reopen-ask
+    command: "glab mr reopen 123"
+    expected:
+      decision: ask
+  - id: glab-mr-approve-ask
+    command: "glab mr approve 123"
+    expected:
+      decision: ask
+  - id: glab-mr-revoke-ask
+    command: "glab mr revoke 123"
+    expected:
+      decision: ask
+  - id: glab-mr-comment-ask
+    command: "glab mr comment 123 --message 'LGTM'"
+    expected:
+      decision: ask
+  - id: glab-mr-note-ask
+    command: "glab mr note 123 --message 'Note'"
+    expected:
+      decision: ask
+  - id: glab-mr-update-ask
+    command: "glab mr update 123 --title 'Updated'"
+    expected:
+      decision: ask
+  - id: glab-mr-delete-ask
+    command: "glab mr delete 123"
+    expected:
+      decision: ask
+  # ── glab issue remote-write ─────────────────────────────────────
+  - id: glab-issue-create-ask
+    command: "glab issue create"
+    expected:
+      decision: ask
+  - id: glab-issue-close-ask
+    command: "glab issue close 42"
+    expected:
+      decision: ask
+  - id: glab-issue-reopen-ask
+    command: "glab issue reopen 42"
+    expected:
+      decision: ask
+  - id: glab-issue-comment-ask
+    command: "glab issue comment 42 --message 'Fixed'"
+    expected:
+      decision: ask
+  - id: glab-issue-note-ask
+    command: "glab issue note 42 --message 'Note'"
+    expected:
+      decision: ask
+  - id: glab-issue-update-ask
+    command: "glab issue update 42 --title 'Updated'"
+    expected:
+      decision: ask
+  - id: glab-issue-delete-ask
+    command: "glab issue delete 42"
+    expected:
+      decision: ask
+  # ── glab release remote-write ───────────────────────────────────
+  - id: glab-release-create-ask
+    command: "glab release create v1.0.0"
+    expected:
+      decision: ask
+  - id: glab-release-delete-ask
+    command: "glab release delete v1.0.0"
+    expected:
+      decision: ask
+  # ── glab ci remote-write ────────────────────────────────────────
+  - id: glab-ci-run-ask
+    command: "glab ci run"
+    expected:
+      decision: ask
+  - id: glab-ci-retry-ask
+    command: "glab ci retry"
+    expected:
+      decision: ask
+  - id: glab-ci-cancel-ask
+    command: "glab ci cancel 123"
+    expected:
+      decision: ask
+  # ── glab repo remote-write ─────────────────────────────────────
+  - id: glab-repo-create-ask
+    command: "glab repo create myrepo"
+    expected:
+      decision: ask
+  - id: glab-repo-fork-ask
+    command: "glab repo fork"
+    expected:
+      decision: ask
+  - id: glab-repo-delete-ask
+    command: "glab repo delete myrepo"
+    expected:
+      decision: ask
+  # ── glab label remote-write ────────────────────────────────────
+  - id: glab-label-create-ask
+    command: "glab label create bug"
+    expected:
+      decision: ask
+  - id: glab-label-delete-ask
+    command: "glab label delete bug"
+    expected:
+      decision: ask
+  # ── glab api mutating operations (caught by rule) ──────────────
   - id: glab-api-post-ask
     command: "glab api -X POST projects"
     expected:
@@ -183,38 +297,7 @@ tests:
     command: "glab api projects/foo -X PATCH"
     expected:
       decision: ask
-  - id: glab-repo-create-ask
-    command: "glab repo create myrepo"
-    expected:
-      decision: ask
-  - id: glab-repo-delete-ask
-    command: "glab repo delete myrepo"
-    expected:
-      decision: ask
-  - id: glab-repo-fork-ask
-    command: "glab repo fork"
-    expected:
-      decision: ask
-  - id: glab-mr-create-ask
-    command: "glab mr create"
-    expected:
-      decision: ask
-  - id: glab-mr-merge-ask
-    command: "glab mr merge 123"
-    expected:
-      decision: ask
-  - id: glab-issue-create-ask
-    command: "glab issue create"
-    expected:
-      decision: ask
-  - id: glab-ci-run-ask
-    command: "glab ci run"
-    expected:
-      decision: ask
-  - id: glab-ci-retry-ask
-    command: "glab ci retry"
-    expected:
-      decision: ask
+  # ── glab other (not allowlisted) ───────────────────────────────
   - id: glab-auth-login-ask
     command: "glab auth login"
     expected:
