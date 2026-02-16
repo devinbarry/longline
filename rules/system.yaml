@@ -115,3 +115,31 @@ rules:
       args: { any_of: ["init"] }
     decision: ask
     reason: "Extracting embedded rules to config directory"
+
+  # ============================================================
+  # CRITICAL: Redirect writes to system files
+  # ============================================================
+  - id: redirect-write-etc
+    level: critical
+    match:
+      redirect:
+        op:
+          any_of: [">", ">>"]
+        target:
+          any_of: ["/etc/hosts", "/etc/passwd", "/etc/shadow", "/etc/sudoers",
+                    "/etc/fstab", "/etc/resolv.conf", "/etc/profile",
+                    "/etc/bash.bashrc", "/etc/sudoers.d/*"]
+    decision: deny
+    reason: "Redirect write to system configuration file"
+
+  - id: redirect-write-device
+    level: critical
+    match:
+      redirect:
+        op:
+          any_of: [">", ">>"]
+        target:
+          any_of: ["/dev/sda*", "/dev/nvme*", "/dev/vd*", "/dev/hd*",
+                    "/dev/xvd*", "/dev/mmcblk*"]
+    decision: deny
+    reason: "Redirect write to disk device"
