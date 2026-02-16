@@ -135,23 +135,27 @@ tests:
     command: "glab ci get"
     expected:
       decision: allow
-  # glab api read operations (should allow - GET is default)
+  # glab api operations (requires full trust - remote API access)
   - id: glab-api-bare-safe
     command: "glab api"
     expected:
-      decision: allow
+      decision: ask
+    note: "glab api requires full trust (remote API access)"
   - id: glab-api-read-safe
     command: "glab api projects"
     expected:
-      decision: allow
+      decision: ask
+    note: "glab api requires full trust (remote API access)"
   - id: glab-api-pipelines-safe
     command: "glab api projects/tools%2Flongline/pipelines"
     expected:
-      decision: allow
+      decision: ask
+    note: "glab api requires full trust (remote API access)"
   - id: glab-api-jobs-safe
     command: "glab api projects/tools%2Flongline/pipelines/123/jobs"
     expected:
-      decision: allow
+      decision: ask
+    note: "glab api requires full trust (remote API access)"
 
   # Negative tests (should ask - not allowlisted or potentially destructive)
   - id: glab-bare-ask

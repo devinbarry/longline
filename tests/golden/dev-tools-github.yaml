@@ -88,23 +88,27 @@ tests:
     command: "gh workflow view CI"
     expected:
       decision: allow
-  # gh api read operations (should allow - GET is default)
+  # gh api operations (requires full trust - remote API access)
   - id: gh-api-bare-safe
     command: "gh api"
     expected:
-      decision: allow
+      decision: ask
+    note: "gh api requires full trust (remote API access)"
   - id: gh-api-read-safe
     command: "gh api repos/owner/repo"
     expected:
-      decision: allow
+      decision: ask
+    note: "gh api requires full trust (remote API access)"
   - id: gh-api-contents-safe
     command: "gh api repos/owner/repo/contents"
     expected:
-      decision: allow
+      decision: ask
+    note: "gh api requires full trust (remote API access)"
   - id: gh-api-jq-safe
     command: "gh api repos/owner/repo --jq '.name'"
     expected:
-      decision: allow
+      decision: ask
+    note: "gh api requires full trust (remote API access)"
 
   # Negative tests (should ask - not allowlisted or potentially destructive)
   - id: gh-bare-ask

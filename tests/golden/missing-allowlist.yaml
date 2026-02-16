@@ -48,14 +48,14 @@ tests:
   - id: git-fsck
     command: "git fsck"
     expected:
-      decision: ask
-    note: "Git filesystem check requires full trust level"
+      decision: allow
+    note: "Git filesystem check is read-only (minimal trust)"
 
   - id: git-fsck-full
     command: "git fsck --full"
     expected:
-      decision: ask
-    note: "Git full filesystem check requires full trust level"
+      decision: allow
+    note: "Git full filesystem check is read-only (minimal trust)"
 
   - id: git-verify-pack
     command: "git verify-pack -v .git/objects/pack/pack-abc.idx"

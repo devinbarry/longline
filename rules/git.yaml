@@ -12,9 +12,7 @@ allowlists:
     - { command: "git remote", trust: minimal }
     - { command: "git tag", trust: minimal }
     - { command: "git rev-parse", trust: minimal }
-    - { command: "git config", trust: minimal }
     - { command: "git blame", trust: minimal }
-    - { command: "git bisect", trust: minimal }
     - { command: "git describe", trust: minimal }
     - { command: "git shortlog", trust: minimal }
     - { command: "git reflog", trust: minimal }
@@ -37,7 +35,10 @@ allowlists:
     - { command: "git for-each-ref", trust: minimal }
     - { command: "git name-rev", trust: minimal }
     - { command: "git verify-pack", trust: minimal }
+    - { command: "git fsck", trust: minimal }
     # ── Git: safe write operations ────────────────────────────────
+    - { command: "git config", trust: standard }
+    - { command: "git bisect", trust: standard }
     - { command: "git add", trust: standard }
     - { command: "git commit", trust: standard }
     - { command: "git fetch", trust: standard }
@@ -58,10 +59,9 @@ allowlists:
     # ── Git: stash operations ────────────────────────────────────────
     - { command: "git stash pop", trust: standard }
     - { command: "git stash apply", trust: standard }
-    # ── Git: maintenance/inspection commands ──────────────────────
-    - { command: "git revert", trust: full }
+    # ── Git: maintenance commands ──────────────────────────────────
+    - { command: "git revert", trust: standard }
     - { command: "git gc", trust: full }
-    - { command: "git fsck", trust: full }
 
 rules:
   # ============================================================

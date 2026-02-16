@@ -42,14 +42,72 @@ allowlists:
     - { command: "gh --version", trust: minimal }
     - { command: "gh --help", trust: minimal }
     - { command: "gh -h", trust: minimal }
-    # ── glab/gh: standard invocations (side-effect potential) ─────
-    - { command: "glab api", trust: standard }
-    - { command: "gh api", trust: standard }
+    # ── glab/gh: standard invocations (local read, no remote mutation) ─
     - { command: "gh run list", trust: standard }
     - { command: "gh run view", trust: standard }
     - { command: "gh run watch", trust: standard }
     - { command: "gh workflow list", trust: standard }
     - { command: "gh workflow view", trust: standard }
+    # ── gh: remote-write operations (full trust) ───────────────────
+    - { command: "gh api", trust: full }
+    - { command: "gh pr create", trust: full }
+    - { command: "gh pr merge", trust: full }
+    - { command: "gh pr close", trust: full }
+    - { command: "gh pr reopen", trust: full }
+    - { command: "gh pr comment", trust: full }
+    - { command: "gh pr review", trust: full }
+    - { command: "gh pr edit", trust: full }
+    - { command: "gh pr ready", trust: full }
+    - { command: "gh issue create", trust: full }
+    - { command: "gh issue close", trust: full }
+    - { command: "gh issue reopen", trust: full }
+    - { command: "gh issue comment", trust: full }
+    - { command: "gh issue edit", trust: full }
+    - { command: "gh issue delete", trust: full }
+    - { command: "gh release create", trust: full }
+    - { command: "gh release delete", trust: full }
+    - { command: "gh release edit", trust: full }
+    - { command: "gh repo create", trust: full }
+    - { command: "gh repo delete", trust: full }
+    - { command: "gh repo edit", trust: full }
+    - { command: "gh repo fork", trust: full }
+    - { command: "gh label create", trust: full }
+    - { command: "gh label edit", trust: full }
+    - { command: "gh label delete", trust: full }
+    - { command: "gh run rerun", trust: full }
+    - { command: "gh run cancel", trust: full }
+    - { command: "gh workflow run", trust: full }
+    - { command: "gh workflow enable", trust: full }
+    - { command: "gh workflow disable", trust: full }
+    # ── glab: remote-write operations (full trust) ─────────────────
+    - { command: "glab api", trust: full }
+    - { command: "glab mr create", trust: full }
+    - { command: "glab mr merge", trust: full }
+    - { command: "glab mr close", trust: full }
+    - { command: "glab mr reopen", trust: full }
+    - { command: "glab mr approve", trust: full }
+    - { command: "glab mr revoke", trust: full }
+    - { command: "glab mr comment", trust: full }
+    - { command: "glab mr note", trust: full }
+    - { command: "glab mr update", trust: full }
+    - { command: "glab mr delete", trust: full }
+    - { command: "glab issue create", trust: full }
+    - { command: "glab issue close", trust: full }
+    - { command: "glab issue reopen", trust: full }
+    - { command: "glab issue comment", trust: full }
+    - { command: "glab issue note", trust: full }
+    - { command: "glab issue update", trust: full }
+    - { command: "glab issue delete", trust: full }
+    - { command: "glab release create", trust: full }
+    - { command: "glab release delete", trust: full }
+    - { command: "glab ci run", trust: full }
+    - { command: "glab ci retry", trust: full }
+    - { command: "glab ci cancel", trust: full }
+    - { command: "glab repo create", trust: full }
+    - { command: "glab repo fork", trust: full }
+    - { command: "glab repo delete", trust: full }
+    - { command: "glab label create", trust: full }
+    - { command: "glab label delete", trust: full }
     # ── git-cliff: stdout-only invocations ────────────────────────
     - { command: "git-cliff", trust: standard }
     - { command: "git-cliff --unreleased", trust: standard }

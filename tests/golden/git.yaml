@@ -302,15 +302,15 @@ tests:
       decision: ask
       rule_id: git-clean-force
 
-  # --- git revert (full trust - creates new commit) ---
+  # --- git revert (standard trust - creates new commit, non-destructive) ---
   - id: git-revert-safe
     command: "git revert HEAD"
     expected:
-      decision: ask
+      decision: allow
   - id: git-revert-commit-safe
     command: "git revert abc123"
     expected:
-      decision: ask
+      decision: allow
 
   # ============================================================
   # 8. CONFIG MODIFICATION
