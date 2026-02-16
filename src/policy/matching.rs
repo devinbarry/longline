@@ -4,6 +4,13 @@ use crate::parser::{self, SimpleCommand, Statement};
 
 use super::config::{Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
 
+/// Extract basename from a command path for matching.
+/// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
+#[allow(dead_code)]
+pub fn normalize_command_name(name: &str) -> &str {
+    name.rsplit('/').next().unwrap_or(name)
+}
+
 fn arg_matches_flag(arg: &str, flag: &str) -> bool {
     if arg == flag {
         return true;
