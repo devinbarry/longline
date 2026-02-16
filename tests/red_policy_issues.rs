@@ -308,12 +308,19 @@ fn red_uv_django_migrate_requires_confirmation() {
 
 #[test]
 fn red_uv_pip_install_is_not_unwrapped() {
-    // uv pip should NOT be treated as a wrapper (only uv run is)
+    // uv pip should NOT be treated as a wrapper (only uv run is).
+    // uv pip install already has its own rule (uv-pip-install -> ask),
+    // and unwrapping should not change that outcome.
     let cmd = "uv pip install requests";
     let result = eval_cmd(cmd);
     assert_eq!(
         result.decision,
-        Decision::Allow,
+        Decision::Ask,
         "cmd={cmd} result={result:?}"
+    );
+    assert_eq!(
+        result.rule_id.as_deref(),
+        Some("uv-pip-install"),
+        "should match the uv-pip-install rule, not be unwrapped"
     );
 }
