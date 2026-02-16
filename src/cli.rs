@@ -74,9 +74,9 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
 
-        /// Show only: allow, ask, deny
-        #[arg(short, long)]
-        filter: Option<DecisionFilter>,
+        /// Filter rules/allowlist [decision:allow|ask|deny, trust:minimal|standard|full, source:global|project]
+        #[arg(short, long, value_parser = clap::value_parser!(RulesFilter))]
+        filter: Vec<RulesFilter>,
 
         /// Show only: critical, high, strict
         #[arg(short, long)]
@@ -96,7 +96,71 @@ enum Commands {
     },
 }
 
-#[derive(Clone, clap::ValueEnum)]
+#[derive(Clone, Debug)]
+enum RulesFilter {
+    Decision(DecisionFilter),
+    Trust(policy::TrustLevel),
+    Source(policy::RuleSource),
+}
+
+impl std::str::FromStr for RulesFilter {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Try dimension:value format first
+        if let Some((dim, val)) = s.split_once(':') {
+            match dim {
+                "decision" => parse_decision(val).map(RulesFilter::Decision),
+                "trust" => parse_trust(val).map(RulesFilter::Trust),
+                "source" => parse_source(val).map(RulesFilter::Source),
+                _ => Err(format!(
+                    "unknown filter dimension '{}' -- valid dimensions: decision, trust, source",
+                    dim
+                )),
+            }
+        } else {
+            // Bare value: try as decision (backwards compat)
+            parse_decision(s).map(RulesFilter::Decision)
+        }
+    }
+}
+
+fn parse_decision(s: &str) -> Result<DecisionFilter, String> {
+    match s {
+        "allow" => Ok(DecisionFilter::Allow),
+        "ask" => Ok(DecisionFilter::Ask),
+        "deny" => Ok(DecisionFilter::Deny),
+        _ => Err(format!(
+            "invalid filter '{}' -- valid decision values: allow, ask, deny",
+            s
+        )),
+    }
+}
+
+fn parse_trust(s: &str) -> Result<policy::TrustLevel, String> {
+    match s {
+        "minimal" => Ok(policy::TrustLevel::Minimal),
+        "standard" => Ok(policy::TrustLevel::Standard),
+        "full" => Ok(policy::TrustLevel::Full),
+        _ => Err(format!(
+            "invalid filter 'trust:{}' -- valid trust values: minimal, standard, full",
+            s
+        )),
+    }
+}
+
+fn parse_source(s: &str) -> Result<policy::RuleSource, String> {
+    match s {
+        "global" => Ok(policy::RuleSource::Global),
+        "project" => Ok(policy::RuleSource::Project),
+        _ => Err(format!(
+            "invalid filter 'source:{}' -- valid source values: global, project",
+            s
+        )),
+    }
+}
+
+#[derive(Clone, Debug, clap::ValueEnum)]
 enum DecisionFilter {
     Allow,
     Ask,
@@ -509,7 +573,7 @@ fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
 fn run_rules(
     config: &policy::RulesConfig,
     verbose: bool,
-    filter: Option<DecisionFilter>,
+    filters: Vec<RulesFilter>,
     level: Option<LevelFilter>,
     group_by: Option<GroupBy>,
     project_config_path: Option<&PathBuf>,
@@ -519,10 +583,25 @@ fn run_rules(
         println!("Project config: {}", yansi::Paint::cyan(&display));
     }
 
+    // Extract filter dimensions
+    let decision_filter: Option<DecisionFilter> = filters.iter().find_map(|f| match f {
+        RulesFilter::Decision(d) => Some(d.clone()),
+        _ => None,
+    });
+    let trust_filter: Option<policy::TrustLevel> = filters.iter().find_map(|f| match f {
+        RulesFilter::Trust(t) => Some(*t),
+        _ => None,
+    });
+    let source_filter: Option<policy::RuleSource> = filters.iter().find_map(|f| match f {
+        RulesFilter::Source(s) => Some(*s),
+        _ => None,
+    });
+
+    // Filter rules by decision, level, and source
     let rules: Vec<&policy::Rule> = config
         .rules
         .iter()
-        .filter(|r| match &filter {
+        .filter(|r| match &decision_filter {
             Some(DecisionFilter::Allow) => r.decision == Decision::Allow,
             Some(DecisionFilter::Ask) => r.decision == Decision::Ask,
             Some(DecisionFilter::Deny) => r.decision == Decision::Deny,
@@ -532,6 +611,10 @@ fn run_rules(
             Some(LevelFilter::Critical) => r.level == policy::SafetyLevel::Critical,
             Some(LevelFilter::High) => r.level == policy::SafetyLevel::High,
             Some(LevelFilter::Strict) => r.level == policy::SafetyLevel::Strict,
+            None => true,
+        })
+        .filter(|r| match &source_filter {
+            Some(s) => r.source == *s,
             None => true,
         })
         .collect();
@@ -548,7 +631,7 @@ fn run_rules(
         }
     }
 
-    // Filter allowlist entries by trust level
+    // Filter allowlist entries by trust level (evaluation cutoff -- unchanged)
     let active_commands: Vec<policy::AllowlistEntry> = config
         .allowlists
         .commands
@@ -559,12 +642,27 @@ fn run_rules(
     let active_count = active_commands.len();
     let total_count = config.allowlists.commands.len();
 
-    // Show full allowlist when filtering to allow, compact summary otherwise
-    let is_allow_filter = matches!(&filter, Some(DecisionFilter::Allow));
-    if is_allow_filter {
-        println!("{}", crate::output::allowlist_table(&active_commands));
+    // Further filter allowlist for display by trust tier and source
+    let display_commands: Vec<policy::AllowlistEntry> = active_commands
+        .iter()
+        .filter(|e| match &trust_filter {
+            Some(t) => e.trust == *t,
+            None => true,
+        })
+        .filter(|e| match &source_filter {
+            Some(s) => e.source == *s,
+            None => true,
+        })
+        .cloned()
+        .collect();
+
+    // Show full allowlist when any allowlist-relevant filter is active
+    let show_full_allowlist =
+        matches!(&decision_filter, Some(DecisionFilter::Allow)) || trust_filter.is_some();
+    if show_full_allowlist {
+        println!("{}", crate::output::allowlist_table(&display_commands));
     } else {
-        crate::output::print_allowlist_summary(&active_commands);
+        crate::output::print_allowlist_summary(&display_commands);
     }
 
     println!(
@@ -743,6 +841,114 @@ fn print_json<T: serde::Serialize>(value: &T) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- RulesFilter FromStr parsing tests ---
+
+    #[test]
+    fn test_rules_filter_parse_bare_decision() {
+        let f: RulesFilter = "deny".parse().unwrap();
+        assert!(matches!(f, RulesFilter::Decision(DecisionFilter::Deny)));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_prefixed_decision() {
+        let f: RulesFilter = "decision:ask".parse().unwrap();
+        assert!(matches!(f, RulesFilter::Decision(DecisionFilter::Ask)));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_trust() {
+        let f: RulesFilter = "trust:full".parse().unwrap();
+        assert!(matches!(f, RulesFilter::Trust(policy::TrustLevel::Full)));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_source() {
+        let f: RulesFilter = "source:project".parse().unwrap();
+        assert!(matches!(
+            f,
+            RulesFilter::Source(policy::RuleSource::Project)
+        ));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_invalid_dimension() {
+        let result: Result<RulesFilter, String> = "foo:bar".parse();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("unknown filter dimension"));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_invalid_value() {
+        let result: Result<RulesFilter, String> = "trust:mega".parse();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("valid trust values"));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_invalid_bare() {
+        let result: Result<RulesFilter, String> = "banana".parse();
+        assert!(result.is_err());
+    }
+
+    // --- CLI parsing tests for typed filters ---
+
+    #[test]
+    fn test_cli_parses_typed_filter() {
+        let cli = Cli::try_parse_from(["longline", "rules", "--filter", "trust:full"]).unwrap();
+        match cli.command {
+            Some(Commands::Rules { filter, .. }) => {
+                assert_eq!(filter.len(), 1);
+                assert!(matches!(
+                    filter[0],
+                    RulesFilter::Trust(policy::TrustLevel::Full)
+                ));
+            }
+            _ => panic!("expected Rules command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_multiple_filters() {
+        let cli = Cli::try_parse_from([
+            "longline",
+            "rules",
+            "--filter",
+            "deny",
+            "--filter",
+            "source:project",
+        ])
+        .unwrap();
+        match cli.command {
+            Some(Commands::Rules { filter, .. }) => {
+                assert_eq!(filter.len(), 2);
+            }
+            _ => panic!("expected Rules command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_bare_filter_backwards_compat() {
+        let cli = Cli::try_parse_from(["longline", "rules", "--filter", "deny"]).unwrap();
+        match cli.command {
+            Some(Commands::Rules { filter, .. }) => {
+                assert_eq!(filter.len(), 1);
+                assert!(matches!(
+                    filter[0],
+                    RulesFilter::Decision(DecisionFilter::Deny)
+                ));
+            }
+            _ => panic!("expected Rules command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_rejects_invalid_filter() {
+        let result = Cli::try_parse_from(["longline", "rules", "--filter", "trust:mega"]);
+        assert!(result.is_err());
+    }
+
+    // --- Existing tests ---
 
     #[test]
     fn test_cli_parses_ask_ai_lenient_flag() {
