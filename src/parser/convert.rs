@@ -58,7 +58,6 @@ fn convert_node(node: Node, source: &str) -> Statement {
 /// Stops recursion at command_substitution boundaries to avoid
 /// double-processing (the substitution's own children are handled
 /// by convert_command_substitution).
-#[allow(dead_code)]
 fn collect_descendant_substitutions(node: Node, source: &str, out: &mut Vec<Statement>) {
     if node.kind() == "command_substitution" {
         out.push(convert_command_substitution(node, source));
@@ -68,6 +67,11 @@ fn collect_descendant_substitutions(node: Node, source: &str, out: &mut Vec<Stat
     for child in node.named_children(&mut cursor) {
         collect_descendant_substitutions(child, source, out);
     }
+}
+
+/// Public wrapper for `collect_descendant_substitutions` for use from sibling modules.
+pub fn collect_descendant_substitutions_pub(node: Node, source: &str, out: &mut Vec<Statement>) {
+    collect_descendant_substitutions(node, source, out);
 }
 
 /// Convert a "command" node to a SimpleCommand.
@@ -93,16 +97,22 @@ fn convert_command(node: Node, source: &str) -> Statement {
             "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion"
             | "expansion" | "string_content" => {
                 argv.push(resolve_node_text(child, source));
+                collect_descendant_substitutions(child, source, &mut embedded_substitutions);
             }
             "variable_assignment" => {
-                assignments.push(parse_assignment(child, source));
+                let (assignment, subs) = parse_assignment(child, source);
+                assignments.push(assignment);
+                embedded_substitutions.extend(subs);
             }
             "file_redirect" | "heredoc_redirect" | "herestring_redirect" => {
-                redirects.push(parse_redirect(child, source));
+                let (redirect, subs) = parse_redirect(child, source);
+                redirects.push(redirect);
+                embedded_substitutions.extend(subs);
             }
             _ => {
                 // Other argument-like nodes: treat as arguments
                 argv.push(resolve_node_text(child, source));
+                collect_descendant_substitutions(child, source, &mut embedded_substitutions);
             }
         }
     }
@@ -191,12 +201,15 @@ pub fn convert_command_substitution(node: Node, source: &str) -> Statement {
 fn convert_redirected_statement(node: Node, source: &str) -> Statement {
     let mut body: Option<Statement> = None;
     let mut redirects: Vec<Redirect> = Vec::new();
+    let mut redirect_substitutions: Vec<Statement> = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         match child.kind() {
             "file_redirect" | "heredoc_redirect" | "herestring_redirect" => {
-                redirects.push(parse_redirect(child, source));
+                let (redirect, subs) = parse_redirect(child, source);
+                redirects.push(redirect);
+                redirect_substitutions.extend(subs);
             }
             _ => {
                 if body.is_none() {
@@ -208,13 +221,12 @@ fn convert_redirected_statement(node: Node, source: &str) -> Statement {
 
     let mut stmt = body.unwrap_or_else(|| Statement::Opaque(node_text(node, source).to_string()));
 
-    // If body is a SimpleCommand, attach the redirects to it
-    if !redirects.is_empty() {
-        if let Statement::SimpleCommand(ref mut cmd) = stmt {
+    // If body is a SimpleCommand, attach the redirects and any substitutions to it
+    if let Statement::SimpleCommand(ref mut cmd) = stmt {
+        if !redirects.is_empty() {
             cmd.redirects.extend(redirects);
         }
-        // For non-SimpleCommand bodies, the redirects are lost in this model.
-        // A more complete implementation would wrap them, but for now this suffices.
+        cmd.embedded_substitutions.extend(redirect_substitutions);
     }
 
     stmt
@@ -271,13 +283,15 @@ fn convert_bare_assignment(node: Node, source: &str) -> Statement {
     let mut assignments = Vec::new();
 
     if node.kind() == "variable_assignment" {
-        assignments.push(parse_assignment(node, source));
+        let (assignment, _subs) = parse_assignment(node, source);
+        assignments.push(assignment);
     } else {
         // variable_assignments: multiple assignments
         let mut cursor = node.walk();
         for child in node.named_children(&mut cursor) {
             if child.kind() == "variable_assignment" {
-                assignments.push(parse_assignment(child, source));
+                let (assignment, _subs) = parse_assignment(child, source);
+                assignments.push(assignment);
             }
         }
     }

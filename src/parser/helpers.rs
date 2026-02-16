@@ -42,10 +42,11 @@ pub fn resolve_node_text(node: Node, source: &str) -> String {
     }
 }
 
-/// Parse a variable_assignment node into an Assignment.
-pub fn parse_assignment(node: Node, source: &str) -> Assignment {
+/// Parse a variable_assignment node into an Assignment and any embedded command substitutions.
+pub fn parse_assignment(node: Node, source: &str) -> (Assignment, Vec<super::Statement>) {
     let mut name = String::new();
     let mut value = String::new();
+    let mut substitutions = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
@@ -55,18 +56,24 @@ pub fn parse_assignment(node: Node, source: &str) -> Assignment {
             }
             _ => {
                 value = resolve_node_text(child, source);
+                super::convert::collect_descendant_substitutions_pub(
+                    child,
+                    source,
+                    &mut substitutions,
+                );
             }
         }
     }
 
-    Assignment { name, value }
+    (Assignment { name, value }, substitutions)
 }
 
-/// Parse a file_redirect node into a Redirect.
-pub fn parse_redirect(node: Node, source: &str) -> Redirect {
+/// Parse a file_redirect node into a Redirect and any embedded command substitutions.
+pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Statement>) {
     let mut fd: Option<u32> = None;
     let mut op = RedirectOp::Write;
     let mut target = String::new();
+    let mut substitutions = Vec::new();
 
     let child_count = node.child_count();
     for i in 0..child_count {
@@ -84,14 +91,24 @@ pub fn parse_redirect(node: Node, source: &str) -> Redirect {
             ">|" => op = RedirectOp::Clobber,
             "word" | "string" | "raw_string" | "number" | "concatenation" => {
                 target = resolve_node_text(child, source);
+                super::convert::collect_descendant_substitutions_pub(
+                    child,
+                    source,
+                    &mut substitutions,
+                );
             }
             _ => {
                 if child.is_named() && target.is_empty() {
                     target = resolve_node_text(child, source);
+                    super::convert::collect_descendant_substitutions_pub(
+                        child,
+                        source,
+                        &mut substitutions,
+                    );
                 }
             }
         }
     }
 
-    Redirect { fd, op, target }
+    (Redirect { fd, op, target }, substitutions)
 }
