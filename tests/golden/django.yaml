@@ -253,11 +253,13 @@ tests:
   - id: django-migrate-uv
     command: "uv run python manage.py migrate"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: django-migrate
   - id: django-migrate-uv-python3
     command: "uv run python3 manage.py migrate"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: django-migrate
   - id: django-migrate-path
     command: "python ./manage.py migrate"
     expected:

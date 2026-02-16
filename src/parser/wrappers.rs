@@ -26,6 +26,9 @@ enum ArgSkip {
 struct WrapperDef {
     /// Command name (matched after basename extraction)
     name: &'static str,
+    /// If set, argv[0] must equal this for the wrapper to apply.
+    /// Used for subcommand-based wrappers like "uv run".
+    subcommand: Option<&'static str>,
     /// Flags that consume the following token as a value (e.g., -s SIGNAL)
     value_flags: &'static [&'static str],
     /// Flags that stand alone with no value (e.g., --verbose)
@@ -37,30 +40,35 @@ struct WrapperDef {
 static WRAPPERS: &[WrapperDef] = &[
     WrapperDef {
         name: "timeout",
+        subcommand: None,
         value_flags: &["-s", "--signal", "-k", "--kill-after"],
         bool_flags: &["--preserve-status", "--foreground", "-v", "--verbose"],
         skip: ArgSkip::Positional(1),
     },
     WrapperDef {
         name: "nice",
+        subcommand: None,
         value_flags: &["-n", "--adjustment"],
         bool_flags: &[],
         skip: ArgSkip::None,
     },
     WrapperDef {
         name: "env",
+        subcommand: None,
         value_flags: &["-u", "--unset"],
         bool_flags: &["-i", "-0", "--null", "--ignore-environment"],
         skip: ArgSkip::Assignments,
     },
     WrapperDef {
         name: "nohup",
+        subcommand: None,
         value_flags: &[],
         bool_flags: &[],
         skip: ArgSkip::None,
     },
     WrapperDef {
         name: "strace",
+        subcommand: None,
         value_flags: &["-e", "-o", "-p", "-s", "-P", "-I"],
         bool_flags: &[
             "-f", "-ff", "-c", "-C", "-t", "-tt", "-ttt", "-T", "-v", "-V", "-x", "-xx", "-y",
@@ -70,8 +78,22 @@ static WRAPPERS: &[WrapperDef] = &[
     },
     WrapperDef {
         name: "time",
+        subcommand: None,
         value_flags: &[],
         bool_flags: &["-p"],
+        skip: ArgSkip::None,
+    },
+    WrapperDef {
+        name: "uv",
+        subcommand: Some("run"),
+        value_flags: &["--python", "-p", "--directory", "--project"],
+        bool_flags: &[
+            "--no-project",
+            "--isolated",
+            "--no-dev",
+            "--locked",
+            "--frozen",
+        ],
         skip: ArgSkip::None,
     },
 ];
@@ -113,7 +135,18 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     let wrapper = find_wrapper(cmd_name)?;
 
     let argv = &cmd.argv;
-    let mut i = 0;
+
+    // If wrapper requires a subcommand, check that argv[0] matches
+    let start_idx = if let Some(sub) = wrapper.subcommand {
+        if argv.first().map(|s| s.as_str()) != Some(sub) {
+            return None;
+        }
+        1 // skip the subcommand
+    } else {
+        0
+    };
+
+    let mut i = start_idx;
 
     // Phase 1: Consume flags
     while i < argv.len() {

@@ -44,6 +44,18 @@ allowlists:
     - { command: "just --version", trust: minimal }
     - { command: "just --help", trust: minimal }
     - { command: "just -h", trust: minimal }
+    # ── Python dev tools (standalone + uv run wrappers) ────────────
+    - { command: pytest, trust: standard }
+    - { command: mypy, trust: standard }
+    - { command: ruff, trust: standard }
+    - { command: black, trust: standard }
+    - { command: isort, trust: standard }
+    - { command: flake8, trust: standard }
+    - { command: pylint, trust: standard }
+    - { command: pyright, trust: standard }
+    - { command: bandit, trust: standard }
+    - { command: coverage, trust: standard }
+    - { command: pre-commit, trust: standard }
     # ── uv: build/test/run tools ───────────────────────────────────
     - { command: "uv run pytest", trust: standard }
     - { command: "uv run mypy", trust: standard }
