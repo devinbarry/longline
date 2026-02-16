@@ -221,12 +221,18 @@ fn convert_redirected_statement(node: Node, source: &str) -> Statement {
 
     let mut stmt = body.unwrap_or_else(|| Statement::Opaque(node_text(node, source).to_string()));
 
-    // If body is a SimpleCommand, attach the redirects and any substitutions to it
+    // Attach redirects and substitutions to the body statement
     if let Statement::SimpleCommand(ref mut cmd) = stmt {
         if !redirects.is_empty() {
             cmd.redirects.extend(redirects);
         }
         cmd.embedded_substitutions.extend(redirect_substitutions);
+    } else {
+        // For compound bodies (subshells, lists, etc.), inject redirects
+        // into all SimpleCommand leaves within the body.
+        if !redirects.is_empty() {
+            inject_redirects_into_leaves(&mut stmt, &redirects);
+        }
     }
 
     stmt
@@ -234,7 +240,6 @@ fn convert_redirected_statement(node: Node, source: &str) -> Statement {
 
 /// Inject redirects into all SimpleCommand leaves of a statement tree.
 /// Used when redirects are attached to compound statements (subshells, brace groups).
-#[allow(dead_code)]
 fn inject_redirects_into_leaves(stmt: &mut Statement, redirects: &[Redirect]) {
     match stmt {
         Statement::SimpleCommand(cmd) => cmd.redirects.extend_from_slice(redirects),
