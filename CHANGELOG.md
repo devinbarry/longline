@@ -2,12 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.4] - 2026-02-16
+
+
+### Added
+
+- add typed filter system for rules subcommand
+
+
+### Changed
+
+- add typed filter system design for longline rules
+- add typed filter system implementation plan
+- add integration tests for typed filter system
+
 ## [0.4.3] - 2026-02-16
 
 
 ### Added
 
 - tighten git push safety rules and add force-with-lease coverage
+
+
+### Changed
+
+- release v0.4.3
+
+## [0.4.2] - 2026-02-14
 
 
 ### Changed
