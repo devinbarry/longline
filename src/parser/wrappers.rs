@@ -68,6 +68,12 @@ static WRAPPERS: &[WrapperDef] = &[
         ],
         skip: ArgSkip::None,
     },
+    WrapperDef {
+        name: "time",
+        value_flags: &[],
+        bool_flags: &["-p"],
+        skip: ArgSkip::None,
+    },
 ];
 
 /// Extract basename from a command name for wrapper matching.

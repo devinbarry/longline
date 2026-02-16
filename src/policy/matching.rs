@@ -6,7 +6,6 @@ use super::config::{Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
 
 /// Extract basename from a command path for matching.
 /// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
-#[allow(dead_code)]
 pub fn normalize_command_name(name: &str) -> &str {
     name.rsplit('/').next().unwrap_or(name)
 }
@@ -50,7 +49,7 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                 Some(n) => n.as_str(),
                 None => return false,
             };
-            if !command.matches(cmd_name) {
+            if !command.matches(normalize_command_name(cmd_name)) {
                 return false;
             }
             // Check flags
@@ -130,8 +129,16 @@ pub fn matches_pipeline(matcher: &PipelineMatcher, pipe: &parser::Pipeline) -> b
         }
         if let Statement::SimpleCommand(cmd) = stage {
             if let Some(ref name) = cmd.name {
-                if matcher.stages[matcher_idx].command.matches(name) {
+                let basename = normalize_command_name(name);
+                if matcher.stages[matcher_idx].command.matches(basename) {
                     matcher_idx += 1;
+                } else if let Some(inner) = crate::parser::wrappers::unwrap_transparent(cmd) {
+                    if let Some(ref inner_name) = inner.name {
+                        let inner_basename = normalize_command_name(inner_name);
+                        if matcher.stages[matcher_idx].command.matches(inner_basename) {
+                            matcher_idx += 1;
+                        }
+                    }
                 }
             }
         }

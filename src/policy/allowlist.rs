@@ -3,6 +3,7 @@
 use crate::parser::{SimpleCommand, Statement};
 
 use super::config::RulesConfig;
+use super::matching::normalize_command_name;
 use std::borrow::Cow;
 
 /// Check if a leaf node is allowlisted (or is a bare version check).
@@ -129,7 +130,7 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
         if parts.is_empty() {
             continue;
         }
-        if parts[0] != cmd_name {
+        if parts[0] != normalize_command_name(cmd_name) {
             continue;
         }
         if parts.len() == 1 {

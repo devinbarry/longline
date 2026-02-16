@@ -5,7 +5,8 @@ tests:
   - id: abs-path-rm
     command: "/bin/rm -rf /"
     expected:
-      decision: ask
+      decision: deny
+      rule_id: rm-recursive-root
 
   - id: abs-path-env-rm
     command: "/usr/bin/env rm -rf /"
