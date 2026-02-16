@@ -192,6 +192,83 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     })
 }
 
+/// Extract commands from `find -exec cmd args \;` or `find -exec cmd args +`.
+/// Returns synthesized SimpleCommands for each -exec/-execdir block found.
+fn extract_find_exec(cmd: &SimpleCommand) -> Vec<SimpleCommand> {
+    let mut results = Vec::new();
+    let argv = &cmd.argv;
+    let mut i = 0;
+
+    while i < argv.len() {
+        if argv[i] == "-exec" || argv[i] == "-execdir" {
+            i += 1; // skip -exec/-execdir
+            let start = i;
+            // Scan forward to find \; or +
+            while i < argv.len() && argv[i] != ";" && argv[i] != "+" {
+                i += 1;
+            }
+            if i > start {
+                let exec_name = argv[start].clone();
+                let exec_argv: Vec<String> = argv[start + 1..i]
+                    .iter()
+                    .filter(|a| a.as_str() != "{}")
+                    .cloned()
+                    .collect();
+                results.push(SimpleCommand {
+                    name: Some(exec_name),
+                    argv: exec_argv,
+                    redirects: vec![],
+                    assignments: vec![],
+                    embedded_substitutions: vec![],
+                });
+            }
+            if i < argv.len() {
+                i += 1; // skip the terminator
+            }
+        } else {
+            i += 1;
+        }
+    }
+
+    results
+}
+
+/// Extract the command from `xargs [flags] cmd [args]`.
+/// Returns a synthesized SimpleCommand if a command is found.
+fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
+    let argv = &cmd.argv;
+    let mut i = 0;
+
+    // Skip xargs flags
+    while i < argv.len() {
+        let token = &argv[i];
+        if token.starts_with('-') {
+            // Known xargs value flags that consume the next token
+            if ["-I", "-L", "-n", "-P", "-s", "-E", "-d"].contains(&token.as_str()) {
+                i += 2; // skip flag + value
+            } else {
+                i += 1; // bool flag
+            }
+        } else {
+            break;
+        }
+    }
+
+    if i < argv.len() {
+        let xargs_cmd_name = argv[i].clone();
+        let xargs_cmd_argv: Vec<String> = argv[i + 1..].to_vec();
+        Some(SimpleCommand {
+            name: Some(xargs_cmd_name),
+            argv: xargs_cmd_argv,
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        })
+    } else {
+        None
+    }
+}
+
 /// Walk a statement tree, find all wrapper SimpleCommands, unwrap them
 /// recursively (max depth 16, then ask), return all synthesized inner commands.
 pub fn extract_inner_commands(stmt: &Statement) -> Vec<Statement> {
@@ -206,6 +283,19 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
             unwrap_recursive(cmd, out, 0);
             for sub in &cmd.embedded_substitutions {
                 collect_inner_commands(sub, out);
+            }
+            // Special-case: find -exec / xargs
+            if let Some(ref name) = cmd.name {
+                let basename = wrapper_basename(name);
+                if basename == "find" {
+                    for inner in extract_find_exec(cmd) {
+                        out.push(Statement::SimpleCommand(inner));
+                    }
+                } else if basename == "xargs" {
+                    if let Some(inner) = extract_xargs_command(cmd) {
+                        out.push(Statement::SimpleCommand(inner));
+                    }
+                }
             }
         }
         Statement::Pipeline(p) => {

@@ -229,7 +229,7 @@ tests:
   - id: find-exec-chmod
     command: "find . -type f -exec chmod 644 {} \\;"
     expected:
-      decision: allow
+      decision: ask
 
   - id: find-exec-wc
     command: "find . -name '*.rs' -exec wc -l {} +"
