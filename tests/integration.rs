@@ -1527,3 +1527,19 @@ fn test_e2e_global_config_no_file_unchanged() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
 }
+
+#[test]
+fn test_e2e_safety_level_flag_overrides_config() {
+    // chmod 777 is a "high" level rule - should be skipped at critical safety level
+    let (code, stdout) =
+        run_hook_with_flags("Bash", "chmod 777 /tmp/f", &["--safety-level", "critical"]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !reason.contains("chmod-777"),
+        "chmod-777 rule should be skipped at critical safety level: {reason}"
+    );
+}

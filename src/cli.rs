@@ -20,6 +20,10 @@ struct Cli {
     #[arg(long, value_name = "LEVEL", global = true)]
     trust_level: Option<TrustLevelArg>,
 
+    /// Override safety level (critical, high, strict)
+    #[arg(long, value_name = "LEVEL", global = true)]
+    safety_level: Option<SafetyLevelArg>,
+
     /// Project directory for .claude/longline.yaml discovery (defaults to cwd)
     #[arg(long, value_name = "DIR", global = true)]
     dir: Option<PathBuf>,
@@ -53,6 +57,23 @@ impl TrustLevelArg {
             TrustLevelArg::Minimal => policy::TrustLevel::Minimal,
             TrustLevelArg::Standard => policy::TrustLevel::Standard,
             TrustLevelArg::Full => policy::TrustLevel::Full,
+        }
+    }
+}
+
+#[derive(Clone, clap::ValueEnum)]
+enum SafetyLevelArg {
+    Critical,
+    High,
+    Strict,
+}
+
+impl SafetyLevelArg {
+    fn to_safety_level(&self) -> policy::SafetyLevel {
+        match self {
+            SafetyLevelArg::Critical => policy::SafetyLevel::Critical,
+            SafetyLevelArg::High => policy::SafetyLevel::High,
+            SafetyLevelArg::Strict => policy::SafetyLevel::Strict,
         }
     }
 }
@@ -264,6 +285,11 @@ pub fn run() -> i32 {
     // Apply CLI trust level override
     if let Some(ref level) = cli.trust_level {
         rules_config.trust_level = level.to_trust_level();
+    }
+
+    // Apply CLI safety level override
+    if let Some(ref level) = cli.safety_level {
+        rules_config.safety_level = level.to_safety_level();
     }
 
     // Merge per-project config (for subcommands; hook mode handles this via JSON cwd)
