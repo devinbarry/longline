@@ -1374,3 +1374,156 @@ fn test_e2e_rules_filter_invalid() {
         "Should show error for invalid filter: {stderr}"
     );
 }
+
+#[test]
+fn test_e2e_global_config_overrides_safety_level() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_safety_level: critical\n",
+    )
+    .unwrap();
+
+    // chmod 777 is a "high" level rule - should be skipped at critical safety level
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "chmod 777 /tmp/f" },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !reason.contains("chmod-777"),
+        "chmod-777 rule should be skipped at critical safety level via global config: {reason}"
+    );
+}
+
+#[test]
+fn test_e2e_global_config_disables_rule() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "disable_rules:\n  - chmod-777\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "chmod 777 /tmp/f" },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    let reason = parsed["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !reason.contains("chmod-777"),
+        "chmod-777 rule should be disabled via global config: {reason}"
+    );
+}
+
+#[test]
+fn test_e2e_global_config_no_file_unchanged() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    // No longline.yaml — should use embedded defaults unchanged
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "ls -la" },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["hookSpecificOutput"]["permissionDecision"], "allow");
+}

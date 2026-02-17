@@ -181,10 +181,14 @@ enum GroupBy {
     Level,
 }
 
-/// Default config file path.
-fn default_config_path() -> PathBuf {
+fn home_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home)
+}
+
+/// Default config file path.
+fn default_config_path() -> PathBuf {
+    home_dir()
         .join(".config")
         .join("longline")
         .join("rules.yaml")
@@ -240,6 +244,22 @@ pub fn run() -> i32 {
             return 2;
         }
     };
+
+    // Merge global config overlay (~/.config/longline/longline.yaml)
+    match policy::load_global_config(&home_dir()) {
+        Ok(Some(global_config)) => {
+            policy::merge_overlay_config(
+                &mut rules_config,
+                global_config,
+                policy::RuleSource::Global,
+            );
+        }
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    }
 
     // Apply CLI trust level override
     if let Some(ref level) = cli.trust_level {
@@ -322,6 +342,22 @@ fn run_hook(
             return 0;
         }
     };
+
+    // Merge global config overlay (~/.config/longline/longline.yaml)
+    match policy::load_global_config(&home_dir()) {
+        Ok(Some(global_config)) => {
+            policy::merge_overlay_config(
+                &mut rules_config,
+                global_config,
+                policy::RuleSource::Global,
+            );
+        }
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    }
 
     // Load and merge per-project config
     if let Some(ref cwd) = hook_input.cwd {
