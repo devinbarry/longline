@@ -9,7 +9,8 @@ use longline::types::Decision;
 /// Map a RuleSource to its display color.
 fn source_color(s: policy::RuleSource) -> Color {
     match s {
-        policy::RuleSource::Global => Color::DarkGrey,
+        policy::RuleSource::BuiltIn => Color::DarkGrey,
+        policy::RuleSource::Global => Color::Blue,
         policy::RuleSource::Project => Color::Cyan,
     }
 }
@@ -17,6 +18,7 @@ fn source_color(s: policy::RuleSource) -> Color {
 /// Create a colored Cell for a RuleSource value.
 fn source_cell(s: policy::RuleSource) -> Cell {
     let label = match s {
+        policy::RuleSource::BuiltIn => "builtin",
         policy::RuleSource::Global => "global",
         policy::RuleSource::Project => "project",
     };

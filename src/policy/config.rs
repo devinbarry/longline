@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 
 use crate::types::Decision;
 
-/// Tracks whether a rule/entry came from global config or project config.
+/// Tracks whether a rule/entry came from built-in defaults, global config, or project config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RuleSource {
     #[default]
+    BuiltIn,
     Global,
     Project,
 }
@@ -1282,7 +1283,7 @@ rules:
     }
 
     #[test]
-    fn test_rule_source_default_is_global() {
+    fn test_rule_source_default_is_builtin() {
         let yaml = r#"
 version: 1
 rules:
@@ -1294,7 +1295,7 @@ rules:
     reason: "Test"
 "#;
         let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(config.rules[0].source, RuleSource::Global);
+        assert_eq!(config.rules[0].source, RuleSource::BuiltIn);
     }
 
     #[test]
@@ -1332,7 +1333,7 @@ rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
-                    source: RuleSource::Global,
+                    source: RuleSource::BuiltIn,
                 }],
                 paths: vec![],
             },
@@ -1353,7 +1354,7 @@ rules:
             disable_rules: None,
         };
         merge_project_config(&mut config, project);
-        assert_eq!(config.allowlists.commands[0].source, RuleSource::Global);
+        assert_eq!(config.allowlists.commands[0].source, RuleSource::BuiltIn);
         assert_eq!(config.allowlists.commands[1].source, RuleSource::Project);
     }
 }

@@ -1358,7 +1358,7 @@ fn test_e2e_rules_filter_multiple() {
         "--filter",
         "deny",
         "--filter",
-        "source:global",
+        "source:builtin",
     ]);
     assert_eq!(code, 0);
     assert!(stdout.contains("deny"), "Should have deny rules: {stdout}");

@@ -74,7 +74,7 @@ enum Commands {
         #[arg(short, long)]
         verbose: bool,
 
-        /// Filter rules/allowlist [decision:allow|ask|deny, trust:minimal|standard|full, source:global|project]
+        /// Filter rules/allowlist [decision:allow|ask|deny, trust:minimal|standard|full, source:builtin|global|project]
         #[arg(short, long, value_parser = clap::value_parser!(RulesFilter))]
         filter: Vec<RulesFilter>,
 
@@ -151,10 +151,11 @@ fn parse_trust(s: &str) -> Result<policy::TrustLevel, String> {
 
 fn parse_source(s: &str) -> Result<policy::RuleSource, String> {
     match s {
+        "builtin" => Ok(policy::RuleSource::BuiltIn),
         "global" => Ok(policy::RuleSource::Global),
         "project" => Ok(policy::RuleSource::Project),
         _ => Err(format!(
-            "invalid filter 'source:{}' -- valid source values: global, project",
+            "invalid filter 'source:{}' -- valid source values: builtin, global, project",
             s
         )),
     }
@@ -869,6 +870,15 @@ mod tests {
         assert!(matches!(
             f,
             RulesFilter::Source(policy::RuleSource::Project)
+        ));
+    }
+
+    #[test]
+    fn test_rules_filter_parse_source_builtin() {
+        let f: RulesFilter = "source:builtin".parse().unwrap();
+        assert!(matches!(
+            f,
+            RulesFilter::Source(policy::RuleSource::BuiltIn)
         ));
     }
 
