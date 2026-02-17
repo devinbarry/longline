@@ -215,6 +215,48 @@ fn default_config_path() -> PathBuf {
         .join("rules.yaml")
 }
 
+/// Global config file path (~/.config/longline/longline.yaml).
+fn global_config_path() -> PathBuf {
+    home_dir()
+        .join(".config")
+        .join("longline")
+        .join("longline.yaml")
+}
+
+/// Print global config summary if it exists.
+fn print_global_config_banner() {
+    match policy::load_global_config(&home_dir()) {
+        Ok(Some(config)) => {
+            let path = global_config_path();
+            let display = path.display().to_string();
+            println!("Global config: {}", yansi::Paint::blue(&display));
+            if let Some(level) = config.override_safety_level {
+                println!("  override_safety_level: {level}");
+            }
+            if let Some(level) = config.override_trust_level {
+                println!("  override_trust_level: {level}");
+            }
+            if let Some(ref allowlists) = config.allowlists {
+                if !allowlists.commands.is_empty() {
+                    println!("  allowlists: {} commands", allowlists.commands.len());
+                }
+            }
+            if let Some(ref rules) = config.rules {
+                if !rules.is_empty() {
+                    println!("  rules: {}", rules.len());
+                }
+            }
+            if let Some(ref disable) = config.disable_rules {
+                if !disable.is_empty() {
+                    println!("  disable_rules: {}", disable.len());
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(e) => eprintln!("longline: global config error: {e}"),
+    }
+}
+
 /// Resolve the project directory: --dir flag > process cwd > None.
 fn resolve_dir(explicit: Option<&PathBuf>) -> Option<PathBuf> {
     if let Some(dir) = explicit {
@@ -553,6 +595,8 @@ fn run_check(
     filter: Option<DecisionFilter>,
     project_config_path: Option<&PathBuf>,
 ) -> i32 {
+    print_global_config_banner();
+
     if let Some(path) = project_config_path {
         let display = path.display().to_string();
         println!("Project config: {}", yansi::Paint::cyan(&display));
@@ -641,6 +685,8 @@ fn run_rules(
     group_by: Option<GroupBy>,
     project_config_path: Option<&PathBuf>,
 ) -> i32 {
+    print_global_config_banner();
+
     if let Some(path) = project_config_path {
         let display = path.display().to_string();
         println!("Project config: {}", yansi::Paint::cyan(&display));
@@ -816,6 +862,9 @@ fn run_files(
         "Total: {} allowlist entries ({} min/{} std/{} full), {} rules",
         total_allowlist, total_trust[0], total_trust[1], total_trust[2], total_rules
     );
+
+    // Show global config info if present
+    print_global_config_banner();
 
     // Show project config info if present
     if let Some(dir) = resolve_dir(dir_override) {

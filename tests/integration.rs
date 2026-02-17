@@ -1543,3 +1543,78 @@ fn test_e2e_safety_level_flag_overrides_config() {
         "chmod-777 rule should be skipped at critical safety level: {reason}"
     );
 }
+
+#[test]
+fn test_e2e_files_shows_global_config() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_safety_level: strict\ndisable_rules:\n  - chmod-777\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout, _) = run_subcommand_with_home(&["files"], &home_str);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Global config:"),
+        "Should show global config banner: {stdout}"
+    );
+    assert!(
+        stdout.contains("override_safety_level: strict"),
+        "Should show safety level override: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_rules_shows_global_config() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout, _) = run_subcommand_with_home(&["rules"], &home_str);
+    assert_eq!(code, 0);
+    assert!(
+        stdout.contains("Global config:"),
+        "Should show global config banner: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_files_no_global_config_no_banner() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    // No longline.yaml
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout, _) = run_subcommand_with_home(&["files"], &home_str);
+    assert_eq!(code, 0);
+    assert!(
+        !stdout.contains("Global config:"),
+        "Should NOT show global config banner when no file: {stdout}"
+    );
+}
