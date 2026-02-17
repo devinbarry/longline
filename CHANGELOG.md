@@ -2,12 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-02-17
+
+
+### Changed
+
+- add design for policy gap fixes (21 red TDD tests)
+- integrate review feedback into policy gap fixes design
+- add missing red tests for subshell redirects and uv subcommand gating
+- add implementation plan for policy gap fixes (12 tasks)
+- remove normalize_arg change from plan, add review analysis
+- add normalize_command_name() helper for basename extraction
+- add collect_descendant_substitutions() helper for parser
+- add inject_redirects_into_leaves() utility for compound redirects
+
+
+### Fixed
+
+- correct uv pip test to regression guard, update design doc counts
+- reject unknown fields in RulesConfig for fail-closed config parsing
+- add time wrapper and basename normalization for absolute paths and pipelines
+- add redirect rules for stdin secret exposure and system path writes
+- recurse into string and concatenation nodes to find embedded command substitutions
+- collect pipeline rules from command substitutions in embedded_substitutions
+- extract inner commands from find -exec and xargs for policy evaluation
+- propagate redirects from compound statements to inner SimpleCommand leaves
+- add subcommand-based wrapper support and uv run delegation
+- propagate substitutions from bare assignments and compound redirect targets
+
 ## [0.4.5] - 2026-02-16
 
 
 ### Changed
 
 - add golden tests for all gh/glab remote-write commands
+- release v0.4.5
 
 
 ### Fixed
