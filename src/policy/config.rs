@@ -274,35 +274,53 @@ pub fn load_project_config(cwd: &Path) -> Result<Option<ProjectConfig>, String> 
     Ok(Some(config))
 }
 
-/// Merge a project config into a global config (mutates in place).
+/// Load global config from `~/.config/longline/longline.yaml` if it exists.
+/// Returns Ok(None) if no global config file exists, Err on parse failure.
+pub fn load_global_config(home: &Path) -> Result<Option<ProjectConfig>, String> {
+    let config_path = home.join(".config").join("longline").join("longline.yaml");
+    let content = match fs::read_to_string(&config_path) {
+        Ok(c) => c,
+        Err(_) => return Ok(None),
+    };
+    let config: ProjectConfig = serde_yaml::from_str(&content)
+        .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
+    Ok(Some(config))
+}
+
+/// Merge a project config into a rules config (mutates in place).
 /// - override_safety_level replaces safety_level
 /// - allowlists are appended
-/// - disable_rules filters out matching global rule IDs (applied before rules are appended)
+/// - disable_rules filters out matching rule IDs (applied before rules are appended)
 /// - rules are appended (not affected by disable_rules)
 pub fn merge_project_config(config: &mut RulesConfig, project: ProjectConfig) {
-    if let Some(level) = project.override_safety_level {
+    merge_overlay_config(config, project, RuleSource::Project);
+}
+
+/// Merge an overlay config into a rules config, tagging entries with the given source.
+pub fn merge_overlay_config(config: &mut RulesConfig, overlay: ProjectConfig, source: RuleSource) {
+    if let Some(level) = overlay.override_safety_level {
         config.safety_level = level;
     }
 
-    if let Some(level) = project.override_trust_level {
+    if let Some(level) = overlay.override_trust_level {
         config.trust_level = level;
     }
 
-    if let Some(allowlists) = project.allowlists {
+    if let Some(allowlists) = overlay.allowlists {
         for mut entry in allowlists.commands {
-            entry.source = RuleSource::Project;
+            entry.source = source;
             config.allowlists.commands.push(entry);
         }
         config.allowlists.paths.extend(allowlists.paths);
     }
 
-    if let Some(disable) = project.disable_rules {
+    if let Some(disable) = overlay.disable_rules {
         config.rules.retain(|r| !disable.contains(&r.id));
     }
 
-    if let Some(rules) = project.rules {
+    if let Some(rules) = overlay.rules {
         for mut rule in rules {
-            rule.source = RuleSource::Project;
+            rule.source = source;
             config.rules.push(rule);
         }
     }
@@ -1356,5 +1374,74 @@ rules:
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands[0].source, RuleSource::BuiltIn);
         assert_eq!(config.allowlists.commands[1].source, RuleSource::Project);
+    }
+
+    #[test]
+    fn test_load_global_config_found() {
+        use tempfile::TempDir;
+
+        let home = TempDir::new().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("longline.yaml"),
+            "override_safety_level: strict\n",
+        )
+        .unwrap();
+
+        let result = load_global_config(home.path()).unwrap();
+        assert!(result.is_some());
+        let config = result.unwrap();
+        assert_eq!(config.override_safety_level, Some(SafetyLevel::Strict));
+    }
+
+    #[test]
+    fn test_load_global_config_not_found() {
+        use tempfile::TempDir;
+
+        let home = TempDir::new().unwrap();
+        let result = load_global_config(home.path()).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_load_global_config_rejects_unknown_fields() {
+        use tempfile::TempDir;
+
+        let home = TempDir::new().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("longline.yaml"), "unknown_field: true\n").unwrap();
+
+        let result = load_global_config(home.path());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_merge_overlay_config_tags_with_source() {
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
+            allowlists: Allowlists::default(),
+            rules: vec![],
+        };
+        let overlay_yaml = r#"
+allowlists:
+  commands:
+    - { command: mytool, trust: standard }
+rules:
+  - id: overlay-rule
+    level: high
+    match:
+      command: docker
+    decision: allow
+    reason: "Test"
+"#;
+        let overlay: ProjectConfig = serde_yaml::from_str(overlay_yaml).unwrap();
+        merge_overlay_config(&mut config, overlay, RuleSource::Global);
+        assert_eq!(config.allowlists.commands[0].source, RuleSource::Global);
+        assert_eq!(config.rules[0].source, RuleSource::Global);
     }
 }
