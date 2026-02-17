@@ -10,7 +10,7 @@ longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands be
 - Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, and compound statements
 - Configurable safety levels (critical, high, strict) and trust levels (minimal, standard, full)
 - Optional AI evaluation for inline interpreter code
-- 1500+ golden test cases for accuracy
+- 1600+ golden test cases for accuracy
 - JSONL audit logging
 - Fail-closed design: unknown/unparseable constructs default to `ask`
 
@@ -131,8 +131,9 @@ Rules are defined in YAML with three matcher types:
 - **pipeline**: Match command sequences (e.g., `curl | sh`)
 - **redirect**: Match output redirection targets
 
-Example rule:
+Example rules:
 ```yaml
+# Command matcher: name + flags + args
 - id: rm-recursive-root
   level: critical
   match:
@@ -143,6 +144,18 @@ Example rule:
       any_of: ["/", "/*"]
   decision: deny
   reason: "Recursive delete targeting root filesystem"
+
+# Redirect matcher: operator + target glob
+- id: redirect-write-etc
+  level: critical
+  match:
+    redirect:
+      op:
+        any_of: [">", ">>"]
+      target:
+        any_of: ["/etc/hosts", "/etc/passwd", "/etc/shadow"]
+  decision: deny
+  reason: "Redirect write to system configuration file"
 ```
 
 ### Rules organization
@@ -208,8 +221,11 @@ The parser handles:
 - for/while loops, if/else, case statements
 - Compound statements `{ ...; }`, function definitions
 - Test commands `[[ ... ]]`, comments
+- Transparent wrappers: `env`, `timeout`, `nice`, `nohup`, `strace`, `time`, `uv run`
+- `find -exec` / `xargs` inner command extraction
+- Command substitutions in assignments, string nodes, and redirect targets
 
-All commands within these constructs are extracted and evaluated. Unknown or unparseable constructs become `Opaque` nodes and result in `ask` (fail-closed).
+All commands within these constructs are extracted and evaluated. Commands invoked via absolute paths (e.g., `/usr/bin/rm`) are matched by basename. Unknown or unparseable constructs become `Opaque` nodes and result in `ask` (fail-closed).
 
 ## License
 

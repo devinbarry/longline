@@ -4,31 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [0.5.0] - 2026-02-17
 
+Closes 21 policy gaps found via red TDD tests. Significantly improves detection of dangerous commands hidden inside substitutions, redirects, absolute paths, compound statements, and wrapper commands.
+
+### Added
+
+- Basename normalization: `/usr/bin/rm -rf /` now matches rules for `rm` and pipeline rules match regardless of path prefix
+- `time` transparent wrapper support: commands wrapped in `time` are now evaluated like other wrappers (env, timeout, nice, etc.)
+- `uv run` subcommand-based wrapper: `uv run pytest` is unwrapped for policy; `uv pip install` is not
+- `find -exec` and `xargs` inner command extraction: `find . -exec rm {} \;` and `xargs rm` are now evaluated against rules instead of relying on the base command's allowlist status
+- Redirect rules for stdin secret exposure (`< ~/.ssh/id_rsa`, `< .env`) and system path writes (`> /etc/hosts`, `> /dev/sda`)
+- Compound statement redirect propagation: redirects on `{ ...; } > target` and `( ... ) > target` are now applied to inner leaf commands
+- Command substitution detection in string nodes, concatenation nodes, bare assignments (`FOO=$(rm -rf /)`), and redirect targets (`> $(cat .env)`)
+- Strict config validation: unknown fields in `rules.yaml` now cause exit code 2 instead of being silently ignored
 
 ### Changed
 
-- add design for policy gap fixes (21 red TDD tests)
-- integrate review feedback into policy gap fixes design
-- add missing red tests for subshell redirects and uv subcommand gating
-- add implementation plan for policy gap fixes (12 tasks)
-- remove normalize_arg change from plan, add review analysis
-- add normalize_command_name() helper for basename extraction
-- add collect_descendant_substitutions() helper for parser
-- add inject_redirects_into_leaves() utility for compound redirects
-
-
-### Fixed
-
-- correct uv pip test to regression guard, update design doc counts
-- reject unknown fields in RulesConfig for fail-closed config parsing
-- add time wrapper and basename normalization for absolute paths and pipelines
-- add redirect rules for stdin secret exposure and system path writes
-- recurse into string and concatenation nodes to find embedded command substitutions
-- collect pipeline rules from command substitutions in embedded_substitutions
-- extract inner commands from find -exec and xargs for policy evaluation
-- propagate redirects from compound statements to inner SimpleCommand leaves
-- add subcommand-based wrapper support and uv run delegation
-- propagate substitutions from bare assignments and compound redirect targets
+- 26 new red_policy_issues regression tests covering all gaps
+- Golden test corpus expanded to 1600+ cases
 
 ## [0.4.5] - 2026-02-16
 

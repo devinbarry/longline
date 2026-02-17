@@ -10,7 +10,17 @@ Overview of longline's security model, known limitations, and accepted risks.
 
 - **Tree-sitter structural parsing.** Commands are parsed into a concrete syntax tree, not matched with regex. This prevents bypass through quoting or escaping tricks. The matching layer uses glob patterns for argument matching.
 
-- **Compound statement flattening.** Compound statements are flattened to leaf nodes. The most restrictive decision across all leaves wins (Deny > Ask > Allow).
+- **Compound statement flattening.** Compound statements are flattened to leaf nodes. The most restrictive decision across all leaves wins (Deny > Ask > Allow). Redirects on compound statements (`{ ...; } > target`, `( ... ) > target`) are propagated to inner leaf commands.
+
+- **Command substitution recursion.** Command substitutions are detected and evaluated in arguments, string interpolations, bare assignments (`FOO=$(cmd)`), concatenation nodes, and redirect targets (`> $(cmd)`).
+
+- **Transparent wrapper unwrapping.** Commands wrapped in `env`, `timeout`, `nice`, `nohup`, `strace`, `time`, or `uv run` are unwrapped and the inner command is evaluated against rules. Unwrapping chains up to a configurable depth limit (default 5).
+
+- **Basename normalization.** Commands invoked via absolute paths (`/usr/bin/rm`) are matched by basename (`rm`) for both rule evaluation and allowlist lookup.
+
+- **Inner command extraction.** `find -exec`/`-execdir` arguments and `xargs` commands are extracted and evaluated independently against the rule set.
+
+- **Strict config validation.** Unknown fields in `rules.yaml` cause exit code 2 (fail-closed) instead of being silently ignored.
 
 - **Non-Bash passthrough.** Non-Bash tool calls pass through with an empty JSON response. longline only evaluates Bash commands.
 
