@@ -14,7 +14,8 @@ pub use config::{
 use crate::parser::{self, Statement};
 use crate::types::{Decision, PolicyResult};
 
-use allowlist::{find_allowlist_match, is_allowlisted, is_version_check};
+#[allow(unused_imports)]
+use allowlist::{find_allowlist_match, find_allowlist_reason, is_allowlisted, is_version_check};
 use matching::{matches_pipeline, matches_rule};
 
 /// Evaluate a parsed statement against the policy rules.

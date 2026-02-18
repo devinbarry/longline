@@ -2,7 +2,7 @@
 
 use crate::parser::{SimpleCommand, Statement};
 
-use super::config::RulesConfig;
+use super::config::{AllowlistEntry, RulesConfig};
 use super::matching::normalize_command_name;
 use std::borrow::Cow;
 
@@ -103,12 +103,13 @@ fn args_match_prefix(required_args: &[&str], argv: &[String]) -> bool {
     })
 }
 
-/// Find the matching allowlist entry for a SimpleCommand.
-/// Entries like "git status" match command name + required args.
-/// Bare entries like "ls" match any invocation of that command.
-/// Entries with a trust level above the config's trust_level are skipped.
-/// Returns the matching command string, or None if no match.
-pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) -> Option<&'a str> {
+/// Find the first allowlist entry matching the command.
+/// If `check_trust` is true, skip entries requiring a higher trust level than configured.
+fn find_matching_entry<'a>(
+    config: &'a RulesConfig,
+    cmd: &SimpleCommand,
+    check_trust: bool,
+) -> Option<&'a AllowlistEntry> {
     let cmd_name = match &cmd.name {
         Some(n) => n.as_str(),
         None => return None,
@@ -121,8 +122,7 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
     };
 
     for entry in &config.allowlists.commands {
-        // Skip entries that require a higher trust level than configured
-        if entry.trust > config.trust_level {
+        if check_trust && entry.trust > config.trust_level {
             continue;
         }
 
@@ -134,16 +134,31 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
             continue;
         }
         if parts.len() == 1 {
-            // Bare command name matches any invocation
-            return Some(&entry.command);
+            return Some(entry);
         }
-        // Multi-word entry: required args must match as ordered prefix
         let required_args = &parts[1..];
         if args_match_prefix(required_args, argv.as_ref()) {
-            return Some(&entry.command);
+            return Some(entry);
         }
     }
     None
+}
+
+/// Find the matching allowlist entry for a SimpleCommand.
+/// Entries like "git status" match command name + required args.
+/// Bare entries like "ls" match any invocation of that command.
+/// Entries with a trust level above the config's trust_level are skipped.
+/// Returns the matching command string, or None if no match.
+pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) -> Option<&'a str> {
+    find_matching_entry(config, cmd, true).map(|entry| entry.command.as_str())
+}
+
+/// Search all allowlist entries (ignoring trust level) for a matching command.
+/// Returns the entry's reason if the command matches an entry that has a reason.
+/// Used as a fallback when a command was trust-filtered out of the allowlist.
+#[allow(dead_code)] // Will be used in evaluate() in the next task
+pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Option<String> {
+    find_matching_entry(config, cmd, false).and_then(|entry| entry.reason.clone())
 }
 
 #[cfg(test)]
@@ -430,6 +445,90 @@ mod tests {
             None,
             "Full-trust entry should be skipped at Standard trust level"
         );
+    }
+
+    #[test]
+    fn test_find_allowlist_reason_returns_reason_for_trust_filtered_entry() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git push".to_string(),
+                    trust: crate::policy::TrustLevel::Full,
+                    reason: Some("Pushes local commits to a remote repository".to_string()),
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = test_git_cmd(vec!["push", "origin", "main"]);
+
+        // find_allowlist_match should return None (trust-filtered)
+        assert_eq!(find_allowlist_match(&config, &cmd), None);
+
+        // find_allowlist_reason should return the reason
+        assert_eq!(
+            find_allowlist_reason(&config, &cmd),
+            Some("Pushes local commits to a remote repository".to_string()),
+        );
+    }
+
+    #[test]
+    fn test_find_allowlist_reason_returns_none_for_unrecognized_command() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git push".to_string(),
+                    trust: crate::policy::TrustLevel::Full,
+                    reason: Some("Pushes local commits to a remote repository".to_string()),
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = SimpleCommand {
+            name: Some("unknown-tool".to_string()),
+            argv: vec![],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+
+        assert_eq!(find_allowlist_reason(&config, &cmd), None);
+    }
+
+    #[test]
+    fn test_find_allowlist_reason_returns_none_when_no_reason_field() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git push".to_string(),
+                    trust: crate::policy::TrustLevel::Full,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = test_git_cmd(vec!["push"]);
+        assert_eq!(find_allowlist_reason(&config, &cmd), None);
     }
 
     #[test]
