@@ -1802,3 +1802,252 @@ fn test_e2e_cli_trust_level_overrides_project_config_in_check_mode() {
         "CLI --trust-level standard should override project full trust for git push: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_hook_cwd_project_config_applies() {
+    // Verify project config from hook JSON cwd is applied correctly
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+
+    // Create a project with override_trust_level: full
+    let project_dir = tempfile::TempDir::new().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(project_dir.path())
+        .output()
+        .unwrap();
+    let claude_dir = project_dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    // Run hook with cwd pointing to the project
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "git push origin main" },
+        "session_id": "test-session",
+        "cwd": project_dir.path().to_string_lossy()
+    });
+
+    let config = rules_path();
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "Project config override_trust_level: full should allow git push: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_no_global_config_uses_defaults() {
+    // Empty HOME (no global config) should use embedded defaults
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    // No longline.yaml — global config absent
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_home_and_flags("Bash", "ls -la", &home_str, &[]);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "ls should be allowed with embedded defaults (no global config): {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_invalid_global_config_exits_with_code_2() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "not_a_valid_field: oops\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, _stdout) = run_hook_with_home_and_flags("Bash", "ls", &home_str, &[]);
+    assert_eq!(code, 2, "Invalid global config should cause exit code 2");
+}
+
+#[test]
+fn test_e2e_cli_trust_overrides_both_global_and_project_in_hook_mode() {
+    // Global config: override_trust_level: full
+    // Project config: override_trust_level: full
+    // CLI: --trust-level minimal
+    // Expected: CLI wins -> minimal trust -> git add (standard trust) = ask
+
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let project_dir = tempfile::TempDir::new().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(project_dir.path())
+        .output()
+        .unwrap();
+    let claude_dir = project_dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "git add ." },
+        "session_id": "test-session",
+        "cwd": project_dir.path().to_string_lossy()
+    });
+
+    let config = rules_path();
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config, "--trust-level", "minimal"])
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "CLI --trust-level minimal should override both global and project full trust: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_project_config_overrides_global_in_hook_mode() {
+    // Global config: override_trust_level: minimal
+    // Project config: override_trust_level: full
+    // Expected: project wins -> full trust -> git push allowed
+
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_trust_level: minimal\n",
+    )
+    .unwrap();
+
+    let project_dir = tempfile::TempDir::new().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(project_dir.path())
+        .output()
+        .unwrap();
+    let claude_dir = project_dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": { "command": "git push origin main" },
+        "session_id": "test-session",
+        "cwd": project_dir.path().to_string_lossy()
+    });
+
+    let config = rules_path();
+    let home_str = home.path().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home_str)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "Project config full trust should override global minimal trust: {stdout}"
+    );
+}
