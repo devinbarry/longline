@@ -92,30 +92,30 @@ allowlists:
     # ── Transparent wrappers: inner command evaluated separately ──
     - { command: timeout, trust: minimal }
     - { command: nice, trust: minimal }
-    - { command: nohup, trust: standard }
-    - { command: strace, trust: standard }
+    - { command: nohup, trust: standard, reason: "Runs a command immune to hangup signals" }
+    - { command: strace, trust: standard, reason: "Traces system calls made by a process" }
     # ── Always safe: dev tools (no publish risk) ──────────────────
-    - { command: make, trust: standard }
-    - { command: cmake, trust: standard }
-    - { command: rustc, trust: standard }
-    - { command: java, trust: standard }
-    - { command: javac, trust: standard }
+    - { command: make, trust: standard, reason: "Runs build targets from a Makefile" }
+    - { command: cmake, trust: standard, reason: "Generates build system files from CMakeLists" }
+    - { command: rustc, trust: standard, reason: "Compiles Rust source code" }
+    - { command: java, trust: standard, reason: "Runs a Java application" }
+    - { command: javac, trust: standard, reason: "Compiles Java source files" }
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
-    - { command: mkdir, trust: standard }
-    - { command: touch, trust: standard }
-    - { command: ln, trust: standard }
-    - { command: cp, trust: standard }
-    - { command: mv, trust: standard }
-    - { command: tee, trust: standard }
-    - { command: tar, trust: standard }
-    - { command: gzip, trust: standard }
-    - { command: gunzip, trust: standard }
-    - { command: zip, trust: standard }
-    - { command: unzip, trust: standard }
+    - { command: mkdir, trust: standard, reason: "Creates directories" }
+    - { command: touch, trust: standard, reason: "Creates files or updates timestamps" }
+    - { command: ln, trust: standard, reason: "Creates hard or symbolic links" }
+    - { command: cp, trust: standard, reason: "Copies files and directories" }
+    - { command: mv, trust: standard, reason: "Moves or renames files and directories" }
+    - { command: tee, trust: standard, reason: "Reads stdin and writes to files and stdout" }
+    - { command: tar, trust: standard, reason: "Creates or extracts tar archives" }
+    - { command: gzip, trust: standard, reason: "Compresses files using gzip" }
+    - { command: gunzip, trust: standard, reason: "Decompresses gzip files" }
+    - { command: zip, trust: standard, reason: "Creates zip archives" }
+    - { command: unzip, trust: standard, reason: "Extracts zip archives" }
     # ── Always safe: text processing ──────────────────────────────
-    - { command: sed, trust: standard }
-    - { command: awk, trust: standard }
-    - { command: patch, trust: standard }
+    - { command: sed, trust: standard, reason: "Edits text via stream transformations" }
+    - { command: awk, trust: standard, reason: "Processes and transforms structured text" }
+    - { command: patch, trust: standard, reason: "Applies diff patches to files" }
     # ── Checksums ──────────────────────────────────────────────────
     - { command: shasum, trust: minimal }
     # ── Network diagnostics: read-only ─────────────────────────────

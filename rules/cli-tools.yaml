@@ -43,76 +43,76 @@ allowlists:
     - { command: "gh --help", trust: minimal }
     - { command: "gh -h", trust: minimal }
     # ── glab/gh: standard invocations (local read, no remote mutation) ─
-    - { command: "gh run list", trust: standard }
-    - { command: "gh run view", trust: standard }
-    - { command: "gh run watch", trust: standard }
-    - { command: "gh workflow list", trust: standard }
-    - { command: "gh workflow view", trust: standard }
+    - { command: "gh run list", trust: standard, reason: "Lists GitHub Actions workflow runs" }
+    - { command: "gh run view", trust: standard, reason: "Views details of a GitHub Actions run" }
+    - { command: "gh run watch", trust: standard, reason: "Watches a GitHub Actions run until it completes" }
+    - { command: "gh workflow list", trust: standard, reason: "Lists GitHub Actions workflows" }
+    - { command: "gh workflow view", trust: standard, reason: "Views details of a GitHub Actions workflow" }
     # ── gh: remote-write operations (full trust) ───────────────────
-    - { command: "gh api", trust: full }
-    - { command: "gh pr create", trust: full }
-    - { command: "gh pr merge", trust: full }
-    - { command: "gh pr close", trust: full }
-    - { command: "gh pr reopen", trust: full }
-    - { command: "gh pr comment", trust: full }
-    - { command: "gh pr review", trust: full }
-    - { command: "gh pr edit", trust: full }
-    - { command: "gh pr ready", trust: full }
-    - { command: "gh issue create", trust: full }
-    - { command: "gh issue close", trust: full }
-    - { command: "gh issue reopen", trust: full }
-    - { command: "gh issue comment", trust: full }
-    - { command: "gh issue edit", trust: full }
-    - { command: "gh issue delete", trust: full }
-    - { command: "gh release create", trust: full }
-    - { command: "gh release delete", trust: full }
-    - { command: "gh release edit", trust: full }
-    - { command: "gh repo create", trust: full }
-    - { command: "gh repo delete", trust: full }
-    - { command: "gh repo edit", trust: full }
-    - { command: "gh repo fork", trust: full }
-    - { command: "gh label create", trust: full }
-    - { command: "gh label edit", trust: full }
-    - { command: "gh label delete", trust: full }
-    - { command: "gh run rerun", trust: full }
-    - { command: "gh run cancel", trust: full }
-    - { command: "gh workflow run", trust: full }
-    - { command: "gh workflow enable", trust: full }
-    - { command: "gh workflow disable", trust: full }
+    - { command: "gh api", trust: full, reason: "Makes authenticated GitHub API requests" }
+    - { command: "gh pr create", trust: full, reason: "Creates a pull request on GitHub" }
+    - { command: "gh pr merge", trust: full, reason: "Merges a pull request on GitHub" }
+    - { command: "gh pr close", trust: full, reason: "Closes a pull request on GitHub" }
+    - { command: "gh pr reopen", trust: full, reason: "Reopens a closed pull request" }
+    - { command: "gh pr comment", trust: full, reason: "Adds a comment to a pull request" }
+    - { command: "gh pr review", trust: full, reason: "Submits a review on a pull request" }
+    - { command: "gh pr edit", trust: full, reason: "Edits a pull request's metadata" }
+    - { command: "gh pr ready", trust: full, reason: "Marks a pull request as ready for review" }
+    - { command: "gh issue create", trust: full, reason: "Creates a new GitHub issue" }
+    - { command: "gh issue close", trust: full, reason: "Closes a GitHub issue" }
+    - { command: "gh issue reopen", trust: full, reason: "Reopens a closed GitHub issue" }
+    - { command: "gh issue comment", trust: full, reason: "Adds a comment to a GitHub issue" }
+    - { command: "gh issue edit", trust: full, reason: "Edits a GitHub issue's metadata" }
+    - { command: "gh issue delete", trust: full, reason: "Permanently deletes a GitHub issue" }
+    - { command: "gh release create", trust: full, reason: "Creates a new GitHub release" }
+    - { command: "gh release delete", trust: full, reason: "Deletes a GitHub release" }
+    - { command: "gh release edit", trust: full, reason: "Edits a GitHub release" }
+    - { command: "gh repo create", trust: full, reason: "Creates a new GitHub repository" }
+    - { command: "gh repo delete", trust: full, reason: "Permanently deletes a GitHub repository" }
+    - { command: "gh repo edit", trust: full, reason: "Edits GitHub repository settings" }
+    - { command: "gh repo fork", trust: full, reason: "Forks a GitHub repository" }
+    - { command: "gh label create", trust: full, reason: "Creates a new label in a repository" }
+    - { command: "gh label edit", trust: full, reason: "Edits an existing repository label" }
+    - { command: "gh label delete", trust: full, reason: "Deletes a repository label" }
+    - { command: "gh run rerun", trust: full, reason: "Re-runs a GitHub Actions workflow run" }
+    - { command: "gh run cancel", trust: full, reason: "Cancels a GitHub Actions workflow run" }
+    - { command: "gh workflow run", trust: full, reason: "Triggers a GitHub Actions workflow" }
+    - { command: "gh workflow enable", trust: full, reason: "Enables a GitHub Actions workflow" }
+    - { command: "gh workflow disable", trust: full, reason: "Disables a GitHub Actions workflow" }
     # ── glab: remote-write operations (full trust) ─────────────────
-    - { command: "glab api", trust: full }
-    - { command: "glab mr create", trust: full }
-    - { command: "glab mr merge", trust: full }
-    - { command: "glab mr close", trust: full }
-    - { command: "glab mr reopen", trust: full }
-    - { command: "glab mr approve", trust: full }
-    - { command: "glab mr revoke", trust: full }
-    - { command: "glab mr comment", trust: full }
-    - { command: "glab mr note", trust: full }
-    - { command: "glab mr update", trust: full }
-    - { command: "glab mr delete", trust: full }
-    - { command: "glab issue create", trust: full }
-    - { command: "glab issue close", trust: full }
-    - { command: "glab issue reopen", trust: full }
-    - { command: "glab issue comment", trust: full }
-    - { command: "glab issue note", trust: full }
-    - { command: "glab issue update", trust: full }
-    - { command: "glab issue delete", trust: full }
-    - { command: "glab release create", trust: full }
-    - { command: "glab release delete", trust: full }
-    - { command: "glab ci run", trust: full }
-    - { command: "glab ci retry", trust: full }
-    - { command: "glab ci cancel", trust: full }
-    - { command: "glab repo create", trust: full }
-    - { command: "glab repo fork", trust: full }
-    - { command: "glab repo delete", trust: full }
-    - { command: "glab label create", trust: full }
-    - { command: "glab label delete", trust: full }
+    - { command: "glab api", trust: full, reason: "Makes authenticated GitLab API requests" }
+    - { command: "glab mr create", trust: full, reason: "Creates a merge request on GitLab" }
+    - { command: "glab mr merge", trust: full, reason: "Merges a merge request on GitLab" }
+    - { command: "glab mr close", trust: full, reason: "Closes a merge request on GitLab" }
+    - { command: "glab mr reopen", trust: full, reason: "Reopens a closed merge request" }
+    - { command: "glab mr approve", trust: full, reason: "Approves a merge request on GitLab" }
+    - { command: "glab mr revoke", trust: full, reason: "Revokes approval from a merge request" }
+    - { command: "glab mr comment", trust: full, reason: "Adds a comment to a merge request" }
+    - { command: "glab mr note", trust: full, reason: "Adds a note to a merge request" }
+    - { command: "glab mr update", trust: full, reason: "Updates a merge request's metadata" }
+    - { command: "glab mr delete", trust: full, reason: "Deletes a merge request on GitLab" }
+    - { command: "glab issue create", trust: full, reason: "Creates a new GitLab issue" }
+    - { command: "glab issue close", trust: full, reason: "Closes a GitLab issue" }
+    - { command: "glab issue reopen", trust: full, reason: "Reopens a closed GitLab issue" }
+    - { command: "glab issue comment", trust: full, reason: "Adds a comment to a GitLab issue" }
+    - { command: "glab issue note", trust: full, reason: "Adds a note to a GitLab issue" }
+    - { command: "glab issue update", trust: full, reason: "Updates a GitLab issue's metadata" }
+    - { command: "glab issue delete", trust: full, reason: "Permanently deletes a GitLab issue" }
+    - { command: "glab release create", trust: full, reason: "Creates a new GitLab release" }
+    - { command: "glab release delete", trust: full, reason: "Deletes a GitLab release" }
+    - { command: "glab ci run", trust: full, reason: "Triggers a GitLab CI/CD pipeline" }
+    - { command: "glab ci retry", trust: full, reason: "Retries a GitLab CI/CD pipeline job" }
+    - { command: "glab ci cancel", trust: full, reason: "Cancels a GitLab CI/CD pipeline" }
+    - { command: "glab repo create", trust: full, reason: "Creates a new GitLab repository" }
+    - { command: "glab repo fork", trust: full, reason: "Forks a GitLab repository" }
+    - { command: "glab repo delete", trust: full, reason: "Permanently deletes a GitLab repository" }
+    - { command: "glab label create", trust: full, reason: "Creates a new label in a GitLab project" }
+    - { command: "glab label delete", trust: full, reason: "Deletes a label from a GitLab project" }
     # ── git-cliff: stdout-only invocations ────────────────────────
-    - { command: "git-cliff", trust: standard }
-    - { command: "git-cliff --unreleased", trust: standard }
-    - { command: "git-cliff --latest", trust: standard }
-    - { command: "git-cliff --current", trust: standard }
+    - { command: "git-cliff", trust: standard, reason: "Generates a changelog from git history" }
+    - { command: "git-cliff --unreleased", trust: standard, reason: "Generates changelog for unreleased changes" }
+    - { command: "git-cliff --latest", trust: standard, reason: "Generates changelog for the latest release" }
+    - { command: "git-cliff --current", trust: standard, reason: "Generates changelog for the current version" }
 
 rules:
   # ============================================================

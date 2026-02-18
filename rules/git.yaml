@@ -37,31 +37,31 @@ allowlists:
     - { command: "git verify-pack", trust: minimal }
     - { command: "git fsck", trust: minimal }
     # ── Git: safe write operations ────────────────────────────────
-    - { command: "git config", trust: standard }
-    - { command: "git bisect", trust: standard }
-    - { command: "git add", trust: standard }
-    - { command: "git commit", trust: standard }
-    - { command: "git fetch", trust: standard }
-    - { command: "git pull", trust: standard }
-    - { command: "git push", trust: full }
-    - { command: "git stash", trust: standard }
-    - { command: "git checkout", trust: standard }
-    - { command: "git switch", trust: standard }
-    - { command: "git restore", trust: standard }
-    - { command: "git merge", trust: standard }
-    - { command: "git cherry-pick", trust: standard }
-    - { command: "git worktree", trust: standard }
-    - { command: "git clone", trust: standard }
-    - { command: "git init", trust: standard }
+    - { command: "git config", trust: standard, reason: "Reads or modifies local git configuration" }
+    - { command: "git bisect", trust: standard, reason: "Binary searches commit history to find a bug" }
+    - { command: "git add", trust: standard, reason: "Stages file changes for the next commit" }
+    - { command: "git commit", trust: standard, reason: "Creates a new commit from staged changes" }
+    - { command: "git fetch", trust: standard, reason: "Downloads objects and refs from a remote" }
+    - { command: "git pull", trust: standard, reason: "Fetches and merges changes from a remote branch" }
+    - { command: "git push", trust: full, reason: "Pushes local commits to a remote repository" }
+    - { command: "git stash", trust: standard, reason: "Temporarily shelves uncommitted changes" }
+    - { command: "git checkout", trust: standard, reason: "Switches branches or restores files" }
+    - { command: "git switch", trust: standard, reason: "Switches to a different branch" }
+    - { command: "git restore", trust: standard, reason: "Restores working tree files from a source" }
+    - { command: "git merge", trust: standard, reason: "Merges another branch into the current branch" }
+    - { command: "git cherry-pick", trust: standard, reason: "Applies changes from specific commits" }
+    - { command: "git worktree", trust: standard, reason: "Manages multiple working trees" }
+    - { command: "git clone", trust: standard, reason: "Clones a repository into a new directory" }
+    - { command: "git init", trust: standard, reason: "Creates a new git repository" }
     # ── Git: safe file operations ────────────────────────────────────
-    - { command: "git mv", trust: standard }
-    - { command: "git rm", trust: standard }
+    - { command: "git mv", trust: standard, reason: "Moves or renames a file tracked by git" }
+    - { command: "git rm", trust: standard, reason: "Removes files from the working tree and index" }
     # ── Git: stash operations ────────────────────────────────────────
-    - { command: "git stash pop", trust: standard }
-    - { command: "git stash apply", trust: standard }
+    - { command: "git stash pop", trust: standard, reason: "Applies and removes the top stashed changes" }
+    - { command: "git stash apply", trust: standard, reason: "Applies stashed changes without removing them" }
     # ── Git: maintenance commands ──────────────────────────────────
-    - { command: "git revert", trust: standard }
-    - { command: "git gc", trust: full }
+    - { command: "git revert", trust: standard, reason: "Creates a new commit that undoes a previous commit" }
+    - { command: "git gc", trust: full, reason: "Runs garbage collection on the repository" }
 
 rules:
   # ============================================================
