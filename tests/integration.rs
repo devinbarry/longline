@@ -195,6 +195,46 @@ fn run_hook_with_cwd(tool_name: &str, command: &str, cwd: &str) -> (i32, String)
     (code, stdout)
 }
 
+fn run_hook_with_home_and_flags(
+    tool_name: &str,
+    command: &str,
+    home: &str,
+    extra_args: &[&str],
+) -> (i32, String) {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": tool_name,
+        "tool_input": { "command": command },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let config = rules_path();
+    let mut args = vec!["--config", &config];
+    args.extend_from_slice(extra_args);
+
+    let mut child = Command::new(longline_bin())
+        .args(&args)
+        .env("HOME", home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let code = output.status.code().unwrap_or(-1);
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    (code, stdout)
+}
+
 #[test]
 fn test_e2e_safe_command_allows() {
     let (code, stdout) = run_hook("Bash", "ls -la");
@@ -1616,5 +1656,149 @@ fn test_e2e_files_no_global_config_no_banner() {
     assert!(
         !stdout.contains("Global config:"),
         "Should NOT show global config banner when no file: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_cli_trust_level_overrides_global_config_in_hook_mode() {
+    // Global config sets override_trust_level: full
+    // CLI flag sets --trust-level standard
+    // git push requires trust: full
+    // Expected: CLI wins → standard trust → git push filtered → ask
+    // Bug: global config re-applied after CLI → full trust → git push allowed
+
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_home_and_flags(
+        "Bash",
+        "git push origin main",
+        &home_str,
+        &["--trust-level", "standard"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "CLI --trust-level standard should override global full trust in hook mode: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_cli_safety_level_overrides_global_config_in_hook_mode() {
+    // Global config sets override_safety_level: strict
+    // CLI flag sets --safety-level critical
+    // git-checkout-dot is a strict-level rule (ask for "git checkout .")
+    // Expected: CLI wins → critical safety → strict rule skipped → allow
+    // Bug: global config re-applied after CLI → strict safety → rule active → ask
+
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_safety_level: strict\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_home_and_flags(
+        "Bash",
+        "git checkout .",
+        &home_str,
+        &["--safety-level", "critical"],
+    );
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    // At critical safety, the strict-level git-checkout-dot rule should be skipped.
+    // git checkout is in the standard-trust allowlist, so at standard trust (default) it's allowed.
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "CLI --safety-level critical should override global strict safety in hook mode: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_cli_trust_level_overrides_project_config_in_check_mode() {
+    // Project config sets override_trust_level: full
+    // CLI flag sets --trust-level standard
+    // git push requires trust: full
+    // Expected: CLI wins → standard trust → git push = ask
+    // Bug: project config applied after CLI → full trust → git push = allow
+
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+
+    // Create a project directory with .claude/longline.yaml
+    let project_dir = tempfile::TempDir::new().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(project_dir.path())
+        .output()
+        .unwrap();
+    let claude_dir = project_dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "override_trust_level: full\n",
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let project_str = project_dir.path().to_string_lossy().to_string();
+
+    // Write a check input file with "git push origin main"
+    let check_file = project_dir.path().join("commands.txt");
+    std::fs::write(&check_file, "git push origin main\n").unwrap();
+
+    let config = rules_path();
+    let child = Command::new(longline_bin())
+        .args([
+            "--config",
+            &config,
+            "--trust-level",
+            "standard",
+            "check",
+            "--dir",
+            &project_str,
+            &check_file.to_string_lossy(),
+        ])
+        .env("HOME", &home_str)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    let output = child.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // The output table should show "ask" for git push, not "allow"
+    assert!(
+        stdout.contains("ask"),
+        "CLI --trust-level standard should override project full trust for git push: {stdout}"
     );
 }
