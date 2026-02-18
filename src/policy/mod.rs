@@ -14,7 +14,6 @@ pub use config::{
 use crate::parser::{self, Statement};
 use crate::types::{Decision, PolicyResult};
 
-#[allow(unused_imports)]
 use allowlist::{find_allowlist_match, find_allowlist_reason, is_allowlisted, is_version_check};
 use matching::{matches_pipeline, matches_rule};
 
@@ -66,10 +65,22 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf))
             && extra_leaves.iter().all(|leaf| is_allowlisted(config, leaf));
         if !all_allowlisted {
+            // Try to find a descriptive reason from trust-filtered allowlist entries
+            let reason = leaves
+                .iter()
+                .copied()
+                .chain(extra_leaves.iter())
+                .filter_map(|leaf| match leaf {
+                    Statement::SimpleCommand(cmd) => find_allowlist_reason(config, cmd),
+                    _ => None,
+                })
+                .next()
+                .unwrap_or_else(|| "No matching rule; using default decision".to_string());
+
             return PolicyResult {
                 decision: config.default_decision,
                 rule_id: None,
-                reason: "No matching rule; using default decision".to_string(),
+                reason,
             };
         }
     }
@@ -1122,5 +1133,52 @@ rules: []
         let stmt = parse("timeout 30").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn test_evaluate_trust_filtered_uses_allowlist_reason() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::Standard,
+            allowlists: Allowlists {
+                commands: vec![AllowlistEntry {
+                    command: "git push".to_string(),
+                    trust: TrustLevel::Full,
+                    reason: Some("Pushes local commits to a remote repository".to_string()),
+                    source: RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let stmt = parse("git push origin main").unwrap();
+        let result = evaluate(&config, &stmt);
+
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(result.reason, "Pushes local commits to a remote repository",);
+    }
+
+    #[test]
+    fn test_evaluate_unknown_command_keeps_generic_reason() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::Standard,
+            allowlists: Allowlists {
+                commands: vec![],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let stmt = parse("unknown-tool --flag").unwrap();
+        let result = evaluate(&config, &stmt);
+
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(result.reason, "No matching rule; using default decision",);
     }
 }

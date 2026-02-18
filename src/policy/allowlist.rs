@@ -156,7 +156,6 @@ pub fn find_allowlist_match<'a>(config: &'a RulesConfig, cmd: &SimpleCommand) ->
 /// Search all allowlist entries (ignoring trust level) for a matching command.
 /// Returns the entry's reason if the command matches an entry that has a reason.
 /// Used as a fallback when a command was trust-filtered out of the allowlist.
-#[allow(dead_code)] // Will be used in evaluate() in the next task
 pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Option<String> {
     find_matching_entry(config, cmd, false).and_then(|entry| entry.reason.clone())
 }
