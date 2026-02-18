@@ -6,7 +6,7 @@ default:
 release level:
     cargo release {{level}} --execute --no-confirm
     git push && git push --tags
-    cargo install --path . --root ~/.local --force
+    cargo install --path . --force
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
@@ -31,6 +31,10 @@ lint:
 fmt:
     cargo fmt
 
-# Install binary to ~/.local/bin
+# Install binary to ~/.cargo/bin (cargo default)
 install:
+    cargo install --path . --force
+
+# Install binary to ~/.local/bin
+install-local:
     cargo install --path . --root ~/.local --force
