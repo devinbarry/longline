@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2026-02-18
+
+
+### Added
+
+- add optional reason field to AllowlistEntry
+- add find_allowlist_reason() for trust-filtered entries
+- use allowlist reasons for trust-filtered default decisions
+- add descriptive reasons to git, cli-tools, and core allowlist entries
+- add descriptive reasons to remaining allowlist entries
+
+
+### Changed
+
+- update justfile install locations to cargo default
+- add design for descriptive allowlist reasons
+- add implementation plan for descriptive allowlist reasons
+
 ## [0.5.1] - 2026-02-18
 
 
@@ -38,6 +56,7 @@ All notable changes to this project will be documented in this file.
 - design for global machine-wide config overlay
 - implementation plan for global config overlay
 - rename RuleSource::Global to BuiltIn, add Global for overlay
+- release v0.5.1
 
 
 ### Fixed
