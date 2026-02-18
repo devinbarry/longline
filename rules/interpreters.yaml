@@ -45,301 +45,301 @@ allowlists:
     - { command: "just --help", trust: minimal }
     - { command: "just -h", trust: minimal }
     # ── Python dev tools (standalone + uv run wrappers) ────────────
-    - { command: pytest, trust: standard }
-    - { command: mypy, trust: standard }
-    - { command: ruff, trust: standard }
-    - { command: black, trust: standard }
-    - { command: isort, trust: standard }
-    - { command: flake8, trust: standard }
-    - { command: pylint, trust: standard }
-    - { command: pyright, trust: standard }
-    - { command: bandit, trust: standard }
-    - { command: coverage, trust: standard }
-    - { command: pre-commit, trust: standard }
+    - { command: pytest, trust: standard, reason: "Runs Python tests" }
+    - { command: mypy, trust: standard, reason: "Type-checks Python code" }
+    - { command: ruff, trust: standard, reason: "Lints and formats Python code" }
+    - { command: black, trust: standard, reason: "Formats Python code" }
+    - { command: isort, trust: standard, reason: "Sorts Python import statements" }
+    - { command: flake8, trust: standard, reason: "Lints Python code for style violations" }
+    - { command: pylint, trust: standard, reason: "Lints Python code" }
+    - { command: pyright, trust: standard, reason: "Type-checks Python code" }
+    - { command: bandit, trust: standard, reason: "Scans Python code for security issues" }
+    - { command: coverage, trust: standard, reason: "Measures Python code coverage" }
+    - { command: pre-commit, trust: standard, reason: "Runs pre-commit hooks" }
     # ── uv: build/test/run tools ───────────────────────────────────
-    - { command: "uv run pytest", trust: standard }
-    - { command: "uv run mypy", trust: standard }
-    - { command: "uv run ruff", trust: standard }
-    - { command: "uv run black", trust: standard }
-    - { command: "uv run isort", trust: standard }
-    - { command: "uv run flake8", trust: standard }
-    - { command: "uv run pylint", trust: standard }
-    - { command: "uv run pyright", trust: standard }
-    - { command: "uv run bandit", trust: standard }
-    - { command: "uv run coverage", trust: standard }
-    - { command: "uv run pre-commit", trust: standard }
-    - { command: "uv sync", trust: standard }
-    - { command: "uv lock", trust: standard }
-    - { command: "uv venv", trust: standard }
-    - { command: "uv pip", trust: standard }
+    - { command: "uv run pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run mypy", trust: standard, reason: "Type-checks Python code" }
+    - { command: "uv run ruff", trust: standard, reason: "Lints and formats Python code" }
+    - { command: "uv run black", trust: standard, reason: "Formats Python code" }
+    - { command: "uv run isort", trust: standard, reason: "Sorts Python import statements" }
+    - { command: "uv run flake8", trust: standard, reason: "Lints Python code for style violations" }
+    - { command: "uv run pylint", trust: standard, reason: "Lints Python code" }
+    - { command: "uv run pyright", trust: standard, reason: "Type-checks Python code" }
+    - { command: "uv run bandit", trust: standard, reason: "Scans Python code for security issues" }
+    - { command: "uv run coverage", trust: standard, reason: "Measures Python code coverage" }
+    - { command: "uv run pre-commit", trust: standard, reason: "Runs pre-commit hooks" }
+    - { command: "uv sync", trust: standard, reason: "Syncs project dependencies with the lockfile" }
+    - { command: "uv lock", trust: standard, reason: "Resolves and locks Python dependencies" }
+    - { command: "uv venv", trust: standard, reason: "Creates a Python virtual environment" }
+    - { command: "uv pip", trust: standard, reason: "Manages Python packages via pip interface" }
     # ── Cargo: build/test/run tools ──────────────────────────────────
-    - { command: "cargo build", trust: standard }
-    - { command: "cargo test", trust: standard }
-    - { command: "cargo check", trust: standard }
-    - { command: "cargo clippy", trust: standard }
-    - { command: "cargo fmt", trust: standard }
-    - { command: "cargo run", trust: standard }
-    - { command: "cargo bench", trust: standard }
-    - { command: "cargo doc", trust: standard }
-    - { command: "cargo clean", trust: standard }
-    - { command: "cargo update", trust: standard }
-    - { command: "cargo remove", trust: standard }
-    - { command: "cargo init", trust: standard }
-    - { command: "cargo new", trust: standard }
-    - { command: "cargo vendor", trust: standard }
-    - { command: "cargo release", trust: standard }
-    - { command: "cargo expand", trust: standard }
+    - { command: "cargo build", trust: standard, reason: "Compiles a Rust project" }
+    - { command: "cargo test", trust: standard, reason: "Runs Rust tests" }
+    - { command: "cargo check", trust: standard, reason: "Checks a Rust project for errors without building" }
+    - { command: "cargo clippy", trust: standard, reason: "Lints Rust code" }
+    - { command: "cargo fmt", trust: standard, reason: "Formats Rust source code" }
+    - { command: "cargo run", trust: standard, reason: "Compiles and runs a Rust binary" }
+    - { command: "cargo bench", trust: standard, reason: "Runs Rust benchmarks" }
+    - { command: "cargo doc", trust: standard, reason: "Generates Rust documentation" }
+    - { command: "cargo clean", trust: standard, reason: "Removes build artifacts" }
+    - { command: "cargo update", trust: standard, reason: "Updates Rust dependencies" }
+    - { command: "cargo remove", trust: standard, reason: "Removes a dependency from Cargo.toml" }
+    - { command: "cargo init", trust: standard, reason: "Creates a new Rust project in an existing directory" }
+    - { command: "cargo new", trust: standard, reason: "Creates a new Rust project" }
+    - { command: "cargo vendor", trust: standard, reason: "Vendors all dependencies locally" }
+    - { command: "cargo release", trust: standard, reason: "Publishes a Rust crate release" }
+    - { command: "cargo expand", trust: standard, reason: "Expands Rust macros for inspection" }
     # ── npm: build/test/run tools ────────────────────────────────────
     # npm install/ci/exec - covered by rules (ask for confirmation)
-    - { command: "npm test", trust: standard }
-    - { command: "npm run", trust: standard }
-    - { command: "npm start", trust: standard }
-    - { command: "npm init", trust: standard }
-    - { command: "npm pack", trust: standard }
+    - { command: "npm test", trust: standard, reason: "Runs the project's test suite" }
+    - { command: "npm run", trust: standard, reason: "Runs a script defined in package.json" }
+    - { command: "npm start", trust: standard, reason: "Starts the application" }
+    - { command: "npm init", trust: standard, reason: "Creates a new package.json" }
+    - { command: "npm pack", trust: standard, reason: "Creates a tarball from a package" }
     # ── npx: local dev tool invocations ────────────────────────────────
     # npx runs tools from local node_modules or downloads them.
     # Only known-safe dev tools are listed here; unknown packages
     # still get ask via default_decision.
     # -- Test runners --
-    - { command: "npx vitest", trust: standard }
-    - { command: "npx jest", trust: standard }
-    - { command: "npx mocha", trust: standard }
-    - { command: "npx playwright", trust: standard }
-    - { command: "npx cypress", trust: standard }
-    - { command: "npx ava", trust: standard }
+    - { command: "npx vitest", trust: standard, reason: "Runs tests" }
+    - { command: "npx jest", trust: standard, reason: "Runs tests" }
+    - { command: "npx mocha", trust: standard, reason: "Runs tests" }
+    - { command: "npx playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "npx cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "npx ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "npx eslint", trust: standard }
-    - { command: "npx biome", trust: standard }
-    - { command: "npx stylelint", trust: standard }
-    - { command: "npx markdownlint", trust: standard }
-    - { command: "npx oxlint", trust: standard }
+    - { command: "npx eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "npx biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "npx stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "npx markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "npx oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "npx prettier", trust: standard }
+    - { command: "npx prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "npx tsc", trust: standard }
-    - { command: "npx vue-tsc", trust: standard }
-    - { command: "npx svelte-check", trust: standard }
+    - { command: "npx tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "npx vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "npx svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "npx vite", trust: standard }
-    - { command: "npx webpack", trust: standard }
-    - { command: "npx rollup", trust: standard }
-    - { command: "npx esbuild", trust: standard }
-    - { command: "npx turbo", trust: standard }
-    - { command: "npx nx", trust: standard }
-    - { command: "npx next", trust: standard }
-    - { command: "npx nuxt", trust: standard }
-    - { command: "npx astro", trust: standard }
-    - { command: "npx svelte-kit", trust: standard }
+    - { command: "npx vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "npx webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "npx rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "npx esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "npx turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "npx nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "npx next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "npx nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "npx astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "npx svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "npx storybook", trust: standard }
-    - { command: "npx tailwindcss", trust: standard }
-    - { command: "npx postcss", trust: standard }
-    - { command: "npx lint-staged", trust: standard }
-    - { command: "npx tsx", trust: standard }
-    - { command: "npx ts-node", trust: standard }
+    - { command: "npx storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "npx tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "npx postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "npx lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "npx tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "npx ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── pnpm: direct tool invocations ──────────────────────────────────
     # pnpm <tool> runs from local node_modules, same as pnpm exec <tool>.
     # -- Test runners --
-    - { command: "pnpm vitest", trust: standard }
-    - { command: "pnpm jest", trust: standard }
-    - { command: "pnpm mocha", trust: standard }
-    - { command: "pnpm playwright", trust: standard }
-    - { command: "pnpm cypress", trust: standard }
-    - { command: "pnpm ava", trust: standard }
+    - { command: "pnpm vitest", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm jest", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm mocha", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "pnpm cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "pnpm ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "pnpm eslint", trust: standard }
-    - { command: "pnpm biome", trust: standard }
-    - { command: "pnpm stylelint", trust: standard }
-    - { command: "pnpm markdownlint", trust: standard }
-    - { command: "pnpm oxlint", trust: standard }
+    - { command: "pnpm eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "pnpm biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "pnpm stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "pnpm markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "pnpm oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "pnpm prettier", trust: standard }
+    - { command: "pnpm prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "pnpm tsc", trust: standard }
-    - { command: "pnpm vue-tsc", trust: standard }
-    - { command: "pnpm svelte-check", trust: standard }
+    - { command: "pnpm tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "pnpm vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "pnpm svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "pnpm vite", trust: standard }
-    - { command: "pnpm webpack", trust: standard }
-    - { command: "pnpm rollup", trust: standard }
-    - { command: "pnpm esbuild", trust: standard }
-    - { command: "pnpm turbo", trust: standard }
-    - { command: "pnpm nx", trust: standard }
-    - { command: "pnpm next", trust: standard }
-    - { command: "pnpm nuxt", trust: standard }
-    - { command: "pnpm astro", trust: standard }
-    - { command: "pnpm svelte-kit", trust: standard }
+    - { command: "pnpm vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "pnpm webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "pnpm nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "pnpm next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "pnpm nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "pnpm astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "pnpm svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "pnpm storybook", trust: standard }
-    - { command: "pnpm tailwindcss", trust: standard }
-    - { command: "pnpm postcss", trust: standard }
-    - { command: "pnpm lint-staged", trust: standard }
-    - { command: "pnpm tsx", trust: standard }
-    - { command: "pnpm ts-node", trust: standard }
+    - { command: "pnpm storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "pnpm tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "pnpm postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "pnpm lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "pnpm tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "pnpm ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── pnpm exec: specific safe dev tools ────────────────────────────
     # pnpm exec is NOT blanket-allowed (can run arbitrary system commands).
     # Only known-safe dev tools listed; unknown commands get ask via default.
     # -- Test runners --
-    - { command: "pnpm exec vitest", trust: standard }
-    - { command: "pnpm exec jest", trust: standard }
-    - { command: "pnpm exec mocha", trust: standard }
-    - { command: "pnpm exec playwright", trust: standard }
-    - { command: "pnpm exec cypress", trust: standard }
-    - { command: "pnpm exec ava", trust: standard }
+    - { command: "pnpm exec vitest", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm exec jest", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm exec mocha", trust: standard, reason: "Runs tests" }
+    - { command: "pnpm exec playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "pnpm exec cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "pnpm exec ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "pnpm exec eslint", trust: standard }
-    - { command: "pnpm exec biome", trust: standard }
-    - { command: "pnpm exec stylelint", trust: standard }
-    - { command: "pnpm exec markdownlint", trust: standard }
-    - { command: "pnpm exec oxlint", trust: standard }
+    - { command: "pnpm exec eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "pnpm exec biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "pnpm exec stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "pnpm exec markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "pnpm exec oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "pnpm exec prettier", trust: standard }
+    - { command: "pnpm exec prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "pnpm exec tsc", trust: standard }
-    - { command: "pnpm exec vue-tsc", trust: standard }
-    - { command: "pnpm exec svelte-check", trust: standard }
+    - { command: "pnpm exec tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "pnpm exec vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "pnpm exec svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "pnpm exec vite", trust: standard }
-    - { command: "pnpm exec webpack", trust: standard }
-    - { command: "pnpm exec rollup", trust: standard }
-    - { command: "pnpm exec esbuild", trust: standard }
-    - { command: "pnpm exec turbo", trust: standard }
-    - { command: "pnpm exec nx", trust: standard }
-    - { command: "pnpm exec next", trust: standard }
-    - { command: "pnpm exec nuxt", trust: standard }
-    - { command: "pnpm exec astro", trust: standard }
-    - { command: "pnpm exec svelte-kit", trust: standard }
+    - { command: "pnpm exec vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "pnpm exec webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm exec rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm exec esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "pnpm exec turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "pnpm exec nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "pnpm exec next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "pnpm exec nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "pnpm exec astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "pnpm exec svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "pnpm exec storybook", trust: standard }
-    - { command: "pnpm exec tailwindcss", trust: standard }
-    - { command: "pnpm exec postcss", trust: standard }
-    - { command: "pnpm exec lint-staged", trust: standard }
-    - { command: "pnpm exec tsx", trust: standard }
-    - { command: "pnpm exec ts-node", trust: standard }
+    - { command: "pnpm exec storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "pnpm exec tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "pnpm exec postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "pnpm exec lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "pnpm exec tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "pnpm exec ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── bunx: local dev tool invocations ───────────────────────────────
     # bunx is bun's equivalent of npx. Same tool list.
     # -- Test runners --
-    - { command: "bunx vitest", trust: standard }
-    - { command: "bunx jest", trust: standard }
-    - { command: "bunx mocha", trust: standard }
-    - { command: "bunx playwright", trust: standard }
-    - { command: "bunx cypress", trust: standard }
-    - { command: "bunx ava", trust: standard }
+    - { command: "bunx vitest", trust: standard, reason: "Runs tests" }
+    - { command: "bunx jest", trust: standard, reason: "Runs tests" }
+    - { command: "bunx mocha", trust: standard, reason: "Runs tests" }
+    - { command: "bunx playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "bunx cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "bunx ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "bunx eslint", trust: standard }
-    - { command: "bunx biome", trust: standard }
-    - { command: "bunx stylelint", trust: standard }
-    - { command: "bunx markdownlint", trust: standard }
-    - { command: "bunx oxlint", trust: standard }
+    - { command: "bunx eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "bunx biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "bunx stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "bunx markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "bunx oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "bunx prettier", trust: standard }
+    - { command: "bunx prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "bunx tsc", trust: standard }
-    - { command: "bunx vue-tsc", trust: standard }
-    - { command: "bunx svelte-check", trust: standard }
+    - { command: "bunx tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "bunx vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "bunx svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "bunx vite", trust: standard }
-    - { command: "bunx webpack", trust: standard }
-    - { command: "bunx rollup", trust: standard }
-    - { command: "bunx esbuild", trust: standard }
-    - { command: "bunx turbo", trust: standard }
-    - { command: "bunx nx", trust: standard }
-    - { command: "bunx next", trust: standard }
-    - { command: "bunx nuxt", trust: standard }
-    - { command: "bunx astro", trust: standard }
-    - { command: "bunx svelte-kit", trust: standard }
+    - { command: "bunx vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "bunx webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "bunx rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "bunx esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "bunx turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "bunx nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "bunx next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "bunx nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "bunx astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "bunx svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "bunx storybook", trust: standard }
-    - { command: "bunx tailwindcss", trust: standard }
-    - { command: "bunx postcss", trust: standard }
-    - { command: "bunx lint-staged", trust: standard }
-    - { command: "bunx tsx", trust: standard }
-    - { command: "bunx ts-node", trust: standard }
+    - { command: "bunx storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "bunx tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "bunx postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "bunx lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "bunx tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "bunx ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── yarn dlx: dev tool invocations ─────────────────────────────────
     # yarn dlx is yarn's equivalent of npx. Same tool list.
     # -- Test runners --
-    - { command: "yarn dlx vitest", trust: standard }
-    - { command: "yarn dlx jest", trust: standard }
-    - { command: "yarn dlx mocha", trust: standard }
-    - { command: "yarn dlx playwright", trust: standard }
-    - { command: "yarn dlx cypress", trust: standard }
-    - { command: "yarn dlx ava", trust: standard }
+    - { command: "yarn dlx vitest", trust: standard, reason: "Runs tests" }
+    - { command: "yarn dlx jest", trust: standard, reason: "Runs tests" }
+    - { command: "yarn dlx mocha", trust: standard, reason: "Runs tests" }
+    - { command: "yarn dlx playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "yarn dlx cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "yarn dlx ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "yarn dlx eslint", trust: standard }
-    - { command: "yarn dlx biome", trust: standard }
-    - { command: "yarn dlx stylelint", trust: standard }
-    - { command: "yarn dlx markdownlint", trust: standard }
-    - { command: "yarn dlx oxlint", trust: standard }
+    - { command: "yarn dlx eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "yarn dlx biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "yarn dlx stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "yarn dlx markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "yarn dlx oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "yarn dlx prettier", trust: standard }
+    - { command: "yarn dlx prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "yarn dlx tsc", trust: standard }
-    - { command: "yarn dlx vue-tsc", trust: standard }
-    - { command: "yarn dlx svelte-check", trust: standard }
+    - { command: "yarn dlx tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "yarn dlx vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "yarn dlx svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "yarn dlx vite", trust: standard }
-    - { command: "yarn dlx webpack", trust: standard }
-    - { command: "yarn dlx rollup", trust: standard }
-    - { command: "yarn dlx esbuild", trust: standard }
-    - { command: "yarn dlx turbo", trust: standard }
-    - { command: "yarn dlx nx", trust: standard }
-    - { command: "yarn dlx next", trust: standard }
-    - { command: "yarn dlx nuxt", trust: standard }
-    - { command: "yarn dlx astro", trust: standard }
-    - { command: "yarn dlx svelte-kit", trust: standard }
+    - { command: "yarn dlx vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "yarn dlx webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn dlx rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn dlx esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn dlx turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "yarn dlx nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "yarn dlx next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "yarn dlx nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "yarn dlx astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "yarn dlx svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "yarn dlx storybook", trust: standard }
-    - { command: "yarn dlx tailwindcss", trust: standard }
-    - { command: "yarn dlx postcss", trust: standard }
-    - { command: "yarn dlx lint-staged", trust: standard }
-    - { command: "yarn dlx tsx", trust: standard }
-    - { command: "yarn dlx ts-node", trust: standard }
+    - { command: "yarn dlx storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "yarn dlx tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "yarn dlx postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "yarn dlx lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "yarn dlx tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "yarn dlx ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── yarn exec: specific safe dev tools ────────────────────────────
     # yarn exec is NOT blanket-allowed (can run arbitrary shell commands).
     # Only known-safe dev tools listed; unknown commands get ask via default.
     # -- Test runners --
-    - { command: "yarn exec vitest", trust: standard }
-    - { command: "yarn exec jest", trust: standard }
-    - { command: "yarn exec mocha", trust: standard }
-    - { command: "yarn exec playwright", trust: standard }
-    - { command: "yarn exec cypress", trust: standard }
-    - { command: "yarn exec ava", trust: standard }
+    - { command: "yarn exec vitest", trust: standard, reason: "Runs tests" }
+    - { command: "yarn exec jest", trust: standard, reason: "Runs tests" }
+    - { command: "yarn exec mocha", trust: standard, reason: "Runs tests" }
+    - { command: "yarn exec playwright", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "yarn exec cypress", trust: standard, reason: "Runs end-to-end tests" }
+    - { command: "yarn exec ava", trust: standard, reason: "Runs tests" }
     # -- Linters --
-    - { command: "yarn exec eslint", trust: standard }
-    - { command: "yarn exec biome", trust: standard }
-    - { command: "yarn exec stylelint", trust: standard }
-    - { command: "yarn exec markdownlint", trust: standard }
-    - { command: "yarn exec oxlint", trust: standard }
+    - { command: "yarn exec eslint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
+    - { command: "yarn exec biome", trust: standard, reason: "Lints and formats code" }
+    - { command: "yarn exec stylelint", trust: standard, reason: "Lints CSS and style files" }
+    - { command: "yarn exec markdownlint", trust: standard, reason: "Lints Markdown files" }
+    - { command: "yarn exec oxlint", trust: standard, reason: "Lints JavaScript/TypeScript code" }
     # -- Formatters --
-    - { command: "yarn exec prettier", trust: standard }
+    - { command: "yarn exec prettier", trust: standard, reason: "Formats source files" }
     # -- Type checkers --
-    - { command: "yarn exec tsc", trust: standard }
-    - { command: "yarn exec vue-tsc", trust: standard }
-    - { command: "yarn exec svelte-check", trust: standard }
+    - { command: "yarn exec tsc", trust: standard, reason: "Type-checks TypeScript code" }
+    - { command: "yarn exec vue-tsc", trust: standard, reason: "Type-checks Vue TypeScript code" }
+    - { command: "yarn exec svelte-check", trust: standard, reason: "Type-checks Svelte code" }
     # -- Build/dev tools --
-    - { command: "yarn exec vite", trust: standard }
-    - { command: "yarn exec webpack", trust: standard }
-    - { command: "yarn exec rollup", trust: standard }
-    - { command: "yarn exec esbuild", trust: standard }
-    - { command: "yarn exec turbo", trust: standard }
-    - { command: "yarn exec nx", trust: standard }
-    - { command: "yarn exec next", trust: standard }
-    - { command: "yarn exec nuxt", trust: standard }
-    - { command: "yarn exec astro", trust: standard }
-    - { command: "yarn exec svelte-kit", trust: standard }
+    - { command: "yarn exec vite", trust: standard, reason: "Runs the Vite development server or bundler" }
+    - { command: "yarn exec webpack", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn exec rollup", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn exec esbuild", trust: standard, reason: "Bundles project files" }
+    - { command: "yarn exec turbo", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "yarn exec nx", trust: standard, reason: "Runs build tasks across the monorepo" }
+    - { command: "yarn exec next", trust: standard, reason: "Runs Next.js CLI commands" }
+    - { command: "yarn exec nuxt", trust: standard, reason: "Runs Nuxt CLI commands" }
+    - { command: "yarn exec astro", trust: standard, reason: "Runs Astro CLI commands" }
+    - { command: "yarn exec svelte-kit", trust: standard, reason: "Runs SvelteKit CLI commands" }
     # -- Dev utilities --
-    - { command: "yarn exec storybook", trust: standard }
-    - { command: "yarn exec tailwindcss", trust: standard }
-    - { command: "yarn exec postcss", trust: standard }
-    - { command: "yarn exec lint-staged", trust: standard }
-    - { command: "yarn exec tsx", trust: standard }
-    - { command: "yarn exec ts-node", trust: standard }
+    - { command: "yarn exec storybook", trust: standard, reason: "Runs Storybook component explorer" }
+    - { command: "yarn exec tailwindcss", trust: standard, reason: "Processes Tailwind CSS" }
+    - { command: "yarn exec postcss", trust: standard, reason: "Processes CSS with PostCSS plugins" }
+    - { command: "yarn exec lint-staged", trust: standard, reason: "Runs linters on staged files" }
+    - { command: "yarn exec tsx", trust: standard, reason: "Runs TypeScript files directly" }
+    - { command: "yarn exec ts-node", trust: standard, reason: "Runs TypeScript files directly" }
     # ── just: build/test/run tools ───────────────────────────────────
-    - { command: "just test", trust: standard }
-    - { command: "just build", trust: standard }
-    - { command: "just check", trust: standard }
-    - { command: "just fmt", trust: standard }
-    - { command: "just lint", trust: standard }
-    - { command: "just release", trust: standard }
+    - { command: "just test", trust: standard, reason: "Runs the 'test' recipe from the justfile" }
+    - { command: "just build", trust: standard, reason: "Runs the 'build' recipe from the justfile" }
+    - { command: "just check", trust: standard, reason: "Runs the 'check' recipe from the justfile" }
+    - { command: "just fmt", trust: standard, reason: "Runs the 'fmt' recipe from the justfile" }
+    - { command: "just lint", trust: standard, reason: "Runs the 'lint' recipe from the justfile" }
+    - { command: "just release", trust: standard, reason: "Runs the 'release' recipe from the justfile" }
 
 rules: []

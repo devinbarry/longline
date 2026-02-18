@@ -3,7 +3,7 @@
 allowlists:
   commands:
     # ── curl: read-only invocations (upload/method flags caught by rules) ──
-    - { command: curl, trust: standard }
+    - { command: curl, trust: standard, reason: "Transfers data from or to a server" }
 
 rules:
   # ============================================================

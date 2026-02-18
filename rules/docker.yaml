@@ -33,8 +33,8 @@ allowlists:
     - { command: "docker-compose top", trust: minimal }
     - { command: "docker-compose version", trust: minimal }
     # ── Docker compose: standard operations ──────────────────────
-    - { command: "docker compose down", trust: standard }
-    - { command: "docker-compose down", trust: standard }
+    - { command: "docker compose down", trust: standard, reason: "Stops and removes Docker Compose containers" }
+    - { command: "docker-compose down", trust: standard, reason: "Stops and removes Docker Compose containers" }
 
 rules:
   # ============================================================

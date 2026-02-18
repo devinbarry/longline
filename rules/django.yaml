@@ -11,14 +11,14 @@ allowlists:
     - { command: "python manage.py sqlsequencereset", trust: minimal }
     - { command: "python manage.py inspectdb", trust: minimal }
     # ── Django: common dev commands ───────────────────────────────────
-    - { command: "python manage.py test", trust: standard }
-    - { command: "python manage.py makemigrations", trust: standard }
-    - { command: "python manage.py runserver", trust: standard }
-    - { command: "python manage.py startapp", trust: standard }
-    - { command: "python manage.py startproject", trust: standard }
-    - { command: "python manage.py dumpdata", trust: standard }
-    - { command: "python manage.py makemessages", trust: standard }
-    - { command: "python manage.py compilemessages", trust: standard }
+    - { command: "python manage.py test", trust: standard, reason: "Runs Django tests" }
+    - { command: "python manage.py makemigrations", trust: standard, reason: "Creates Django database migration files" }
+    - { command: "python manage.py runserver", trust: standard, reason: "Starts the Django development server" }
+    - { command: "python manage.py startapp", trust: standard, reason: "Creates a new Django application" }
+    - { command: "python manage.py startproject", trust: standard, reason: "Creates a new Django project" }
+    - { command: "python manage.py dumpdata", trust: standard, reason: "Exports Django database data as JSON" }
+    - { command: "python manage.py makemessages", trust: standard, reason: "Extracts translatable strings for i18n" }
+    - { command: "python manage.py compilemessages", trust: standard, reason: "Compiles translation message files" }
     # ── Django: python3 variants (read-only/inspection) ───────────────
     - { command: "python3 manage.py check", trust: minimal }
     - { command: "python3 manage.py showmigrations", trust: minimal }
@@ -28,14 +28,14 @@ allowlists:
     - { command: "python3 manage.py sqlsequencereset", trust: minimal }
     - { command: "python3 manage.py inspectdb", trust: minimal }
     # ── Django: python3 common dev commands ──────────────────────────
-    - { command: "python3 manage.py test", trust: standard }
-    - { command: "python3 manage.py makemigrations", trust: standard }
-    - { command: "python3 manage.py runserver", trust: standard }
-    - { command: "python3 manage.py startapp", trust: standard }
-    - { command: "python3 manage.py startproject", trust: standard }
-    - { command: "python3 manage.py dumpdata", trust: standard }
-    - { command: "python3 manage.py makemessages", trust: standard }
-    - { command: "python3 manage.py compilemessages", trust: standard }
+    - { command: "python3 manage.py test", trust: standard, reason: "Runs Django tests" }
+    - { command: "python3 manage.py makemigrations", trust: standard, reason: "Creates Django database migration files" }
+    - { command: "python3 manage.py runserver", trust: standard, reason: "Starts the Django development server" }
+    - { command: "python3 manage.py startapp", trust: standard, reason: "Creates a new Django application" }
+    - { command: "python3 manage.py startproject", trust: standard, reason: "Creates a new Django project" }
+    - { command: "python3 manage.py dumpdata", trust: standard, reason: "Exports Django database data as JSON" }
+    - { command: "python3 manage.py makemessages", trust: standard, reason: "Extracts translatable strings for i18n" }
+    - { command: "python3 manage.py compilemessages", trust: standard, reason: "Compiles translation message files" }
     # ── Django: uv run variants (read-only/inspection) ────────────────
     - { command: "uv run python manage.py check", trust: minimal }
     - { command: "uv run python manage.py showmigrations", trust: minimal }
@@ -45,15 +45,15 @@ allowlists:
     - { command: "uv run python manage.py sqlsequencereset", trust: minimal }
     - { command: "uv run python manage.py inspectdb", trust: minimal }
     # ── Django: uv run common dev commands ────────────────────────────
-    - { command: "uv run python manage.py test", trust: standard }
-    - { command: "uv run python manage.py makemigrations", trust: standard }
-    - { command: "uv run python manage.py migrate", trust: standard }
-    - { command: "uv run python manage.py runserver", trust: standard }
-    - { command: "uv run python manage.py startapp", trust: standard }
-    - { command: "uv run python manage.py startproject", trust: standard }
-    - { command: "uv run python manage.py dumpdata", trust: standard }
-    - { command: "uv run python manage.py makemessages", trust: standard }
-    - { command: "uv run python manage.py compilemessages", trust: standard }
+    - { command: "uv run python manage.py test", trust: standard, reason: "Runs Django tests" }
+    - { command: "uv run python manage.py makemigrations", trust: standard, reason: "Creates Django database migration files" }
+    - { command: "uv run python manage.py migrate", trust: standard, reason: "Applies Django database migrations" }
+    - { command: "uv run python manage.py runserver", trust: standard, reason: "Starts the Django development server" }
+    - { command: "uv run python manage.py startapp", trust: standard, reason: "Creates a new Django application" }
+    - { command: "uv run python manage.py startproject", trust: standard, reason: "Creates a new Django project" }
+    - { command: "uv run python manage.py dumpdata", trust: standard, reason: "Exports Django database data as JSON" }
+    - { command: "uv run python manage.py makemessages", trust: standard, reason: "Extracts translatable strings for i18n" }
+    - { command: "uv run python manage.py compilemessages", trust: standard, reason: "Compiles translation message files" }
     # ── Django: uv run python3 variants (read-only/inspection) ────────
     - { command: "uv run python3 manage.py check", trust: minimal }
     - { command: "uv run python3 manage.py showmigrations", trust: minimal }
@@ -63,15 +63,15 @@ allowlists:
     - { command: "uv run python3 manage.py sqlsequencereset", trust: minimal }
     - { command: "uv run python3 manage.py inspectdb", trust: minimal }
     # ── Django: uv run python3 common dev commands ───────────────────
-    - { command: "uv run python3 manage.py test", trust: standard }
-    - { command: "uv run python3 manage.py makemigrations", trust: standard }
-    - { command: "uv run python3 manage.py migrate", trust: standard }
-    - { command: "uv run python3 manage.py runserver", trust: standard }
-    - { command: "uv run python3 manage.py startapp", trust: standard }
-    - { command: "uv run python3 manage.py startproject", trust: standard }
-    - { command: "uv run python3 manage.py dumpdata", trust: standard }
-    - { command: "uv run python3 manage.py makemessages", trust: standard }
-    - { command: "uv run python3 manage.py compilemessages", trust: standard }
+    - { command: "uv run python3 manage.py test", trust: standard, reason: "Runs Django tests" }
+    - { command: "uv run python3 manage.py makemigrations", trust: standard, reason: "Creates Django database migration files" }
+    - { command: "uv run python3 manage.py migrate", trust: standard, reason: "Applies Django database migrations" }
+    - { command: "uv run python3 manage.py runserver", trust: standard, reason: "Starts the Django development server" }
+    - { command: "uv run python3 manage.py startapp", trust: standard, reason: "Creates a new Django application" }
+    - { command: "uv run python3 manage.py startproject", trust: standard, reason: "Creates a new Django project" }
+    - { command: "uv run python3 manage.py dumpdata", trust: standard, reason: "Exports Django database data as JSON" }
+    - { command: "uv run python3 manage.py makemessages", trust: standard, reason: "Extracts translatable strings for i18n" }
+    - { command: "uv run python3 manage.py compilemessages", trust: standard, reason: "Compiles translation message files" }
 
 rules:
   # ============================================================

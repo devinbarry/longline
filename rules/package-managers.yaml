@@ -30,18 +30,18 @@ allowlists:
     - { command: "bundler --version", trust: minimal }
     # ── go: safe invocations ──────────────────────────────────────
     # go get/install - covered by rules (ask for confirmation)
-    - { command: "go build", trust: standard }
-    - { command: "go test", trust: standard }
-    - { command: "go run", trust: standard }
-    - { command: "go vet", trust: standard }
-    - { command: "go fmt", trust: standard }
-    - { command: "go mod", trust: standard }
-    - { command: "go generate", trust: standard }
+    - { command: "go build", trust: standard, reason: "Compiles Go packages" }
+    - { command: "go test", trust: standard, reason: "Runs Go tests" }
+    - { command: "go run", trust: standard, reason: "Compiles and runs a Go program" }
+    - { command: "go vet", trust: standard, reason: "Reports likely mistakes in Go code" }
+    - { command: "go fmt", trust: standard, reason: "Formats Go source code" }
+    - { command: "go mod", trust: standard, reason: "Manages Go module dependencies" }
+    - { command: "go generate", trust: standard, reason: "Runs code generation directives" }
     - { command: "go doc", trust: minimal }
-    - { command: "go clean", trust: standard }
+    - { command: "go clean", trust: standard, reason: "Removes build cache and output files" }
     - { command: "go env", trust: minimal }
     - { command: "go version", trust: minimal }
-    - { command: "go work", trust: standard }
+    - { command: "go work", trust: standard, reason: "Manages Go workspace configuration" }
     # ── yarn: safe invocations ────────────────────────────────────
     # yarn add/install - covered by rules (ask for confirmation)
     - { command: "yarn --version", trust: minimal }
@@ -49,11 +49,11 @@ allowlists:
     - { command: "yarn list", trust: minimal }
     - { command: "yarn info", trust: minimal }
     - { command: "yarn why", trust: minimal }
-    - { command: "yarn run", trust: standard }
-    - { command: "yarn test", trust: standard }
-    - { command: "yarn build", trust: standard }
-    - { command: "yarn start", trust: standard }
-    - { command: "yarn lint", trust: standard }
+    - { command: "yarn run", trust: standard, reason: "Runs a script defined in package.json" }
+    - { command: "yarn test", trust: standard, reason: "Runs the project's test suite" }
+    - { command: "yarn build", trust: standard, reason: "Runs the project's build script" }
+    - { command: "yarn start", trust: standard, reason: "Starts the application" }
+    - { command: "yarn lint", trust: standard, reason: "Runs the project's linter" }
     # ── pnpm: safe invocations ────────────────────────────────────
     # pnpm add/install - covered by rules (ask for confirmation)
     - { command: "pnpm --version", trust: minimal }
@@ -62,22 +62,22 @@ allowlists:
     - { command: "pnpm ls", trust: minimal }
     - { command: "pnpm why", trust: minimal }
     - { command: "pnpm audit", trust: minimal }
-    - { command: "pnpm run", trust: standard }
-    - { command: "pnpm test", trust: standard }
-    - { command: "pnpm build", trust: standard }
-    - { command: "pnpm start", trust: standard }
-    - { command: "pnpm lint", trust: standard }
-    - { command: "pnpm dev", trust: standard }
-    - { command: "pnpm check", trust: standard }
-    - { command: "pnpm format", trust: standard }
-    - { command: "pnpm typecheck", trust: standard }
+    - { command: "pnpm run", trust: standard, reason: "Runs a script defined in package.json" }
+    - { command: "pnpm test", trust: standard, reason: "Runs the project's test suite" }
+    - { command: "pnpm build", trust: standard, reason: "Runs the project's build script" }
+    - { command: "pnpm start", trust: standard, reason: "Starts the application" }
+    - { command: "pnpm lint", trust: standard, reason: "Runs the project's linter" }
+    - { command: "pnpm dev", trust: standard, reason: "Starts the development server" }
+    - { command: "pnpm check", trust: standard, reason: "Runs project checks" }
+    - { command: "pnpm format", trust: standard, reason: "Formats project source files" }
+    - { command: "pnpm typecheck", trust: standard, reason: "Runs TypeScript type checking" }
     # ── bun: safe invocations ─────────────────────────────────────
     # bun add/install - covered by rules (ask for confirmation)
     - { command: "bun --version", trust: minimal }
     - { command: "bun -v", trust: minimal }
-    - { command: "bun run", trust: standard }
-    - { command: "bun test", trust: standard }
-    - { command: "bun build", trust: standard }
+    - { command: "bun run", trust: standard, reason: "Runs a script or file with Bun" }
+    - { command: "bun test", trust: standard, reason: "Runs tests with Bun's test runner" }
+    - { command: "bun build", trust: standard, reason: "Bundles files with Bun's bundler" }
     # ── poetry: safe invocations ──────────────────────────────────
     # poetry add/install - covered by rules (ask for confirmation)
     - { command: "poetry --version", trust: minimal }
@@ -85,29 +85,29 @@ allowlists:
     - { command: "poetry show", trust: minimal }
     - { command: "poetry list", trust: minimal }
     - { command: "poetry check", trust: minimal }
-    - { command: "poetry lock", trust: standard }
-    - { command: "poetry shell", trust: standard }
-    - { command: "poetry env", trust: standard }
+    - { command: "poetry lock", trust: standard, reason: "Resolves and locks Python dependencies" }
+    - { command: "poetry shell", trust: standard, reason: "Activates the Poetry virtual environment" }
+    - { command: "poetry env", trust: standard, reason: "Manages Poetry virtual environments" }
     # ── pipx: safe invocations ────────────────────────────────────
     # pipx install - covered by rules (ask for confirmation)
     - { command: "pipx --version", trust: minimal }
     - { command: "pipx list", trust: minimal }
-    - { command: "pipx run", trust: standard }
+    - { command: "pipx run", trust: standard, reason: "Runs a Python application in isolation" }
     # ── pdm: safe invocations ─────────────────────────────────────
     # pdm add/install - covered by rules (ask for confirmation)
     - { command: "pdm --version", trust: minimal }
     - { command: "pdm -V", trust: minimal }
     - { command: "pdm list", trust: minimal }
     - { command: "pdm show", trust: minimal }
-    - { command: "pdm lock", trust: standard }
+    - { command: "pdm lock", trust: standard, reason: "Resolves and locks Python dependencies" }
     # ── rye: safe invocations ─────────────────────────────────────
     # rye add - covered by rules (ask for confirmation)
     - { command: "rye --version", trust: minimal }
     - { command: "rye -V", trust: minimal }
     - { command: "rye list", trust: minimal }
     - { command: "rye show", trust: minimal }
-    - { command: "rye lock", trust: standard }
-    - { command: "rye sync", trust: standard }
+    - { command: "rye lock", trust: standard, reason: "Resolves and locks Python dependencies" }
+    - { command: "rye sync", trust: standard, reason: "Syncs project dependencies with the lockfile" }
     # ── conda/mamba: safe invocations ─────────────────────────────
     # conda/mamba install - covered by rules (ask for confirmation)
     - { command: "conda --version", trust: minimal }
@@ -145,23 +145,23 @@ allowlists:
     # deno install/add - covered by rules (ask for confirmation)
     - { command: "deno --version", trust: minimal }
     - { command: "deno -V", trust: minimal }
-    - { command: "deno run", trust: standard }
-    - { command: "deno test", trust: standard }
-    - { command: "deno lint", trust: standard }
-    - { command: "deno fmt", trust: standard }
-    - { command: "deno check", trust: standard }
-    - { command: "deno info", trust: standard }
-    - { command: "deno doc", trust: standard }
+    - { command: "deno run", trust: standard, reason: "Runs a Deno script" }
+    - { command: "deno test", trust: standard, reason: "Runs Deno tests" }
+    - { command: "deno lint", trust: standard, reason: "Lints Deno source files" }
+    - { command: "deno fmt", trust: standard, reason: "Formats Deno source files" }
+    - { command: "deno check", trust: standard, reason: "Type-checks Deno source files" }
+    - { command: "deno info", trust: standard, reason: "Shows dependency information" }
+    - { command: "deno doc", trust: standard, reason: "Generates documentation from source" }
     # ── dotnet: safe invocations ──────────────────────────────────
     # dotnet add - covered by rules (ask for confirmation)
     - { command: "dotnet --version", trust: minimal }
     - { command: "dotnet --info", trust: minimal }
     - { command: "dotnet list", trust: minimal }
-    - { command: "dotnet build", trust: standard }
-    - { command: "dotnet run", trust: standard }
-    - { command: "dotnet test", trust: standard }
-    - { command: "dotnet clean", trust: standard }
-    - { command: "dotnet restore", trust: standard }
+    - { command: "dotnet build", trust: standard, reason: "Builds a .NET project" }
+    - { command: "dotnet run", trust: standard, reason: "Runs a .NET project" }
+    - { command: "dotnet test", trust: standard, reason: "Runs .NET tests" }
+    - { command: "dotnet clean", trust: standard, reason: "Cleans build output" }
+    - { command: "dotnet restore", trust: standard, reason: "Restores .NET project dependencies" }
     # ── nuget: safe invocations ───────────────────────────────────
     # nuget install - covered by rules (ask for confirmation)
     - { command: "nuget --version", trust: minimal }
@@ -171,9 +171,9 @@ allowlists:
     # mix deps.get - covered by rules (ask for confirmation)
     - { command: "mix --version", trust: minimal }
     - { command: "mix help", trust: minimal }
-    - { command: "mix compile", trust: standard }
-    - { command: "mix test", trust: standard }
-    - { command: "mix format", trust: standard }
+    - { command: "mix compile", trust: standard, reason: "Compiles an Elixir project" }
+    - { command: "mix test", trust: standard, reason: "Runs Elixir tests" }
+    - { command: "mix format", trust: standard, reason: "Formats Elixir source files" }
     # ── pub (Dart): safe invocations ──────────────────────────────
     # pub get/add - covered by rules (ask for confirmation)
     - { command: "dart pub --version", trust: minimal }
@@ -187,16 +187,16 @@ allowlists:
     - { command: "cabal -V", trust: minimal }
     - { command: "cabal list", trust: minimal }
     - { command: "cabal info", trust: minimal }
-    - { command: "cabal build", trust: standard }
-    - { command: "cabal test", trust: standard }
-    - { command: "cabal run", trust: standard }
+    - { command: "cabal build", trust: standard, reason: "Builds a Haskell project with Cabal" }
+    - { command: "cabal test", trust: standard, reason: "Runs Haskell tests with Cabal" }
+    - { command: "cabal run", trust: standard, reason: "Runs a Haskell executable with Cabal" }
     # ── stack (Haskell): safe invocations ─────────────────────────
     # stack install - covered by rules (ask for confirmation)
     - { command: "stack --version", trust: minimal }
     - { command: "stack list-dependencies", trust: minimal }
-    - { command: "stack build", trust: standard }
-    - { command: "stack test", trust: standard }
-    - { command: "stack run", trust: standard }
+    - { command: "stack build", trust: standard, reason: "Builds a Haskell project with Stack" }
+    - { command: "stack test", trust: standard, reason: "Runs Haskell tests with Stack" }
+    - { command: "stack run", trust: standard, reason: "Runs a Haskell executable with Stack" }
 
 rules:
   # ============================================================
