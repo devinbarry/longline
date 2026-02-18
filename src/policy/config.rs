@@ -132,6 +132,8 @@ impl std::fmt::Display for TrustLevel {
 pub struct AllowlistEntry {
     pub command: String,
     pub trust: TrustLevel,
+    #[serde(default)]
+    pub reason: Option<String>,
     #[serde(skip)]
     pub source: RuleSource,
 }
@@ -1076,6 +1078,7 @@ disable_rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
+                    reason: None,
                     source: RuleSource::default(),
                 }],
                 paths: vec![],
@@ -1089,6 +1092,7 @@ disable_rules:
                 commands: vec![AllowlistEntry {
                     command: "docker compose".to_string(),
                     trust: TrustLevel::Standard,
+                    reason: None,
                     source: RuleSource::default(),
                 }],
                 paths: vec![],
@@ -1189,6 +1193,7 @@ rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
+                    reason: None,
                     source: RuleSource::default(),
                 }],
                 paths: vec![],
@@ -1230,6 +1235,26 @@ rules:
         let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(entry.command, "git status");
         assert_eq!(entry.trust, TrustLevel::Minimal);
+    }
+
+    #[test]
+    fn test_allowlist_entry_deserialize_with_reason() {
+        let yaml = "command: \"git push\"\ntrust: full\nreason: \"Pushes local commits to a remote repository\"\n";
+        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.command, "git push");
+        assert_eq!(entry.trust, TrustLevel::Full);
+        assert_eq!(
+            entry.reason.as_deref(),
+            Some("Pushes local commits to a remote repository")
+        );
+    }
+
+    #[test]
+    fn test_allowlist_entry_deserialize_without_reason() {
+        let yaml = "command: ls\ntrust: minimal\n";
+        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(entry.command, "ls");
+        assert_eq!(entry.reason, None);
     }
 
     #[test]
@@ -1351,6 +1376,7 @@ rules:
                 commands: vec![AllowlistEntry {
                     command: "ls".to_string(),
                     trust: TrustLevel::Standard,
+                    reason: None,
                     source: RuleSource::BuiltIn,
                 }],
                 paths: vec![],
@@ -1364,6 +1390,7 @@ rules:
                 commands: vec![AllowlistEntry {
                     command: "docker compose".to_string(),
                     trust: TrustLevel::Standard,
+                    reason: None,
                     source: RuleSource::default(),
                 }],
                 paths: vec![],

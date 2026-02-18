@@ -330,6 +330,7 @@ mod tests {
                 commands: vec![crate::policy::AllowlistEntry {
                     command: "git status".to_string(),
                     trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
                     source: crate::policy::RuleSource::default(),
                 }],
                 paths: vec![],
@@ -353,16 +354,19 @@ mod tests {
                     crate::policy::AllowlistEntry {
                         command: "ls".to_string(),
                         trust: crate::policy::TrustLevel::Minimal,
+                        reason: None,
                         source: crate::policy::RuleSource::default(),
                     },
                     crate::policy::AllowlistEntry {
                         command: "go build".to_string(),
                         trust: crate::policy::TrustLevel::Standard,
+                        reason: None,
                         source: crate::policy::RuleSource::default(),
                     },
                     crate::policy::AllowlistEntry {
                         command: "docker run".to_string(),
                         trust: crate::policy::TrustLevel::Full,
+                        reason: None,
                         source: crate::policy::RuleSource::default(),
                     },
                 ],
@@ -439,6 +443,7 @@ mod tests {
                 commands: vec![crate::policy::AllowlistEntry {
                     command: "git status".to_string(),
                     trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
                     source: crate::policy::RuleSource::default(),
                 }],
                 paths: vec![],
