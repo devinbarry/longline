@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-02-18
+
+
+### Changed
+
+- add design for fixing double config load bug
+- add RED tests proving CLI override bugs in hook and check modes
+- add comprehensive config precedence integration tests
+- add implementation plan for double config load fix
+
+
+### Fixed
+
+- centralize config merging into finalize_config() with correct precedence
+
 ## [0.6.0] - 2026-02-18
 
 
@@ -19,6 +34,7 @@ All notable changes to this project will be documented in this file.
 - update justfile install locations to cargo default
 - add design for descriptive allowlist reasons
 - add implementation plan for descriptive allowlist reasons
+- release v0.6.0
 
 ## [0.5.1] - 2026-02-18
 
