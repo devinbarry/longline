@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.2] - 2026-02-19
+
+
+### Added
+
+- add is_covered_by_wrapper_entry() for compound allowlist matching
+
+
+### Changed
+
+- add design for wrapper allowlist fix (GitLab #1)
+- add implementation plan for wrapper allowlist fix (GitLab #1)
+- add RED tests for wrapper allowlist bug (GitLab #1)
+- update design and plan with smarter compound-entry approach (v2)
+- add integration tests for wrapper allowlist fix (GitLab #1)
+
+
+### Fixed
+
+- use compound entry coverage for wrapper allowlist check (GitLab #1)
+- update docs to match parts.last() implementation, add chained wrapper tests
+
 ## [0.6.1] - 2026-02-18
 
 
@@ -11,6 +33,7 @@ All notable changes to this project will be documented in this file.
 - add RED tests proving CLI override bugs in hook and check modes
 - add comprehensive config precedence integration tests
 - add implementation plan for double config load fix
+- release v0.6.1
 
 
 ### Fixed
@@ -41,8 +64,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- tighten git push safety rules and add force-with-lease coverage
-- add typed filter system for rules subcommand
 - add load_global_config and merge_overlay_config
 - load global config overlay from ~/.config/longline/longline.yaml
 - add --safety-level CLI flag
@@ -51,13 +72,18 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- release v0.4.3
-- add typed filter system design for longline rules
-- add typed filter system implementation plan
-- add integration tests for typed filter system
-- release v0.4.4
-- add golden tests for all gh/glab remote-write commands
-- release v0.4.5
+- update documentation for v0.5.0 release
+- rewrite changelog with human-readable release notes
+- design for global machine-wide config overlay
+- implementation plan for global config overlay
+- rename RuleSource::Global to BuiltIn, add Global for overlay
+- release v0.5.1
+
+## [0.5.0] - 2026-02-17
+
+
+### Changed
+
 - add design for policy gap fixes (21 red TDD tests)
 - integrate review feedback into policy gap fixes design
 - add missing red tests for subshell redirects and uv subcommand gating
@@ -67,17 +93,10 @@ All notable changes to this project will be documented in this file.
 - add collect_descendant_substitutions() helper for parser
 - add inject_redirects_into_leaves() utility for compound redirects
 - release v0.5.0
-- update documentation for v0.5.0 release
-- rewrite changelog with human-readable release notes
-- design for global machine-wide config overlay
-- implementation plan for global config overlay
-- rename RuleSource::Global to BuiltIn, add Global for overlay
-- release v0.5.1
 
 
 ### Fixed
 
-- reclassify trust levels for git and cli-tool allowlists
 - correct uv pip test to regression guard, update design doc counts
 - reject unknown fields in RulesConfig for fail-closed config parsing
 - add time wrapper and basename normalization for absolute paths and pipelines
@@ -89,36 +108,100 @@ All notable changes to this project will be documented in this file.
 - add subcommand-based wrapper support and uv run delegation
 - propagate substitutions from bare assignments and compound redirect targets
 
-## [0.4.2] - 2026-02-14
+## [0.4.5] - 2026-02-16
+
+
+### Changed
+
+- add golden tests for all gh/glab remote-write commands
+- release v0.4.5
+
+
+### Fixed
+
+- reclassify trust levels for git and cli-tool allowlists
+
+## [0.4.4] - 2026-02-16
 
 
 ### Added
 
-- send Python script executions to AI judge
-- add lenient AI judge mode
-- add support for compound bash statements
-- add git read-only commands check-ignore, symbolic-ref, show-ref
-- add git-cliff base command with safety rules
-- add just release to safe commands
-- allow uv run python manage.py migrate
-- add Docker allowlist and destructive operation rules
-- add docker compose down --rmi and --remove-orphans rules
-- add log rotation with 10-file retention
-- allowlist curl and add rules for unsafe flags
-- allow bare --version and -V on any command
-- add ProjectConfig type for per-project overrides
-- add project root discovery via .git or .claude directory
-- add project config loading from .claude/longline.yaml
-- add merge function for project config into global config
-- wire per-project config into hook mode
-- reject unknown fields in project config with exit code 2
-- add trust level tiered allowlists
-- show trust tier breakdown in files subcommand
-- add embedded_rules module with compile-time rule embedding
-- add load_embedded_rules() for loading rules from compiled-in defaults
-- fall back to embedded rules when no config file found
-- add 'longline init' subcommand to extract embedded rules
-- embed default rules into binary and rename manifest to rules
+- add typed filter system for rules subcommand
+
+
+### Changed
+
+- add typed filter system design for longline rules
+- add typed filter system implementation plan
+- add integration tests for typed filter system
+- release v0.4.4
+
+## [0.4.3] - 2026-02-16
+
+
+### Added
+
+- tighten git push safety rules and add force-with-lease coverage
+
+
+### Changed
+
+- release v0.4.3
+
+## [0.4.2] - 2026-02-14
+
+
+### Changed
+
+- add design doc for documentation cleanup and maintenance
+- add implementation plan for documentation cleanup
+- rewrite README for embedded defaults and fix manifest.yaml references
+- rewrite SECURITY.md to focus on security model and current limitations
+- update CLAUDE.md test count, fix CI docs filter, remove designs dir
+- release v0.4.2
+
+
+### Fixed
+
+- add ci group and skip merge commits in git-cliff config
+- correct golden test count to 1500+ in README
+- remove residual 'manifest' terminology from README
+- auto-push commits and tags in release recipe
+
+## [0.4.1] - 2026-02-13
+
+
+### Added
+
+- add npx allowlist for common JS dev tools
+- add pnpm allowlist for direct tool invocations
+- add bunx and yarn dlx/exec allowlists for JS dev tools
+- add pnpm exec and yarn exec allowlists for safe dev tools
+
+
+### Changed
+
+- clean up changelog with contextual descriptions
+- add JS dev tool allowlisting design
+- add JS dev tool allowlisting implementation plan
+- remove blanket npx-run rule
+- add command-wrapper bypass tests for all runners
+- rename safe-commands-node.yaml and duplicate for split
+- split node golden tests into safe and dangerous files
+- release v0.4.1
+
+
+### Fixed
+
+- remove blanket pnpm exec and yarn exec allowlist entries
+- remove blanket poetry run, pdm run, and rye run allowlist entries
+- remove command-wrapper tools from allowlists
+
+## [0.4.0] - 2026-02-11
+
+
+### Added
+
 - add --dir global CLI flag for project config discovery
 - add RuleSource enum to track global vs project origin
 - tag merged project rules and allowlists with RuleSource::Project
@@ -134,40 +217,10 @@ All notable changes to this project will be documented in this file.
 - implement extract_inner_commands with chaining and depth limit
 - add wrapper commands to core allowlist
 - integrate wrapper unwrapping into policy evaluation
-- add npx allowlist for common JS dev tools
-- add pnpm allowlist for direct tool invocations
-- add bunx and yarn dlx/exec allowlists for JS dev tools
-- add pnpm exec and yarn exec allowlists for safe dev tools
 
 
 ### Changed
 
-- split ai_judge.rs into module directory
-- release v0.1.13
-- release v0.1.14
-- update documentation for recent features
-- release v0.2.0
-- add design for fixing duplicate test execution
-- add .worktrees/ to gitignore
-- remove duplicate module declarations from main.rs
-- add implementation plan for duplicate test fix
-- release v0.2.1
-- update SECURITY.md with resolved items and future work
-- release v0.2.2
-- add per-project config design
-- add per-project config implementation plan
-- add integration tests for per-project config
-- clarify merge order in merge_project_config doc comment
-- migrate all allowlist files to tagged trust format
-- remove bare string backwards-compat from AllowlistEntry
-- add integration tests for trust_level
-- add implementation plan for trust_level tiered allowlists
-- release v0.3.0
-- add design for embedded rules and manifest rename
-- add implementation plan for embedded rules
-- rename manifest to rules manifest throughout codebase
-- update CLAUDE.md and justfile for rules.yaml rename and embedded defaults
-- release v0.3.1
 - add design and implementation plan for project config discovery
 - add safe command allowlist additions design
 - add allowlist additions and transparent wrappers design docs
@@ -178,42 +231,166 @@ All notable changes to this project will be documented in this file.
 - add transparent wrappers implementation plan
 - add golden tests for transparent wrapper commands
 - release v0.4.0
-- clean up changelog with contextual descriptions
-- add JS dev tool allowlisting design
-- add JS dev tool allowlisting implementation plan
-- remove blanket npx-run rule
-- add command-wrapper bypass tests for all runners
-- rename safe-commands-node.yaml and duplicate for split
-- split node golden tests into safe and dangerous files
-- release v0.4.1
-- add design doc for documentation cleanup and maintenance
-- add implementation plan for documentation cleanup
-- rewrite README for embedded defaults and fix manifest.yaml references
-- rewrite SECURITY.md to focus on security model and current limitations
-- update CLAUDE.md test count, fix CI docs filter, remove designs dir
-- release v0.4.2
+
+## [0.3.1] - 2026-02-09
+
+
+### Added
+
+- add embedded_rules module with compile-time rule embedding
+- add load_embedded_rules() for loading rules from compiled-in defaults
+- fall back to embedded rules when no config file found
+- add 'longline init' subcommand to extract embedded rules
+- embed default rules into binary and rename manifest to rules
+
+
+### Changed
+
+- add design for embedded rules and manifest rename
+- add implementation plan for embedded rules
+- rename manifest to rules manifest throughout codebase
+- update CLAUDE.md and justfile for rules.yaml rename and embedded defaults
+- release v0.3.1
+
+
+### Fixed
+
+- error on TTY stdin instead of silently blocking in check subcommand
+
+## [0.3.0] - 2026-02-08
+
+
+### Added
+
+- add ProjectConfig type for per-project overrides
+- add project root discovery via .git or .claude directory
+- add project config loading from .claude/longline.yaml
+- add merge function for project config into global config
+- wire per-project config into hook mode
+- reject unknown fields in project config with exit code 2
+- add trust level tiered allowlists
+- show trust tier breakdown in files subcommand
+
+
+### Changed
+
+- add per-project config design
+- add per-project config implementation plan
+- add integration tests for per-project config
+- clarify merge order in merge_project_config doc comment
+- migrate all allowlist files to tagged trust format
+- remove bare string backwards-compat from AllowlistEntry
+- add integration tests for trust_level
+- add implementation plan for trust_level tiered allowlists
+- release v0.3.0
+
+
+### Fixed
+
+- detect git worktrees in project root discovery
+- address code review findings for trust_level feature
+
+## [0.2.2] - 2026-02-07
+
+
+### Added
+
+- add log rotation with 10-file retention
+- allowlist curl and add rules for unsafe flags
+- allow bare --version and -V on any command
+
+
+### Changed
+
+- update SECURITY.md with resolved items and future work
+- release v0.2.2
+
+
+### Fixed
+
+- kill judge subprocesses on timeout
+- log raw stdout/stderr on unparseable response
+
+## [0.2.1] - 2026-02-07
+
+
+### Added
+
+- add git read-only commands check-ignore, symbolic-ref, show-ref
+- add git-cliff base command with safety rules
+- add just release to safe commands
+- allow uv run python manage.py migrate
+- add Docker allowlist and destructive operation rules
+- add docker compose down --rmi and --remove-orphans rules
+
+
+### Changed
+
+- add design for fixing duplicate test execution
+- add .worktrees/ to gitignore
+- remove duplicate module declarations from main.rs
+- add implementation plan for duplicate test fix
+- release v0.2.1
+
+
+### Fixed
+
+- use gpt-5.1-codex-mini with medium reasoning effort
+- use flags matcher for git-cliff dash-prefixed options
+
+## [0.2.0] - 2026-02-05
+
+
+### Added
+
+- add support for compound bash statements
+
+
+### Changed
+
+- update documentation for recent features
+- release v0.2.0
+
+
+### Fixed
+
+- eliminate flaky AI judge script execution tests
+
+## [0.1.14] - 2026-02-04
+
+
+### Added
+
+- add lenient AI judge mode
+
+
+### Changed
+
+- release v0.1.14
+
+
+### Fixed
+
+- increase timeout to 30s
+
+## [0.1.13] - 2026-02-04
+
+
+### Added
+
+- send Python script executions to AI judge
+
+
+### Changed
+
+- split ai_judge.rs into module directory
+- release v0.1.13
 
 
 ### Fixed
 
 - use pull_policy: always for GitLab runner compatibility
 - stop truncating hook logs
-- increase timeout to 30s
-- eliminate flaky AI judge script execution tests
-- use gpt-5.1-codex-mini with medium reasoning effort
-- use flags matcher for git-cliff dash-prefixed options
-- kill judge subprocesses on timeout
-- log raw stdout/stderr on unparseable response
-- detect git worktrees in project root discovery
-- address code review findings for trust_level feature
-- error on TTY stdin instead of silently blocking in check subcommand
-- remove blanket pnpm exec and yarn exec allowlist entries
-- remove blanket poetry run, pdm run, and rye run allowlist entries
-- remove command-wrapper tools from allowlists
-- add ci group and skip merge commits in git-cliff config
-- correct golden test count to 1500+ in README
-- remove residual 'manifest' terminology from README
-- auto-push commits and tags in release recipe
 
 ## [0.1.12] - 2026-02-04
 
