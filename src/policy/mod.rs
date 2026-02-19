@@ -14,7 +14,10 @@ pub use config::{
 use crate::parser::{self, Statement};
 use crate::types::{Decision, PolicyResult};
 
-use allowlist::{find_allowlist_match, find_allowlist_reason, is_allowlisted, is_version_check};
+use allowlist::{
+    find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,
+    is_version_check,
+};
 use matching::{matches_pipeline, matches_rule};
 
 /// Evaluate a parsed statement against the policy rules.
@@ -63,7 +66,9 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
     // If nothing matched and not all leaves are allowlisted, use default decision
     if worst.decision == Decision::Allow && worst.rule_id.is_none() {
         let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf))
-            && extra_leaves.iter().all(|leaf| is_allowlisted(config, leaf));
+            && extra_leaves.iter().all(|leaf| {
+                is_allowlisted(config, leaf) || is_covered_by_wrapper_entry(config, &leaves, leaf)
+            });
         if !all_allowlisted {
             // Try to find a descriptive reason from trust-filtered allowlist entries
             let reason = leaves
@@ -1180,5 +1185,199 @@ rules: []
 
         assert_eq!(result.decision, Decision::Ask);
         assert_eq!(result.reason, "No matching rule; using default decision",);
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_specific_entry_allows() {
+        // "uv run yamllint" allowlist entry should allow "uv run yamllint .gitlab-ci.yml"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Specific wrapper allowlist entry should allow matching command: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_specific_entry_rejects_different_inner() {
+        // "uv run yamllint" should NOT allow "uv run dangeroustool"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run dangeroustool").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Specific wrapper allowlist should not allow different inner command: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_rules_still_deny_inner() {
+        // Even with "uv run" allowlisted, "uv run rm -rf /" should deny
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run", trust: standard }
+rules:
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting critical system path"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Rules should still catch dangerous inner commands: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_broad_entry_allows_any_inner() {
+        // Broad "timeout" allowlist should allow "timeout 30 ls"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: timeout, trust: standard }
+    - { command: ls, trust: minimal }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("timeout 30 ls").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Wrapper with allowlisted inner should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_timeout_rm_denied_by_rules() {
+        // Even with "timeout" allowlisted, "timeout 30 rm -rf /" should deny
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: timeout, trust: standard }
+rules:
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting critical system path"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("timeout 30 rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Rules should override wrapper allowlist: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_chained_requires_outer_allowlisted() {
+        // Chained wrappers: env VAR=val uv run yamllint requires BOTH "env" and
+        // "uv run yamllint" allowlisted. With only "uv run yamllint", the outer
+        // wrapper "env" is the original leaf and won't match the "uv run yamllint"
+        // entry, so the command gets ask.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Chained wrapper without outer allowlisted should ask: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_chained_both_allowlisted_still_asks() {
+        // Known limitation: even with both "env" and "uv run yamllint" allowlisted,
+        // chained wrappers still ask. This is because is_covered_by_wrapper_entry()
+        // checks extra_leaves against original leaves only (from flatten()), not
+        // against other extra_leaves. The original leaf is "env", whose bare entry
+        // doesn't cover the "yamllint" extra_leaf. The "uv run yamllint" extra_leaf
+        // matches its entry independently, but the "yamllint" extra_leaf has no
+        // original leaf with a compound entry naming it.
+        //
+        // Workaround: users should also add "yamllint" as a standalone allowlist entry.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: env, trust: standard }
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Chained wrapper limitation: extra_leaves only checked against original leaves: {:?}",
+            result
+        );
     }
 }

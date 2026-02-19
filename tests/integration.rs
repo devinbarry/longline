@@ -2051,3 +2051,93 @@ fn test_e2e_project_config_overrides_global_in_hook_mode() {
         "Project config full trust should override global minimal trust: {stdout}"
     );
 }
+
+#[test]
+fn test_e2e_wrapper_allowlist_specific_entry_allows() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "uv run yamllint .gitlab-ci.yml", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "uv run yamllint should be allowed via wrapper allowlist: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_wrapper_allowlist_rejects_different_inner() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "uv run dangeroustool", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "uv run dangeroustool should ask (not covered by allowlist): {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_wrapper_allowlist_rules_still_deny() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(dir.path().join(".git")).unwrap();
+    let claude_dir = dir.path().join(".claude");
+    std::fs::create_dir_all(&claude_dir).unwrap();
+    std::fs::write(
+        claude_dir.join("longline.yaml"),
+        "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
+    )
+    .unwrap();
+
+    let cwd = dir.path().to_string_lossy().to_string();
+    let (code, stdout) = run_hook_with_cwd("Bash", "uv run rm -rf /", &cwd);
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "deny",
+        "Rules should still deny dangerous inner commands: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_wrapper_allowlist_timeout_unknown_still_asks() {
+    // timeout is in the default allowlist, but unknown inner commands should still ask
+    let (code, stdout) = run_hook("Bash", "timeout 10 some_unknown_command");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "timeout with unknown inner should still ask: {stdout}"
+    );
+}
+
+#[test]
+fn test_e2e_wrapper_allowlist_timeout_safe_inner_allows() {
+    // timeout + ls both in default allowlist
+    let (code, stdout) = run_hook("Bash", "timeout 30 ls");
+    assert_eq!(code, 0);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["permissionDecision"], "allow",
+        "timeout with allowlisted inner should allow: {stdout}"
+    );
+}
