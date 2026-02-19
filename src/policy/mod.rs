@@ -14,7 +14,10 @@ pub use config::{
 use crate::parser::{self, Statement};
 use crate::types::{Decision, PolicyResult};
 
-use allowlist::{find_allowlist_match, find_allowlist_reason, is_allowlisted, is_version_check};
+use allowlist::{
+    find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,
+    is_version_check,
+};
 use matching::{matches_pipeline, matches_rule};
 
 /// Evaluate a parsed statement against the policy rules.
@@ -63,7 +66,9 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
     // If nothing matched and not all leaves are allowlisted, use default decision
     if worst.decision == Decision::Allow && worst.rule_id.is_none() {
         let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf))
-            && extra_leaves.iter().all(|leaf| is_allowlisted(config, leaf));
+            && extra_leaves.iter().all(|leaf| {
+                is_allowlisted(config, leaf) || is_covered_by_wrapper_entry(config, &leaves, leaf)
+            });
         if !all_allowlisted {
             // Try to find a descriptive reason from trust-filtered allowlist entries
             let reason = leaves

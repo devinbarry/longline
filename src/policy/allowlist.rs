@@ -168,7 +168,6 @@ pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Optio
 /// is covered because "yamllint" appears in the entry's prefix args.
 ///
 /// Bare entries like `"timeout"` (no prefix args) never cover extra_leaves.
-#[allow(dead_code)] // Will be called from policy/mod.rs in a subsequent change
 pub fn is_covered_by_wrapper_entry(
     config: &RulesConfig,
     original_leaves: &[&Statement],
@@ -187,7 +186,7 @@ pub fn is_covered_by_wrapper_entry(
         if let Statement::SimpleCommand(cmd) = leaf {
             if let Some(entry_str) = find_allowlist_match(config, cmd) {
                 let parts: Vec<&str> = entry_str.split_whitespace().collect();
-                if parts.len() > 1 && parts[1..].contains(&extra_cmd_name) {
+                if parts.len() > 1 && parts.last() == Some(&extra_cmd_name) {
                     return true;
                 }
             }
