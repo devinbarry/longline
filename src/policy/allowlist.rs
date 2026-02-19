@@ -165,7 +165,11 @@ pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Optio
 ///
 /// For example, if the original leaf is `uv run yamllint .gitlab-ci.yml` and
 /// the allowlist entry is `"uv run yamllint"`, then the extra_leaf `yamllint`
-/// is covered because "yamllint" appears in the entry's prefix args.
+/// is covered because "yamllint" is the last token in the entry.
+///
+/// Only the last token is checked (not any intermediate token like "run"),
+/// which prevents intermediate wrapper args from being treated as covered
+/// inner commands.
 ///
 /// Bare entries like `"timeout"` (no prefix args) never cover extra_leaves.
 pub fn is_covered_by_wrapper_entry(

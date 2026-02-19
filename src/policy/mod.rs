@@ -1322,4 +1322,62 @@ rules:
             result
         );
     }
+
+    #[test]
+    fn test_wrapper_allowlist_chained_requires_outer_allowlisted() {
+        // Chained wrappers: env VAR=val uv run yamllint requires BOTH "env" and
+        // "uv run yamllint" allowlisted. With only "uv run yamllint", the outer
+        // wrapper "env" is the original leaf and won't match the "uv run yamllint"
+        // entry, so the command gets ask.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Chained wrapper without outer allowlisted should ask: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_chained_both_allowlisted_still_asks() {
+        // Known limitation: even with both "env" and "uv run yamllint" allowlisted,
+        // chained wrappers still ask. This is because is_covered_by_wrapper_entry()
+        // checks extra_leaves against original leaves only (from flatten()), not
+        // against other extra_leaves. The original leaf is "env", whose bare entry
+        // doesn't cover the "yamllint" extra_leaf. The "uv run yamllint" extra_leaf
+        // matches its entry independently, but the "yamllint" extra_leaf has no
+        // original leaf with a compound entry naming it.
+        //
+        // Workaround: users should also add "yamllint" as a standalone allowlist entry.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: env, trust: standard }
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Chained wrapper limitation: extra_leaves only checked against original leaves: {:?}",
+            result
+        );
+    }
 }
