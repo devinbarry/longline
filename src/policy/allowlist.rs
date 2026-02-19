@@ -160,6 +160,42 @@ pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Optio
     find_matching_entry(config, cmd, false).and_then(|entry| entry.reason.clone())
 }
 
+/// Check if an extra_leaf (unwrapped inner command) is covered by a compound
+/// allowlist entry on one of the original leaves.
+///
+/// For example, if the original leaf is `uv run yamllint .gitlab-ci.yml` and
+/// the allowlist entry is `"uv run yamllint"`, then the extra_leaf `yamllint`
+/// is covered because "yamllint" appears in the entry's prefix args.
+///
+/// Bare entries like `"timeout"` (no prefix args) never cover extra_leaves.
+#[allow(dead_code)] // Will be called from policy/mod.rs in a subsequent change
+pub fn is_covered_by_wrapper_entry(
+    config: &RulesConfig,
+    original_leaves: &[&Statement],
+    extra_leaf: &Statement,
+) -> bool {
+    let extra_cmd_name = match extra_leaf {
+        Statement::SimpleCommand(cmd) => cmd.name.as_deref(),
+        _ => return false,
+    };
+    let extra_cmd_name = match extra_cmd_name {
+        Some(name) => name,
+        None => return false,
+    };
+
+    for leaf in original_leaves {
+        if let Statement::SimpleCommand(cmd) = leaf {
+            if let Some(entry_str) = find_allowlist_match(config, cmd) {
+                let parts: Vec<&str> = entry_str.split_whitespace().collect();
+                if parts.len() > 1 && parts[1..].contains(&extra_cmd_name) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,5 +587,111 @@ mod tests {
 
         let cmd = test_git_cmd(vec!["-C", "/tmp", "clean", "-f"]);
         assert_eq!(find_allowlist_match(&config, &cmd), None);
+    }
+
+    #[test]
+    fn test_is_covered_by_wrapper_entry_compound_entry() {
+        use crate::parser::Statement;
+
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "uv run yamllint".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let original_leaf = Statement::SimpleCommand(SimpleCommand {
+            name: Some("uv".to_string()),
+            argv: vec![
+                "run".to_string(),
+                "yamllint".to_string(),
+                ".gitlab-ci.yml".to_string(),
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let extra_leaf_covered = Statement::SimpleCommand(SimpleCommand {
+            name: Some("yamllint".to_string()),
+            argv: vec![".gitlab-ci.yml".to_string()],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let extra_leaf_not_covered = Statement::SimpleCommand(SimpleCommand {
+            name: Some("dangeroustool".to_string()),
+            argv: vec![],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let leaves = vec![&original_leaf];
+
+        assert!(
+            is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_covered),
+            "yamllint should be covered by 'uv run yamllint' entry"
+        );
+        assert!(
+            !is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_not_covered),
+            "dangeroustool should NOT be covered"
+        );
+    }
+
+    #[test]
+    fn test_is_covered_by_wrapper_entry_bare_entry_no_coverage() {
+        use crate::parser::Statement;
+
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "timeout".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let original_leaf = Statement::SimpleCommand(SimpleCommand {
+            name: Some("timeout".to_string()),
+            argv: vec!["10".to_string(), "unknown_command".to_string()],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let extra_leaf = Statement::SimpleCommand(SimpleCommand {
+            name: Some("unknown_command".to_string()),
+            argv: vec![],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let leaves = vec![&original_leaf];
+
+        assert!(
+            !is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf),
+            "Bare 'timeout' entry should NOT cover unknown_command"
+        );
     }
 }
