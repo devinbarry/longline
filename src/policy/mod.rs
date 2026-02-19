@@ -1181,4 +1181,140 @@ rules: []
         assert_eq!(result.decision, Decision::Ask);
         assert_eq!(result.reason, "No matching rule; using default decision",);
     }
+
+    #[test]
+    fn test_wrapper_allowlist_specific_entry_allows() {
+        // "uv run yamllint" allowlist entry should allow "uv run yamllint .gitlab-ci.yml"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run yamllint .gitlab-ci.yml").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Specific wrapper allowlist entry should allow matching command: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_specific_entry_rejects_different_inner() {
+        // "uv run yamllint" should NOT allow "uv run dangeroustool"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run yamllint", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run dangeroustool").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Specific wrapper allowlist should not allow different inner command: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_rules_still_deny_inner() {
+        // Even with "uv run" allowlisted, "uv run rm -rf /" should deny
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run", trust: standard }
+rules:
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting critical system path"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Rules should still catch dangerous inner commands: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_broad_entry_allows_any_inner() {
+        // Broad "timeout" allowlist should allow "timeout 30 ls"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: timeout, trust: standard }
+    - { command: ls, trust: minimal }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("timeout 30 ls").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Wrapper with allowlisted inner should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_timeout_rm_denied_by_rules() {
+        // Even with "timeout" allowlisted, "timeout 30 rm -rf /" should deny
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: timeout, trust: standard }
+rules:
+  - id: rm-recursive-root
+    level: critical
+    match:
+      command: rm
+      flags:
+        any_of: ["-r", "-R", "--recursive", "-rf", "-fr"]
+      args:
+        any_of: ["/", "/*"]
+    decision: deny
+    reason: "Recursive delete targeting critical system path"
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("timeout 30 rm -rf /").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Rules should override wrapper allowlist: {:?}",
+            result
+        );
+    }
 }
