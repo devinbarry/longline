@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.3] - 2026-02-20
+
+
+### Changed
+
+- add repository URLs to CLAUDE.md
+
+
+### Fixed
+
+- wrapper coverage check for multi-word inner command subcommands
+
 ## [0.6.2] - 2026-02-19
 
 
@@ -17,6 +29,7 @@ All notable changes to this project will be documented in this file.
 - add RED tests for wrapper allowlist bug (GitLab #1)
 - update design and plan with smarter compound-entry approach (v2)
 - add integration tests for wrapper allowlist fix (GitLab #1)
+- release v0.6.2
 
 
 ### Fixed
