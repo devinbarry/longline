@@ -5,37 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [0.6.3] - 2026-02-20
 
 
-### Changed
-
-- add repository URLs to CLAUDE.md
-
-
 ### Fixed
 
-- wrapper coverage check for multi-word inner command subcommands
+- allowlist entries for wrapped commands with multi-word subcommands (e.g. `"uv run prefect config view"`) were not matching because `is_covered_by_wrapper_entry()` only checked the last token of the entry against the inner command name; now checks all entry tokens
 
 ## [0.6.2] - 2026-02-19
 
 
 ### Added
 
-- add is_covered_by_wrapper_entry() for compound allowlist matching
-
-
-### Changed
-
-- add design for wrapper allowlist fix (GitLab #1)
-- add implementation plan for wrapper allowlist fix (GitLab #1)
-- add RED tests for wrapper allowlist bug (GitLab #1)
-- update design and plan with smarter compound-entry approach (v2)
-- add integration tests for wrapper allowlist fix (GitLab #1)
-- release v0.6.2
+- compound allowlist entry matching for transparent wrappers via `is_covered_by_wrapper_entry()` — entries like `"uv run yamllint"` now correctly allow the wrapped inner command
 
 
 ### Fixed
 
-- use compound entry coverage for wrapper allowlist check (GitLab #1)
-- update docs to match parts.last() implementation, add chained wrapper tests
+- wrapper allowlist entries were not covering unwrapped inner commands; the outer leaf and inner leaf are now both checked against compound entries (GitLab #1)
 
 ## [0.6.1] - 2026-02-18
 
