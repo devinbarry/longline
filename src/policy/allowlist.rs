@@ -163,13 +163,13 @@ pub fn find_allowlist_reason(config: &RulesConfig, cmd: &SimpleCommand) -> Optio
 /// Check if an extra_leaf (unwrapped inner command) is covered by a compound
 /// allowlist entry on one of the original leaves.
 ///
-/// For example, if the original leaf is `uv run yamllint .gitlab-ci.yml` and
-/// the allowlist entry is `"uv run yamllint"`, then the extra_leaf `yamllint`
-/// is covered because "yamllint" is the last token in the entry.
+/// For example, if the original leaf is `uv run prefect config view` and
+/// the allowlist entry is `"uv run prefect config view"`, then the extra_leaf
+/// `prefect` is covered because "prefect" appears in the entry's arguments.
 ///
-/// Only the last token is checked (not any intermediate token like "run"),
-/// which prevents intermediate wrapper args from being treated as covered
-/// inner commands.
+/// This handles both simple cases (`"uv run yamllint"` covers inner `yamllint`)
+/// and multi-word subcommand cases (`"uv run prefect config view"` covers
+/// inner `prefect`).
 ///
 /// Bare entries like `"timeout"` (no prefix args) never cover extra_leaves.
 pub fn is_covered_by_wrapper_entry(
@@ -190,7 +190,7 @@ pub fn is_covered_by_wrapper_entry(
         if let Statement::SimpleCommand(cmd) = leaf {
             if let Some(entry_str) = find_allowlist_match(config, cmd) {
                 let parts: Vec<&str> = entry_str.split_whitespace().collect();
-                if parts.len() > 1 && parts.last() == Some(&extra_cmd_name) {
+                if parts.len() > 1 && parts[1..].contains(&extra_cmd_name) {
                     return true;
                 }
             }
@@ -646,6 +646,70 @@ mod tests {
         assert!(
             is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_covered),
             "yamllint should be covered by 'uv run yamllint' entry"
+        );
+        assert!(
+            !is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_not_covered),
+            "dangeroustool should NOT be covered"
+        );
+    }
+
+    #[test]
+    fn test_is_covered_by_wrapper_entry_multi_word_subcommand() {
+        use crate::parser::Statement;
+
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "uv run prefect config view".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        // Original leaf: uv run prefect config view
+        let original_leaf = Statement::SimpleCommand(SimpleCommand {
+            name: Some("uv".to_string()),
+            argv: vec![
+                "run".to_string(),
+                "prefect".to_string(),
+                "config".to_string(),
+                "view".to_string(),
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        // Extra leaf: prefect (the unwrapped inner command)
+        let extra_leaf_covered = Statement::SimpleCommand(SimpleCommand {
+            name: Some("prefect".to_string()),
+            argv: vec!["config".to_string(), "view".to_string()],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let extra_leaf_not_covered = Statement::SimpleCommand(SimpleCommand {
+            name: Some("dangeroustool".to_string()),
+            argv: vec![],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+
+        let leaves = vec![&original_leaf];
+
+        assert!(
+            is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_covered),
+            "prefect should be covered by 'uv run prefect config view' entry"
         );
         assert!(
             !is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf_not_covered),

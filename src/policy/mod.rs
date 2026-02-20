@@ -1211,6 +1211,78 @@ rules: []
     }
 
     #[test]
+    fn test_wrapper_allowlist_multi_word_subcommand_allows() {
+        // "uv run prefect config view" should allow "uv run prefect config view"
+        // The inner command is "prefect" (not "view"), so coverage check must
+        // find "prefect" anywhere in the entry args, not just at the last position.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run prefect config view", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run prefect config view").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Multi-word subcommand wrapper entry should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_multi_word_subcommand_prefix_allows() {
+        // "uv run prefect deployment run" should allow
+        // "uv run prefect deployment run 'foo/bar' --watch"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run prefect deployment run", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run prefect deployment run 'foo/bar' --watch").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Multi-word subcommand with extra args should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_wrapper_allowlist_multi_word_rejects_different_subcommand() {
+        // "uv run prefect config view" should NOT allow "uv run prefect deployment delete"
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "uv run prefect config view", trust: standard }
+rules: []
+"#;
+        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let stmt = parse("uv run prefect deployment delete foo").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Different subcommand should not be allowed: {:?}",
+            result
+        );
+    }
+
+    #[test]
     fn test_wrapper_allowlist_specific_entry_rejects_different_inner() {
         // "uv run yamllint" should NOT allow "uv run dangeroustool"
         let yaml = r#"
