@@ -185,6 +185,8 @@ pub struct PipelineMatcher {
 #[derive(Debug, Deserialize)]
 pub struct StageMatcher {
     pub command: StringOrList,
+    #[serde(default)]
+    pub flags: Option<FlagsMatcher>,
 }
 
 #[derive(Debug, Deserialize)]
