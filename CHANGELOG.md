@@ -7,33 +7,49 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- split monolithic integration.rs (2144 lines, 86 tests) into focused test files: hook_protocol.rs (26), subcommands.rs (30), trust_safety.rs (8), wrapper_allowlist.rs (5), config_integration.rs (17)
-- add shared TestEnv builder in tests/common/mod.rs for isolated test environments with project/global config support
-
-
-### Added
-
-- 45 new config-driven integration tests covering safety level overrides, trust level overrides, allowlist extensions, disable_rules, custom project rules, config precedence, config isolation, and real-world ops/automation config regression tests
-- assert_cmd, assert_fs, predicates dev dependencies for improved test ergonomics
+- clean up changelog for v0.6.2 and v0.6.3
+- add assert_cmd, assert_fs, predicates dev dependencies
+- add shared test harness with TestEnv builder and RunResult
+- split integration.rs into focused test files
+- add config-driven integration tests for safety/trust/allowlist/rules/precedence/isolation/ops-automation
+- add integration test framework design and implementation plan
+- update changelog for v0.7.0
 
 ## [0.6.3] - 2026-02-20
 
 
+### Changed
+
+- add repository URLs to CLAUDE.md
+- release v0.6.3
+
+
 ### Fixed
 
-- allowlist entries for wrapped commands with multi-word subcommands (e.g. `"uv run prefect config view"`) were not matching because `is_covered_by_wrapper_entry()` only checked the last token of the entry against the inner command name; now checks all entry tokens
+- wrapper coverage check for multi-word inner command subcommands
 
 ## [0.6.2] - 2026-02-19
 
 
 ### Added
 
-- compound allowlist entry matching for transparent wrappers via `is_covered_by_wrapper_entry()` — entries like `"uv run yamllint"` now correctly allow the wrapped inner command
+- add is_covered_by_wrapper_entry() for compound allowlist matching
+
+
+### Changed
+
+- add design for wrapper allowlist fix (GitLab #1)
+- add implementation plan for wrapper allowlist fix (GitLab #1)
+- add RED tests for wrapper allowlist bug (GitLab #1)
+- update design and plan with smarter compound-entry approach (v2)
+- add integration tests for wrapper allowlist fix (GitLab #1)
+- release v0.6.2
 
 
 ### Fixed
 
-- wrapper allowlist entries were not covering unwrapped inner commands; the outer leaf and inner leaf are now both checked against compound entries (GitLab #1)
+- use compound entry coverage for wrapper allowlist check (GitLab #1)
+- update docs to match parts.last() implementation, add chained wrapper tests
 
 ## [0.6.1] - 2026-02-18
 
