@@ -10,6 +10,15 @@ use std::borrow::Cow;
 pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
         Statement::SimpleCommand(cmd) => {
+            // Bare assignments (no command name, just VAR=val) are safe
+            // when all their embedded substitutions are also safe.
+            if cmd.name.is_none() && !cmd.assignments.is_empty() && cmd.argv.is_empty() {
+                return cmd.embedded_substitutions.iter().all(|sub| {
+                    crate::parser::flatten(sub)
+                        .iter()
+                        .all(|inner| is_allowlisted(config, inner))
+                });
+            }
             find_allowlist_match(config, cmd).is_some() || is_version_check(cmd)
         }
         Statement::Empty => true, // Empty statements (e.g., comments) are always safe

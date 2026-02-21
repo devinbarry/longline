@@ -271,3 +271,8 @@ fn golden_network_diagnostics() {
 fn golden_wrappers() {
     run_golden_suite("wrappers.yaml");
 }
+
+#[test]
+fn golden_bare_assignments() {
+    run_golden_suite("bare-assignments.yaml");
+}

@@ -1,0 +1,99 @@
+# Bare variable assignment tests — verify that assignments like VAR=$(cmd)
+# are treated as safe when all embedded substitutions are allowlisted.
+tests:
+  # -- Safe bare assignments (allow) ----------------------------------------
+  - id: bare-assign-safe-date
+    command: "VAR=$(date)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-safe-ls
+    command: "VAR=$(ls -la)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-safe-pwd
+    command: "DIR=$(pwd)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-safe-whoami
+    command: "USER=$(whoami)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-plain-value
+    command: "VAR=hello"
+    expected:
+      decision: allow
+
+  - id: bare-assign-plain-path
+    command: "PATH=/usr/bin"
+    expected:
+      decision: allow
+
+  - id: bare-assign-pipeline-subst
+    command: "VAR=$(ls | grep foo | sort)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-git-subst
+    command: "BRANCH=$(git branch --show-current)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-wc-subst
+    command: "COUNT=$(wc -l < file.txt)"
+    expected:
+      decision: allow
+
+  - id: bare-assign-backtick-safe
+    command: "VAR=`date`"
+    expected:
+      decision: allow
+
+  # -- Bare assignment chained with safe commands (allow) --------------------
+  - id: bare-assign-chain-echo
+    command: "RESULT=$(grep foo bar) && echo $RESULT"
+    expected:
+      decision: allow
+
+  - id: bare-assign-chain-multiple
+    command: "A=$(date) && B=$(pwd) && echo $A $B"
+    expected:
+      decision: allow
+
+  - id: bare-assign-semicolon-chain
+    command: "A=$(date); B=$(pwd)"
+    expected:
+      decision: allow
+
+  # -- Dangerous bare assignments (deny) ------------------------------------
+  - id: bare-assign-deny-rm
+    command: "VAR=$(rm -rf /)"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+
+  - id: bare-assign-deny-cat-env
+    command: "SECRET=$(cat .env)"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  - id: bare-assign-deny-cat-ssh
+    command: "KEY=$(cat ~/.ssh/id_rsa)"
+    expected:
+      decision: deny
+      rule_id: cat-ssh-key
+
+  # -- Unknown command in bare assignment (ask) -----------------------------
+  - id: bare-assign-ask-unknown
+    command: "VAR=$(unknown_tool)"
+    expected:
+      decision: ask
+
+  - id: bare-assign-ask-unknown-pipeline
+    command: "VAR=$(unknown_tool | grep foo)"
+    expected:
+      decision: ask

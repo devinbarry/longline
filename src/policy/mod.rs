@@ -1452,4 +1452,97 @@ rules: []
             result
         );
     }
+
+    // --- Bare assignment policy tests ---
+
+    #[test]
+    fn test_bare_assignment_safe_substitution_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("VAR=$(date)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Bare assignment with allowlisted substitution should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_dangerous_substitution_denies() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("VAR=$(rm -rf /)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Bare assignment with dangerous substitution should deny: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_no_substitution_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("VAR=hello").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Plain bare assignment without substitution should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_with_pipeline_substitution_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("VAR=$(ls | grep foo | sort)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Bare assignment with pipeline of allowlisted commands should allow: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_with_unknown_command_asks() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("VAR=$(unknown_tool)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "Bare assignment with unknown command should ask: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_secrets_denies() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("SECRET=$(cat .env)").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Deny,
+            "Bare assignment reading secrets should deny: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_bare_assignment_chain_allows() {
+        let config = load_rules(Path::new("rules/rules.yaml")).unwrap();
+        let stmt = parse("RESULT=$(grep foo bar) && echo $RESULT").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "Bare assignment chained with safe command should allow: {:?}",
+            result
+        );
+    }
 }
