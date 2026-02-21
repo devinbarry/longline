@@ -22,8 +22,12 @@ release-prep level:
     NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
     echo "New version: $NEW_VERSION"
 
-    # Bump version in Cargo.toml
-    sed -i '' "s/^version = \"$OLD_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+    # Bump version in Cargo.toml (compatible with both macOS and Linux sed)
+    if [[ "$OSTYPE" == darwin* ]]; then
+        sed -i '' "s/^version = \"$OLD_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+    else
+        sed -i "s/^version = \"$OLD_VERSION\"/version = \"$NEW_VERSION\"/" Cargo.toml
+    fi
     cargo check --quiet 2>/dev/null  # update Cargo.lock
 
     # Generate changelog draft to stdout for reference
