@@ -30,8 +30,24 @@ rules:
               any_of: [curl, wget]
           - command:
               any_of: [python, python3, ruby, perl, node]
+            flags:
+              none_of: ["-m", "-c", "-e"]
     decision: deny
     reason: "Remote code execution: piping download to interpreter"
+
+  - id: curl-pipe-interpreter-inline
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [python, python3, ruby, perl, node]
+            flags:
+              any_of: ["-c", "-e"]
+    decision: ask
+    reason: "Inline interpreter code piped from download"
 
   # ============================================================
   # HIGH: Exfiltration

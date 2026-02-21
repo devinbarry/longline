@@ -130,12 +130,16 @@ pub fn matches_pipeline(matcher: &PipelineMatcher, pipe: &parser::Pipeline) -> b
         if let Statement::SimpleCommand(cmd) = stage {
             if let Some(ref name) = cmd.name {
                 let basename = normalize_command_name(name);
-                if matcher.stages[matcher_idx].command.matches(basename) {
+                if matcher.stages[matcher_idx].command.matches(basename)
+                    && stage_flags_match(&matcher.stages[matcher_idx], cmd)
+                {
                     matcher_idx += 1;
                 } else if let Some(inner) = crate::parser::wrappers::unwrap_transparent(cmd) {
                     if let Some(ref inner_name) = inner.name {
                         let inner_basename = normalize_command_name(inner_name);
-                        if matcher.stages[matcher_idx].command.matches(inner_basename) {
+                        if matcher.stages[matcher_idx].command.matches(inner_basename)
+                            && stage_flags_match(&matcher.stages[matcher_idx], &inner)
+                        {
                             matcher_idx += 1;
                         }
                     }
@@ -144,6 +148,59 @@ pub fn matches_pipeline(matcher: &PipelineMatcher, pipe: &parser::Pipeline) -> b
         }
     }
     matcher_idx == matcher.stages.len()
+}
+
+/// Check if a stage matcher's flags constraints are satisfied by a command.
+fn stage_flags_match(stage: &super::config::StageMatcher, cmd: &SimpleCommand) -> bool {
+    let Some(ref flags_matcher) = stage.flags else {
+        return true; // No flags constraint means any flags are fine
+    };
+
+    // any_of: at least one of these flags must be present
+    if !flags_matcher.any_of.is_empty() {
+        let has_any = flags_matcher
+            .any_of
+            .iter()
+            .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
+        if !has_any {
+            return false;
+        }
+    }
+
+    // all_of: all of these flags must be present
+    if !flags_matcher.all_of.is_empty() {
+        let has_all = flags_matcher
+            .all_of
+            .iter()
+            .all(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
+        if !has_all {
+            return false;
+        }
+    }
+
+    // none_of: none of these flags may be present
+    if !flags_matcher.none_of.is_empty() {
+        let has_any_excluded = flags_matcher
+            .none_of
+            .iter()
+            .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
+        if has_any_excluded {
+            return false;
+        }
+    }
+
+    // starts_with: at least one arg must start with one of these prefixes
+    if !flags_matcher.starts_with.is_empty() {
+        let has_prefix = flags_matcher
+            .starts_with
+            .iter()
+            .any(|prefix| cmd.argv.iter().any(|a| a.starts_with(prefix)));
+        if !has_prefix {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Check if any of the command's redirects match the redirect matcher.
