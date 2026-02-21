@@ -271,7 +271,7 @@ pub fn load_project_config(cwd: &Path) -> Result<Option<ProjectConfig>, String> 
         Ok(c) => c,
         Err(_) => return Ok(None), // File doesn't exist
     };
-    let config: ProjectConfig = serde_yaml::from_str(&content)
+    let config: ProjectConfig = serde_norway::from_str(&content)
         .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
     Ok(Some(config))
 }
@@ -284,7 +284,7 @@ pub fn load_global_config(home: &Path) -> Result<Option<ProjectConfig>, String> 
         Ok(c) => c,
         Err(_) => return Ok(None),
     };
-    let config: ProjectConfig = serde_yaml::from_str(&content)
+    let config: ProjectConfig = serde_norway::from_str(&content)
         .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
     Ok(Some(config))
 }
@@ -336,7 +336,7 @@ pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
     if is_rules_manifest(&content) {
         load_rules_manifest(path, &content)
     } else {
-        let config: RulesConfig = serde_yaml::from_str(&content)
+        let config: RulesConfig = serde_norway::from_str(&content)
             .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
         Ok(config)
     }
@@ -344,7 +344,7 @@ pub fn load_rules(path: &Path) -> Result<RulesConfig, String> {
 
 /// Load a rules manifest file and merge all included files.
 fn load_rules_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfig, String> {
-    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+    let manifest: RulesManifestConfig = serde_norway::from_str(content)
         .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
@@ -357,7 +357,7 @@ fn load_rules_manifest(manifest_path: &Path, content: &str) -> Result<RulesConfi
         let file_content = fs::read_to_string(&file_path)
             .map_err(|e| format!("Failed to read included file {}: {e}", file_path.display()))?;
 
-        let partial: PartialRulesConfig = serde_yaml::from_str(&file_content)
+        let partial: PartialRulesConfig = serde_norway::from_str(&file_content)
             .map_err(|e| format!("Failed to parse included file {}: {e}", file_path.display()))?;
 
         merged_allowlists.extend(partial.allowlists.commands);
@@ -382,7 +382,7 @@ pub fn load_embedded_rules() -> Result<RulesConfig, String> {
     let content = crate::embedded_rules::get("rules.yaml")
         .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
 
-    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+    let manifest: RulesManifestConfig = serde_norway::from_str(content)
         .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
 
     let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
@@ -392,7 +392,7 @@ pub fn load_embedded_rules() -> Result<RulesConfig, String> {
         let file_content = crate::embedded_rules::get(file_name)
             .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
 
-        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+        let partial: PartialRulesConfig = serde_norway::from_str(file_content)
             .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
 
         merged_allowlists.extend(partial.allowlists.commands);
@@ -417,7 +417,7 @@ pub fn load_embedded_rules_with_info() -> Result<LoadedConfig, String> {
     let content = crate::embedded_rules::get("rules.yaml")
         .ok_or_else(|| "Embedded rules.yaml not found".to_string())?;
 
-    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+    let manifest: RulesManifestConfig = serde_norway::from_str(content)
         .map_err(|e| format!("Failed to parse embedded rules.yaml: {e}"))?;
 
     let mut merged_allowlists: Vec<AllowlistEntry> = Vec::new();
@@ -428,7 +428,7 @@ pub fn load_embedded_rules_with_info() -> Result<LoadedConfig, String> {
         let file_content = crate::embedded_rules::get(file_name)
             .ok_or_else(|| format!("Embedded file '{}' not found", file_name))?;
 
-        let partial: PartialRulesConfig = serde_yaml::from_str(file_content)
+        let partial: PartialRulesConfig = serde_norway::from_str(file_content)
             .map_err(|e| format!("Failed to parse embedded file {}: {e}", file_name))?;
 
         let trust_counts = compute_trust_counts(&partial.allowlists.commands);
@@ -487,7 +487,7 @@ pub fn load_rules_with_info(path: &Path) -> Result<LoadedConfig, String> {
     if is_rules_manifest(&content) {
         load_rules_manifest_with_info(path, &content)
     } else {
-        let config: RulesConfig = serde_yaml::from_str(&content)
+        let config: RulesConfig = serde_norway::from_str(&content)
             .map_err(|e| format!("Failed to parse rules file {}: {e}", path.display()))?;
         let trust_counts = compute_trust_counts(&config.allowlists.commands);
         Ok(LoadedConfig {
@@ -512,7 +512,7 @@ fn load_rules_manifest_with_info(
     manifest_path: &Path,
     content: &str,
 ) -> Result<LoadedConfig, String> {
-    let manifest: RulesManifestConfig = serde_yaml::from_str(content)
+    let manifest: RulesManifestConfig = serde_norway::from_str(content)
         .map_err(|e| format!("Failed to parse manifest {}: {e}", manifest_path.display()))?;
 
     let manifest_dir = manifest_path.parent().unwrap_or(Path::new("."));
@@ -526,7 +526,7 @@ fn load_rules_manifest_with_info(
         let file_content = fs::read_to_string(&file_path)
             .map_err(|e| format!("Failed to read included file {}: {e}", file_path.display()))?;
 
-        let partial: PartialRulesConfig = serde_yaml::from_str(&file_content)
+        let partial: PartialRulesConfig = serde_norway::from_str(&file_content)
             .map_err(|e| format!("Failed to parse included file {}: {e}", file_path.display()))?;
 
         let trust_counts = compute_trust_counts(&partial.allowlists.commands);
@@ -598,7 +598,7 @@ rules:
     decision: deny
     reason: "Remote code execution: piping download to shell"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.version, 1);
         assert_eq!(config.default_decision, Decision::Ask);
         assert_eq!(config.safety_level, SafetyLevel::High);
@@ -635,7 +635,7 @@ rules:
     #[test]
     fn test_minimal_rules_config() {
         let yaml = "version: 1\nrules: []\n";
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.default_decision, Decision::Ask);
         assert_eq!(config.safety_level, SafetyLevel::High);
         assert!(config.rules.is_empty());
@@ -657,7 +657,7 @@ rules:
     decision: deny
     reason: "Writing directly to disk device"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.rules.len(), 1);
         assert_eq!(config.rules[0].id, "write-to-dev");
     }
@@ -687,7 +687,7 @@ include:
   - core.yaml
   - git.yaml
 "#;
-        let config: RulesManifestConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesManifestConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.include.len(), 2);
         assert_eq!(config.include[0], "core.yaml");
     }
@@ -707,7 +707,7 @@ rules:
     decision: ask
     reason: "Test rule"
 "#;
-        let config: PartialRulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: PartialRulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.allowlists.commands.len(), 2);
         assert_eq!(config.rules.len(), 1);
     }
@@ -888,7 +888,7 @@ disable_rules:
   - npm-install
   - npx-run
 "#;
-        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.override_safety_level, Some(SafetyLevel::Strict));
         assert_eq!(config.allowlists.as_ref().unwrap().commands.len(), 1);
         assert_eq!(config.rules.as_ref().unwrap().len(), 1);
@@ -898,7 +898,7 @@ disable_rules:
     #[test]
     fn test_project_config_empty() {
         let yaml = "{}";
-        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
         assert!(config.override_safety_level.is_none());
         assert!(config.allowlists.is_none());
         assert!(config.rules.is_none());
@@ -908,7 +908,7 @@ disable_rules:
     #[test]
     fn test_project_config_partial() {
         let yaml = "override_safety_level: critical\n";
-        let config: ProjectConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.override_safety_level, Some(SafetyLevel::Critical));
         assert!(config.allowlists.is_none());
     }
@@ -1176,7 +1176,7 @@ rules:
     decision: allow
     reason: "Project allows docker"
 "#;
-        let project: ProjectConfig = serde_yaml::from_str(project_yaml).unwrap();
+        let project: ProjectConfig = serde_norway::from_str(project_yaml).unwrap();
         merge_project_config(&mut config, project);
         assert_eq!(config.rules.len(), 1);
         assert_eq!(config.rules[0].id, "project-rule");
@@ -1221,18 +1221,18 @@ rules:
 
     #[test]
     fn test_trust_level_deserialize() {
-        let level: TrustLevel = serde_yaml::from_str("minimal").unwrap();
+        let level: TrustLevel = serde_norway::from_str("minimal").unwrap();
         assert_eq!(level, TrustLevel::Minimal);
-        let level: TrustLevel = serde_yaml::from_str("standard").unwrap();
+        let level: TrustLevel = serde_norway::from_str("standard").unwrap();
         assert_eq!(level, TrustLevel::Standard);
-        let level: TrustLevel = serde_yaml::from_str("full").unwrap();
+        let level: TrustLevel = serde_norway::from_str("full").unwrap();
         assert_eq!(level, TrustLevel::Full);
     }
 
     #[test]
     fn test_allowlist_entry_deserialize_tagged() {
         let yaml = "command: \"git status\"\ntrust: minimal\n";
-        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        let entry: AllowlistEntry = serde_norway::from_str(yaml).unwrap();
         assert_eq!(entry.command, "git status");
         assert_eq!(entry.trust, TrustLevel::Minimal);
     }
@@ -1240,7 +1240,7 @@ rules:
     #[test]
     fn test_allowlist_entry_deserialize_with_reason() {
         let yaml = "command: \"git push\"\ntrust: full\nreason: \"Pushes local commits to a remote repository\"\n";
-        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        let entry: AllowlistEntry = serde_norway::from_str(yaml).unwrap();
         assert_eq!(entry.command, "git push");
         assert_eq!(entry.trust, TrustLevel::Full);
         assert_eq!(
@@ -1252,35 +1252,35 @@ rules:
     #[test]
     fn test_allowlist_entry_deserialize_without_reason() {
         let yaml = "command: ls\ntrust: minimal\n";
-        let entry: AllowlistEntry = serde_yaml::from_str(yaml).unwrap();
+        let entry: AllowlistEntry = serde_norway::from_str(yaml).unwrap();
         assert_eq!(entry.command, "ls");
         assert_eq!(entry.reason, None);
     }
 
     #[test]
     fn test_allowlist_entry_rejects_bare_string() {
-        let result: Result<AllowlistEntry, _> = serde_yaml::from_str("ls");
+        let result: Result<AllowlistEntry, _> = serde_norway::from_str("ls");
         assert!(result.is_err(), "Bare strings should be rejected");
     }
 
     #[test]
     fn test_allowlist_entry_requires_trust_field() {
         let yaml = "command: \"ls\"\n";
-        let result: Result<AllowlistEntry, _> = serde_yaml::from_str(yaml);
+        let result: Result<AllowlistEntry, _> = serde_norway::from_str(yaml);
         assert!(result.is_err(), "Missing trust field should be rejected");
     }
 
     #[test]
     fn test_rules_config_trust_level_default() {
         let yaml = "version: 1\nallowlists:\n  commands: []\nrules: []\n";
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.trust_level, TrustLevel::Standard);
     }
 
     #[test]
     fn test_rules_config_trust_level_explicit() {
         let yaml = "version: 1\ntrust_level: minimal\nallowlists:\n  commands: []\nrules: []\n";
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.trust_level, TrustLevel::Minimal);
     }
 
@@ -1337,7 +1337,7 @@ rules:
     decision: ask
     reason: "Test"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.rules[0].source, RuleSource::BuiltIn);
     }
 
@@ -1360,7 +1360,7 @@ rules:
     decision: allow
     reason: "Project allows docker"
 "#;
-        let project: ProjectConfig = serde_yaml::from_str(project_yaml).unwrap();
+        let project: ProjectConfig = serde_norway::from_str(project_yaml).unwrap();
         merge_project_config(&mut config, project);
         assert_eq!(config.rules[0].source, RuleSource::Project);
     }
@@ -1466,7 +1466,7 @@ rules:
     decision: allow
     reason: "Test"
 "#;
-        let overlay: ProjectConfig = serde_yaml::from_str(overlay_yaml).unwrap();
+        let overlay: ProjectConfig = serde_norway::from_str(overlay_yaml).unwrap();
         merge_overlay_config(&mut config, overlay, RuleSource::Global);
         assert_eq!(config.allowlists.commands[0].source, RuleSource::Global);
         assert_eq!(config.rules[0].source, RuleSource::Global);

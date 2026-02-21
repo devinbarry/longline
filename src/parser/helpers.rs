@@ -76,7 +76,7 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
     let mut substitutions = Vec::new();
 
     let child_count = node.child_count();
-    for i in 0..child_count {
+    for i in 0..child_count as u32 {
         let child = node.child(i).unwrap();
         match child.kind() {
             "file_descriptor" => {

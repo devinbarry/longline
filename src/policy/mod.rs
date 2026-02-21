@@ -244,7 +244,7 @@ rules:
     decision: ask
     reason: "Setting world-writable permissions"
 "#;
-        serde_yaml::from_str(yaml).unwrap()
+        serde_norway::from_str(yaml).unwrap()
     }
 
     #[test]
@@ -341,7 +341,7 @@ rules:
     decision: ask
     reason: "Setting world-writable permissions"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("chmod 777 /tmp/file").unwrap();
         let result = evaluate(&config, &stmt);
         // The high-level rule should be skipped at critical safety level,
@@ -375,7 +375,7 @@ rules:
     decision: deny
     reason: "Reading sensitive environment file"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("cat .env").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -431,7 +431,7 @@ rules:
     decision: deny
     reason: "Reading sensitive environment file"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("cat README.md").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -500,7 +500,7 @@ rules:
     decision: ask
     reason: "gzip removes original file by default"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         // No safe flags present - rule should match
         let stmt = parse("gzip file.txt").unwrap();
         let result = evaluate(&config, &stmt);
@@ -526,7 +526,7 @@ rules:
     decision: ask
     reason: "gzip removes original file by default"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         // Safe flag present - rule should NOT match
         let stmt = parse("gzip -k file.txt").unwrap();
         let result = evaluate(&config, &stmt);
@@ -552,7 +552,7 @@ rules:
     decision: ask
     reason: "gzip removes original file by default"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         // --keep flag present - rule should NOT match
         let stmt = parse("gzip --keep file.txt").unwrap();
         let result = evaluate(&config, &stmt);
@@ -579,7 +579,7 @@ rules:
     decision: ask
     reason: "has -a but not -b"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // Has -a but no -b - should match
         let stmt = parse("mycmd -a file.txt").unwrap();
@@ -615,7 +615,7 @@ rules:
     decision: ask
     reason: "unzip extraction can overwrite files"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // List operation - safe, rule should NOT match
         let stmt = parse("unzip -l archive.zip").unwrap();
@@ -648,7 +648,7 @@ rules:
     decision: ask
     reason: "tar extraction can overwrite files"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // Exact match with -x
         let stmt = parse("tar -x archive.tar").unwrap();
@@ -675,7 +675,7 @@ rules:
     decision: ask
     reason: "tar extraction can overwrite files"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // Combined flag -xf should match starts_with "-x"
         let stmt = parse("tar -xf archive.tar").unwrap();
@@ -711,7 +711,7 @@ rules:
     decision: ask
     reason: "tar extraction can overwrite files"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // -t (list) should NOT match starts_with "-x"
         let stmt = parse("tar -tf archive.tar").unwrap();
@@ -742,7 +742,7 @@ rules:
     decision: ask
     reason: "tar extraction can overwrite files"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // Long flag --extract should match
         let stmt = parse("tar --extract -f archive.tar").unwrap();
@@ -768,7 +768,7 @@ rules:
     decision: ask
     reason: "sed -i modifies files in place"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // -i should match
         let stmt = parse("sed -i 's/a/b/' file.txt").unwrap();
@@ -806,7 +806,7 @@ rules:
     decision: ask
     reason: "tar extract without verbose"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
 
         // -xf (has -x prefix, no -v) should match
         let stmt = parse("tar -xf archive.tar").unwrap();
@@ -1089,7 +1089,7 @@ allowlists:
     - { command: ls, trust: minimal }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("env FOO=bar ls").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -1118,7 +1118,7 @@ allowlists:
     - { command: ls, trust: minimal }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("env VAR=1 timeout 30 ls").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
@@ -1199,7 +1199,7 @@ allowlists:
     - { command: "uv run yamllint", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run yamllint .gitlab-ci.yml").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1224,7 +1224,7 @@ allowlists:
     - { command: "uv run prefect config view", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run prefect config view").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1248,7 +1248,7 @@ allowlists:
     - { command: "uv run prefect deployment run", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run prefect deployment run 'foo/bar' --watch").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1271,7 +1271,7 @@ allowlists:
     - { command: "uv run prefect config view", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run prefect deployment delete foo").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1294,7 +1294,7 @@ allowlists:
     - { command: "uv run yamllint", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run dangeroustool").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1327,7 +1327,7 @@ rules:
     decision: deny
     reason: "Recursive delete targeting critical system path"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("uv run rm -rf /").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1351,7 +1351,7 @@ allowlists:
     - { command: ls, trust: minimal }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("timeout 30 ls").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1384,7 +1384,7 @@ rules:
     decision: deny
     reason: "Recursive delete targeting critical system path"
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("timeout 30 rm -rf /").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1410,7 +1410,7 @@ allowlists:
     - { command: "uv run yamllint", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
@@ -1442,7 +1442,7 @@ allowlists:
     - { command: "uv run yamllint", trust: standard }
 rules: []
 "#;
-        let config: RulesConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         let stmt = parse("env VAR=val uv run yamllint .gitlab-ci.yml").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(
