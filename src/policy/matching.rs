@@ -228,6 +228,26 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
 #[cfg(test)]
 mod tests {
     use super::arg_matches_flag;
+    use super::matches_pipeline;
+    use crate::policy::config::{FlagsMatcher, PipelineMatcher, StageMatcher, StringOrList};
+
+    fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {
+        crate::parser::Pipeline {
+            stages: commands
+                .iter()
+                .map(|c| {
+                    let parsed = crate::parser::parse(c).unwrap();
+                    match parsed {
+                        crate::parser::Statement::Pipeline(p) => {
+                            p.stages.into_iter().next().unwrap()
+                        }
+                        other => other,
+                    }
+                })
+                .collect(),
+            negated: false,
+        }
+    }
 
     #[test]
     fn test_arg_matches_flag_exact_match() {
@@ -250,5 +270,173 @@ mod tests {
         assert!(arg_matches_flag("-fd", "-f"));
         assert!(arg_matches_flag("-fd", "-d"));
         assert!(!arg_matches_flag("-n", "-f"));
+    }
+
+    #[test]
+    fn test_pipeline_stage_none_of_excludes_when_flag_present() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["curl".into(), "wget".into()],
+                    },
+                    flags: None,
+                },
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["python".into(), "python3".into()],
+                    },
+                    flags: Some(FlagsMatcher {
+                        none_of: vec!["-m".into(), "-c".into()],
+                        any_of: vec![],
+                        all_of: vec![],
+                        starts_with: vec![],
+                    }),
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl http://example.com", "python3 -m json.tool"]);
+        assert!(
+            !matches_pipeline(&matcher, &pipe),
+            "Should NOT match: python3 has -m flag which is in none_of"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_stage_none_of_matches_when_flag_absent() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["curl".into(), "wget".into()],
+                    },
+                    flags: None,
+                },
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["python".into(), "python3".into()],
+                    },
+                    flags: Some(FlagsMatcher {
+                        none_of: vec!["-m".into(), "-c".into()],
+                        any_of: vec![],
+                        all_of: vec![],
+                        starts_with: vec![],
+                    }),
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl http://example.com", "python3"]);
+        assert!(
+            matches_pipeline(&matcher, &pipe),
+            "Should match: bare python3 has no excluded flags"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_stage_any_of_matches_when_flag_present() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["curl".into(), "wget".into()],
+                    },
+                    flags: None,
+                },
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["python".into(), "python3".into()],
+                    },
+                    flags: Some(FlagsMatcher {
+                        any_of: vec!["-c".into(), "-e".into()],
+                        none_of: vec![],
+                        all_of: vec![],
+                        starts_with: vec![],
+                    }),
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl http://example.com", "python3 -c 'print(1)'"]);
+        assert!(
+            matches_pipeline(&matcher, &pipe),
+            "Should match: python3 has -c flag"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_stage_any_of_no_match_when_flag_absent() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["curl".into(), "wget".into()],
+                    },
+                    flags: None,
+                },
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["python".into(), "python3".into()],
+                    },
+                    flags: Some(FlagsMatcher {
+                        any_of: vec!["-c".into(), "-e".into()],
+                        none_of: vec![],
+                        all_of: vec![],
+                        starts_with: vec![],
+                    }),
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl http://example.com", "python3 -m json.tool"]);
+        assert!(
+            !matches_pipeline(&matcher, &pipe),
+            "Should NOT match: python3 has -m not -c/-e"
+        );
+    }
+
+    #[test]
+    fn test_pipeline_stage_flags_on_first_stage() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::Single("curl".into()),
+                    flags: Some(FlagsMatcher {
+                        any_of: vec!["-s".into()],
+                        none_of: vec![],
+                        all_of: vec![],
+                        starts_with: vec![],
+                    }),
+                },
+                StageMatcher {
+                    command: StringOrList::Single("python3".into()),
+                    flags: None,
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl -s http://example.com", "python3"]);
+        assert!(matches_pipeline(&matcher, &pipe));
+
+        let pipe_no_s = make_pipeline(&["curl http://example.com", "python3"]);
+        assert!(!matches_pipeline(&matcher, &pipe_no_s));
+    }
+
+    #[test]
+    fn test_pipeline_no_flags_backward_compatible() {
+        let matcher = PipelineMatcher {
+            stages: vec![
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["curl".into(), "wget".into()],
+                    },
+                    flags: None,
+                },
+                StageMatcher {
+                    command: StringOrList::List {
+                        any_of: vec!["sh".into(), "bash".into()],
+                    },
+                    flags: None,
+                },
+            ],
+        };
+        let pipe = make_pipeline(&["curl http://example.com", "bash"]);
+        assert!(matches_pipeline(&matcher, &pipe));
     }
 }
