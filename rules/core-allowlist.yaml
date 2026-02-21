@@ -102,6 +102,7 @@ allowlists:
     - { command: javac, trust: standard, reason: "Compiles Java source files" }
     # ── Always safe: filesystem ops (secrets caught by rules) ─────
     - { command: mkdir, trust: standard, reason: "Creates directories" }
+    - { command: mktemp, trust: standard, reason: "Creates temporary files or directories" }
     - { command: touch, trust: standard, reason: "Creates files or updates timestamps" }
     - { command: ln, trust: standard, reason: "Creates hard or symbolic links" }
     - { command: cp, trust: standard, reason: "Copies files and directories" }
