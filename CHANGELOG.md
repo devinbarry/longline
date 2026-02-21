@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-02-21
+
+### Fixed
+
+- Release process: `git-cliff -o` was regenerating the entire changelog from commit messages on every release, destroying manually curated entries (happened at v0.1.13, v0.4.1, v0.5.1, v0.7.0)
+- Split `just release` into `just release-prep` / `just release-finish` so changelog edits and diffs can be reviewed before committing
+- Restored all manually curated changelog entries lost across 4 releases
+
 ## [0.7.0] - 2026-02-21
 
 Integration test framework overhaul. Split monolithic test file into focused modules and added 45 new config-driven integration tests.
