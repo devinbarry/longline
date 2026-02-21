@@ -1473,4 +1473,60 @@ rules:
         assert_eq!(config.allowlists.commands[0].source, RuleSource::Global);
         assert_eq!(config.rules[0].source, RuleSource::Global);
     }
+
+    #[test]
+    fn test_stage_matcher_with_flags_deserialization() {
+        let yaml = r#"
+version: 1
+rules:
+  - id: pipe-with-flags
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [python, python3]
+            flags:
+              none_of: ["-m", "-c"]
+    decision: deny
+    reason: "Test rule"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].id, "pipe-with-flags");
+        // Verify flags are actually captured, not silently dropped
+        if let Matcher::Pipeline { ref pipeline } = config.rules[0].matcher {
+            assert!(pipeline.stages[0].flags.is_none());
+            let flags = pipeline.stages[1]
+                .flags
+                .as_ref()
+                .expect("second stage should have flags");
+            assert_eq!(flags.none_of, vec!["-m", "-c"]);
+        } else {
+            panic!("Expected pipeline matcher");
+        }
+    }
+
+    #[test]
+    fn test_stage_matcher_without_flags_still_works() {
+        let yaml = r#"
+version: 1
+rules:
+  - id: pipe-no-flags
+    level: critical
+    match:
+      pipeline:
+        stages:
+          - command:
+              any_of: [curl, wget]
+          - command:
+              any_of: [sh, bash]
+    decision: deny
+    reason: "Test rule"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        assert_eq!(config.rules.len(), 1);
+    }
 }
