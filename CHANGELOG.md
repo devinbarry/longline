@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-02-21
+
+### Fixed
+
+- Bare variable assignments like `VAR=$(date)` and `OLD=$(git show ... | sed ... | sort)` were always getting "ask" even when all embedded commands are allowlisted. The `is_allowlisted()` check requires a command name, but bare assignments have no command name. Now bare assignments are treated as safe when all their embedded substitutions pass the allowlist check. Dangerous substitutions like `VAR=$(cat .env)` still correctly deny.
+
+### Added
+
+- `mktemp` added to core allowlist (was missing, caused unnecessary "ask" on temp-dir setup scripts)
+- 16 golden tests and 12 integration tests for bare assignment handling, including real-world scripts from production logs
+
 ## [0.7.1] - 2026-02-21
 
 ### Fixed
