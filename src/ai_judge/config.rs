@@ -91,7 +91,7 @@ fn load_config_from_path(path: &Path) -> AiJudgeConfig {
         return default_config();
     }
     match std::fs::read_to_string(path) {
-        Ok(content) => serde_yaml::from_str(&content).unwrap_or_else(|e| {
+        Ok(content) => serde_norway::from_str(&content).unwrap_or_else(|e| {
             eprintln!("longline: failed to parse ai-judge config: {e}");
             default_config()
         }),
@@ -124,7 +124,7 @@ triggers:
     - name: [python, python3]
       inline_flag: "-c"
 "#;
-        let config: AiJudgeConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: AiJudgeConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.command, "claude -p");
         assert_eq!(config.timeout, 10);
         assert_eq!(config.triggers.interpreters.len(), 1);
@@ -138,7 +138,7 @@ triggers:
     #[test]
     fn test_config_defaults() {
         let yaml = "{}";
-        let config: AiJudgeConfig = serde_yaml::from_str(yaml).unwrap();
+        let config: AiJudgeConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(
             config.command,
             "codex exec -m gpt-5.1-codex-mini -c model_reasoning_effort=medium"

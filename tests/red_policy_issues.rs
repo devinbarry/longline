@@ -31,7 +31,7 @@ allowlists:
 rules: []
 "#;
 
-    let parsed: Result<policy::RulesConfig, serde_yaml::Error> = serde_yaml::from_str(yaml);
+    let parsed: Result<policy::RulesConfig, serde_norway::Error> = serde_norway::from_str(yaml);
     assert!(parsed.is_err(), "RulesConfig should reject unknown fields");
 }
 

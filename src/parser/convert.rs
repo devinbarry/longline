@@ -147,7 +147,7 @@ fn convert_list(node: Node, source: &str) -> Statement {
     let mut operators: Vec<ListOp> = Vec::new();
 
     let child_count = node.child_count();
-    for i in 0..child_count {
+    for i in 0..child_count as u32 {
         let child = node.child(i).unwrap();
         if child.is_named() {
             items.push(convert_node(child, source));
