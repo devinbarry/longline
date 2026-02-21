@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.3] - 2026-02-21
+
+### Changed
+
+- Upgrade tree-sitter 0.24→0.26 and tree-sitter-bash 0.23→0.25 for improved error recovery, grammar correctness fixes (arithmetic expansion parsing), and continued upstream maintenance
+- Replace deprecated `serde_yaml` with `serde_norway`, a maintained fork recommended by RustSec (RUSTSEC-2025-0068)
+- Update all transitive dependencies to latest compatible versions
+
+### Fixed
+
+- `just release-prep` sed command now works on both macOS and Linux
+
 ## [0.7.2] - 2026-02-21
 
 ### Fixed
