@@ -4,4 +4,5 @@ sign-tag = false
 push = false
 tag-name = "v{{version}}"
 pre-release-commit-message = "chore: release v{{version}}"
-pre-release-hook = ["git-cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
+# Changelog is maintained manually; do not auto-generate.
+# pre-release-hook = ["git-cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]
