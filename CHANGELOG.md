@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-02-21
+
+
+### Changed
+
+- split monolithic integration.rs (2144 lines, 86 tests) into focused test files: hook_protocol.rs (26), subcommands.rs (30), trust_safety.rs (8), wrapper_allowlist.rs (5), config_integration.rs (17)
+- add shared TestEnv builder in tests/common/mod.rs for isolated test environments with project/global config support
+
+
+### Added
+
+- 45 new config-driven integration tests covering safety level overrides, trust level overrides, allowlist extensions, disable_rules, custom project rules, config precedence, config isolation, and real-world ops/automation config regression tests
+- assert_cmd, assert_fs, predicates dev dependencies for improved test ergonomics
+
 ## [0.6.3] - 2026-02-20
 
 
