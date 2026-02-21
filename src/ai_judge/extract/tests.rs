@@ -373,3 +373,59 @@ fn test_no_extract_django_shell_pipeline_cat_file_outside_allowed_roots() {
     let result = extract_code(cmd, &stmt, "/tmp", &config);
     assert!(result.is_none(), "Should not read files outside cwd/tmp");
 }
+
+// ============================================================
+// Pipeline network context enrichment tests
+// ============================================================
+
+#[test]
+fn test_pipeline_extraction_includes_context_for_curl() {
+    let config = crate::ai_judge::load_config();
+    let raw = "curl -s https://api.example.com/data | python3 -c 'import json,sys; print(json.load(sys.stdin))'";
+    let stmt = crate::parser::parse(raw).unwrap();
+    let extracted = super::extract_code(raw, &stmt, "/tmp", &config);
+    assert!(
+        extracted.is_some(),
+        "Should extract inline code from pipeline"
+    );
+    let extracted = extracted.unwrap();
+    assert_eq!(extracted.language, "python3");
+    assert!(extracted.code.contains("json"));
+    assert!(
+        extracted.context.is_some(),
+        "Pipeline with curl should set context"
+    );
+    let ctx = extracted.context.unwrap();
+    assert!(
+        ctx.contains("curl") || ctx.contains("network") || ctx.contains("download"),
+        "Context should mention the network data source: {ctx}"
+    );
+}
+
+#[test]
+fn test_non_pipeline_extraction_no_spurious_context() {
+    let config = crate::ai_judge::load_config();
+    let raw = "python3 -c 'print(1)'";
+    let stmt = crate::parser::parse(raw).unwrap();
+    let extracted = super::extract_code(raw, &stmt, "/tmp", &config);
+    assert!(extracted.is_some());
+    let extracted = extracted.unwrap();
+    assert!(
+        extracted.context.is_none(),
+        "Non-pipeline command should not get spurious context"
+    );
+}
+
+#[test]
+fn test_safe_pipeline_extraction_no_network_context() {
+    let config = crate::ai_judge::load_config();
+    let raw = "grep foo bar | python3 -c 'print(1)'";
+    let stmt = crate::parser::parse(raw).unwrap();
+    let extracted = super::extract_code(raw, &stmt, "/tmp", &config);
+    assert!(extracted.is_some());
+    let extracted = extracted.unwrap();
+    assert!(
+        extracted.context.is_none(),
+        "Pipeline without network commands should not set network context"
+    );
+}

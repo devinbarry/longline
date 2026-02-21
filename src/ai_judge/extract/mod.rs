@@ -32,7 +32,14 @@ pub fn extract_code(
     cwd: &str,
     config: &AiJudgeConfig,
 ) -> Option<ExtractedCode> {
-    if let Some(extracted) = inline::extract_inline_code_from_stmt(stmt, config) {
+    if let Some(mut extracted) = inline::extract_inline_code_from_stmt(stmt, config) {
+        // If the code was extracted from within a pipeline that has a network
+        // source (curl/wget), add context so the AI judge knows the data source.
+        if extracted.context.is_none() && has_network_source_pipeline(stmt) {
+            extracted.context = Some(format!(
+                "Execution context: stdin piped from network download\nFull command: {raw_command}"
+            ));
+        }
         return Some(extracted);
     }
 
@@ -56,6 +63,33 @@ pub fn extract_code(
     }
 
     None
+}
+
+/// Check if the statement contains a pipeline with a network download command (curl/wget)
+/// as one of its stages.
+fn has_network_source_pipeline(stmt: &Statement) -> bool {
+    match stmt {
+        Statement::Pipeline(pipeline) => pipeline.stages.iter().any(|stage| {
+            if let Statement::SimpleCommand(cmd) = stage {
+                if let Some(ref name) = cmd.name {
+                    let basename = name.rsplit('/').next().unwrap_or(name);
+                    return basename == "curl" || basename == "wget";
+                }
+            }
+            false
+        }),
+        Statement::List(list) => {
+            has_network_source_pipeline(&list.first)
+                || list
+                    .rest
+                    .iter()
+                    .any(|(_, s)| has_network_source_pipeline(s))
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            has_network_source_pipeline(inner)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]
