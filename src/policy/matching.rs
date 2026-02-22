@@ -38,7 +38,6 @@ fn arg_matches_flag(arg: &str, flag: &str) -> bool {
 
 /// Check if a FlagsMatcher's constraints are satisfied by the given argv.
 /// Returns true if all active constraints pass. Empty constraint fields are skipped.
-#[allow(dead_code)] // Will be wired into call sites in a follow-up commit
 fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
     // any_of: at least one of these flags must be present
     if !flags_matcher.any_of.is_empty() {
@@ -99,46 +98,9 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             if !command.matches(normalize_command_name(cmd_name)) {
                 return false;
             }
-            // Check flags
-            if let Some(flags_matcher) = flags {
-                if !flags_matcher.any_of.is_empty() {
-                    let has_any = flags_matcher
-                        .any_of
-                        .iter()
-                        .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-                    if !has_any {
-                        return false;
-                    }
-                }
-                if !flags_matcher.all_of.is_empty() {
-                    let has_all = flags_matcher
-                        .all_of
-                        .iter()
-                        .all(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-                    if !has_all {
-                        return false;
-                    }
-                }
-                // none_of: rule matches only if NONE of these flags are present
-                if !flags_matcher.none_of.is_empty() {
-                    let has_any_excluded = flags_matcher
-                        .none_of
-                        .iter()
-                        .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-                    if has_any_excluded {
-                        return false;
-                    }
-                }
-                // starts_with: rule matches if any arg starts with any of these prefixes
-                // Useful for combined flags like -xf matching "-x"
-                if !flags_matcher.starts_with.is_empty() {
-                    let has_prefix = flags_matcher
-                        .starts_with
-                        .iter()
-                        .any(|prefix| cmd.argv.iter().any(|a| a.starts_with(prefix)));
-                    if !has_prefix {
-                        return false;
-                    }
+            if let Some(ref flags_matcher) = flags {
+                if !flags_match(flags_matcher, &cmd.argv) {
+                    return false;
                 }
             }
             // Check args with glob matching
@@ -178,14 +140,20 @@ pub fn matches_pipeline(matcher: &PipelineMatcher, pipe: &parser::Pipeline) -> b
             if let Some(ref name) = cmd.name {
                 let basename = normalize_command_name(name);
                 if matcher.stages[matcher_idx].command.matches(basename)
-                    && stage_flags_match(&matcher.stages[matcher_idx], cmd)
+                    && matcher.stages[matcher_idx]
+                        .flags
+                        .as_ref()
+                        .is_none_or(|f| flags_match(f, &cmd.argv))
                 {
                     matcher_idx += 1;
                 } else if let Some(inner) = crate::parser::wrappers::unwrap_transparent(cmd) {
                     if let Some(ref inner_name) = inner.name {
                         let inner_basename = normalize_command_name(inner_name);
                         if matcher.stages[matcher_idx].command.matches(inner_basename)
-                            && stage_flags_match(&matcher.stages[matcher_idx], &inner)
+                            && matcher.stages[matcher_idx]
+                                .flags
+                                .as_ref()
+                                .is_none_or(|f| flags_match(f, &inner.argv))
                         {
                             matcher_idx += 1;
                         }
@@ -195,59 +163,6 @@ pub fn matches_pipeline(matcher: &PipelineMatcher, pipe: &parser::Pipeline) -> b
         }
     }
     matcher_idx == matcher.stages.len()
-}
-
-/// Check if a stage matcher's flags constraints are satisfied by a command.
-fn stage_flags_match(stage: &super::config::StageMatcher, cmd: &SimpleCommand) -> bool {
-    let Some(ref flags_matcher) = stage.flags else {
-        return true; // No flags constraint means any flags are fine
-    };
-
-    // any_of: at least one of these flags must be present
-    if !flags_matcher.any_of.is_empty() {
-        let has_any = flags_matcher
-            .any_of
-            .iter()
-            .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-        if !has_any {
-            return false;
-        }
-    }
-
-    // all_of: all of these flags must be present
-    if !flags_matcher.all_of.is_empty() {
-        let has_all = flags_matcher
-            .all_of
-            .iter()
-            .all(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-        if !has_all {
-            return false;
-        }
-    }
-
-    // none_of: none of these flags may be present
-    if !flags_matcher.none_of.is_empty() {
-        let has_any_excluded = flags_matcher
-            .none_of
-            .iter()
-            .any(|f| cmd.argv.iter().any(|a| arg_matches_flag(a, f)));
-        if has_any_excluded {
-            return false;
-        }
-    }
-
-    // starts_with: at least one arg must start with one of these prefixes
-    if !flags_matcher.starts_with.is_empty() {
-        let has_prefix = flags_matcher
-            .starts_with
-            .iter()
-            .any(|prefix| cmd.argv.iter().any(|a| a.starts_with(prefix)));
-        if !has_prefix {
-            return false;
-        }
-    }
-
-    true
 }
 
 /// Check if any of the command's redirects match the redirect matcher.
