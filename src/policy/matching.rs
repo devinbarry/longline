@@ -2,7 +2,7 @@
 
 use crate::parser::{self, SimpleCommand, Statement};
 
-use super::config::{Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
+use super::config::{FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
 
 /// Extract basename from a command path for matching.
 /// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
@@ -34,6 +34,53 @@ fn arg_matches_flag(arg: &str, flag: &str) -> bool {
     }
 
     false
+}
+
+/// Check if a FlagsMatcher's constraints are satisfied by the given argv.
+/// Returns true if all active constraints pass. Empty constraint fields are skipped.
+#[allow(dead_code)] // Will be wired into call sites in a follow-up commit
+fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
+    // any_of: at least one of these flags must be present
+    if !flags_matcher.any_of.is_empty() {
+        let has_any = flags_matcher
+            .any_of
+            .iter()
+            .any(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+        if !has_any {
+            return false;
+        }
+    }
+    // all_of: all of these flags must be present
+    if !flags_matcher.all_of.is_empty() {
+        let has_all = flags_matcher
+            .all_of
+            .iter()
+            .all(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+        if !has_all {
+            return false;
+        }
+    }
+    // none_of: none of these flags may be present
+    if !flags_matcher.none_of.is_empty() {
+        let has_any_excluded = flags_matcher
+            .none_of
+            .iter()
+            .any(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+        if has_any_excluded {
+            return false;
+        }
+    }
+    // starts_with: at least one arg must start with one of these prefixes
+    if !flags_matcher.starts_with.is_empty() {
+        let has_prefix = flags_matcher
+            .starts_with
+            .iter()
+            .any(|prefix| argv.iter().any(|a| a.starts_with(prefix)));
+        if !has_prefix {
+            return false;
+        }
+    }
+    true
 }
 
 /// Check if a rule's matcher matches a given SimpleCommand.
@@ -438,5 +485,113 @@ mod tests {
         };
         let pipe = make_pipeline(&["curl http://example.com", "bash"]);
         assert!(matches_pipeline(&matcher, &pipe));
+    }
+
+    // --- flags_match unit tests ---
+
+    fn fm(
+        any_of: &[&str],
+        all_of: &[&str],
+        none_of: &[&str],
+        starts_with: &[&str],
+    ) -> FlagsMatcher {
+        FlagsMatcher {
+            any_of: any_of.iter().map(|s| s.to_string()).collect(),
+            all_of: all_of.iter().map(|s| s.to_string()).collect(),
+            none_of: none_of.iter().map(|s| s.to_string()).collect(),
+            starts_with: starts_with.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn argv(args: &[&str]) -> Vec<String> {
+        args.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn test_flags_match_empty_matcher() {
+        // All fields empty → always matches
+        assert!(super::flags_match(
+            &fm(&[], &[], &[], &[]),
+            &argv(&["--anything"])
+        ));
+        assert!(super::flags_match(&fm(&[], &[], &[], &[]), &argv(&[])));
+    }
+
+    #[test]
+    fn test_flags_match_any_of_present() {
+        let m = fm(&["-f", "-v"], &[], &[], &[]);
+        assert!(super::flags_match(&m, &argv(&["cmd", "-f"])));
+        assert!(super::flags_match(&m, &argv(&["cmd", "-v"])));
+        assert!(super::flags_match(&m, &argv(&["cmd", "-f", "-v"])));
+    }
+
+    #[test]
+    fn test_flags_match_any_of_absent() {
+        let m = fm(&["-f", "-v"], &[], &[], &[]);
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-x"])));
+        assert!(!super::flags_match(&m, &argv(&["cmd"])));
+    }
+
+    #[test]
+    fn test_flags_match_all_of_present() {
+        let m = fm(&[], &["-f", "-v"], &[], &[]);
+        assert!(super::flags_match(&m, &argv(&["cmd", "-f", "-v"])));
+        assert!(super::flags_match(&m, &argv(&["cmd", "-v", "-f", "-x"])));
+    }
+
+    #[test]
+    fn test_flags_match_all_of_partial() {
+        let m = fm(&[], &["-f", "-v"], &[], &[]);
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-f"])));
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-v"])));
+    }
+
+    #[test]
+    fn test_flags_match_all_of_absent() {
+        let m = fm(&[], &["-f", "-v"], &[], &[]);
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-x"])));
+    }
+
+    #[test]
+    fn test_flags_match_none_of_absent() {
+        let m = fm(&[], &[], &["-f", "-v"], &[]);
+        assert!(super::flags_match(&m, &argv(&["cmd", "-x"])));
+        assert!(super::flags_match(&m, &argv(&["cmd"])));
+    }
+
+    #[test]
+    fn test_flags_match_none_of_present() {
+        let m = fm(&[], &[], &["-f", "-v"], &[]);
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-f"])));
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-v"])));
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-f", "-v"])));
+    }
+
+    #[test]
+    fn test_flags_match_starts_with_present() {
+        let m = fm(&[], &[], &[], &["-x"]);
+        assert!(super::flags_match(&m, &argv(&["cmd", "-xvf"])));
+        assert!(super::flags_match(&m, &argv(&["cmd", "-x"])));
+    }
+
+    #[test]
+    fn test_flags_match_starts_with_absent() {
+        let m = fm(&[], &[], &[], &["-x"]);
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-v"])));
+        assert!(!super::flags_match(&m, &argv(&["cmd"])));
+    }
+
+    #[test]
+    fn test_flags_match_combined_constraints() {
+        // any_of requires -c or -e, none_of excludes --dry-run
+        let m = fm(&["-c", "-e"], &[], &["--dry-run"], &[]);
+        // Has -c, no --dry-run → match
+        assert!(super::flags_match(&m, &argv(&["cmd", "-c", "arg"])));
+        // Has -c AND --dry-run → no match (none_of fails)
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-c", "--dry-run"])));
+        // Has --dry-run but no -c/-e → no match (any_of fails)
+        assert!(!super::flags_match(&m, &argv(&["cmd", "--dry-run"])));
+        // Has neither → no match (any_of fails)
+        assert!(!super::flags_match(&m, &argv(&["cmd", "-x"])));
     }
 }
