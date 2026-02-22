@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-02-22
+
+Pipeline stage flag matching and internal refactoring.
+
+### Added
+
+- Pipeline stage matchers now support `flags` constraints (`any_of`, `all_of`, `none_of`, `starts_with`), enabling rules to match pipelines based on both command names and their flags
+- AI judge context now includes the full pipeline source for better evaluation of inline interpreter code
+- Edge case golden tests for pipeline stage flag matching
+
+### Changed
+
+- `wget | interpreter` rule split into two: bare `wget` without `-O-` is denied outright, while `wget -O- | interpreter` uses inline-ask for AI evaluation
+- Extracted shared `flags_match` helper from duplicated logic in `matches_rule` and `stage_flags_match`, reducing ~85 lines of duplication
+- Deleted redundant `stage_flags_match` function; pipeline flag matching now calls `flags_match` directly
+
 ## [0.7.3] - 2026-02-21
 
 ### Changed
