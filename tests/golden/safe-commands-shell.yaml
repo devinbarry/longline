@@ -330,3 +330,73 @@ tests:
     expected:
       decision: ask
       rule_id: longline-init
+
+  # ── pstree safe invocations ──────────────────────────────────────
+  - id: pstree-safe
+    command: "pstree"
+    expected:
+      decision: allow
+  - id: pstree-pid-safe
+    command: "pstree -p 1234"
+    expected:
+      decision: allow
+  - id: pstree-user-safe
+    command: "pstree -u axion"
+    expected:
+      decision: allow
+
+  # ── tmux: read-only invocations ──────────────────────────────────
+  - id: tmux-list-sessions-safe
+    command: "tmux list-sessions"
+    expected:
+      decision: allow
+  - id: tmux-ls-safe
+    command: "tmux ls"
+    expected:
+      decision: allow
+  - id: tmux-list-windows-safe
+    command: "tmux list-windows -t mysession"
+    expected:
+      decision: allow
+  - id: tmux-list-panes-safe
+    command: "tmux list-panes -t 'session:0'"
+    expected:
+      decision: allow
+  - id: tmux-list-panes-format-safe
+    command: "tmux list-panes -t 'session:0' -F '#{pane_pid}'"
+    expected:
+      decision: allow
+  - id: tmux-capture-pane-safe
+    command: "tmux capture-pane -t 'session:0' -p"
+    expected:
+      decision: allow
+  - id: tmux-has-session-safe
+    command: "tmux has-session -t mysession"
+    expected:
+      decision: allow
+  - id: tmux-display-message-safe
+    command: "tmux display-message -p '#{session_name}'"
+    expected:
+      decision: allow
+  # tmux: mutating operations (should ask - not allowlisted)
+  - id: tmux-send-keys-ask
+    command: "tmux send-keys -t 'session:0' 'ls' Enter"
+    expected:
+      decision: ask
+  - id: tmux-new-session-ask
+    command: "tmux new-session -d -s mysession"
+    expected:
+      decision: ask
+  - id: tmux-kill-session-ask
+    command: "tmux kill-session -t mysession"
+    expected:
+      decision: ask
+  # tmux: bare and unknown (should ask)
+  - id: tmux-bare-ask
+    command: "tmux"
+    expected:
+      decision: ask
+  - id: tmux-unknown-ask
+    command: "tmux unknown-command"
+    expected:
+      decision: ask

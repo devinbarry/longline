@@ -68,6 +68,7 @@ allowlists:
     - { command: df, trust: minimal }
     - { command: ps, trust: minimal }
     - { command: pgrep, trust: minimal }
+    - { command: pstree, trust: minimal }
     - { command: lsof, trust: minimal }
     - { command: nproc, trust: minimal }
     - { command: getconf, trust: minimal }
@@ -142,6 +143,18 @@ allowlists:
     - { command: "ip rule list", trust: minimal }
     - { command: "arp -a", trust: minimal }
     - { command: "route -n", trust: minimal }
+    # ── tmux: read-only invocations ──────────────────────────────────
+    - { command: "tmux list-sessions", trust: minimal }
+    - { command: "tmux ls", trust: minimal }
+    - { command: "tmux list-windows", trust: minimal }
+    - { command: "tmux list-panes", trust: minimal }
+    - { command: "tmux capture-pane", trust: minimal }
+    - { command: "tmux display-message", trust: minimal }
+    - { command: "tmux show-options", trust: minimal }
+    - { command: "tmux show-environment", trust: minimal }
+    - { command: "tmux has-session", trust: minimal }
+    # Note: tmux mutating operations (send-keys, new-session, kill-session, etc.)
+    # are intentionally NOT allowlisted — they default to ask.
     # ── longline: project CLI ──────────────────────────────────────
     - { command: longline, trust: minimal }
 

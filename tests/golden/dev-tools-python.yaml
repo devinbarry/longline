@@ -35,6 +35,11 @@ tests:
     command: "uv pip list"
     expected:
       decision: allow
+  - id: uv-cache-dir-safe
+    command: "uv cache dir"
+    expected:
+      decision: ask
+    note: "uv cache not explicitly allowlisted"
   - id: uv-pip-install-safe
     command: "uv pip install requests"
     expected:
@@ -91,5 +96,33 @@ tests:
       decision: allow
   - id: python3-m-pytest-path-safe
     command: "python3 -m pytest tests/unit/"
+    expected:
+      decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # uv run python -m pytest: wrapped pytest invocations
+  # ════════════════════════════════════════════════════════════════
+  - id: uv-run-python-m-pytest-safe
+    command: "uv run python -m pytest"
+    expected:
+      decision: allow
+  - id: uv-run-python-m-pytest-verbose-safe
+    command: "uv run python -m pytest -v --tb=short"
+    expected:
+      decision: allow
+  - id: uv-run-python-m-pytest-path-safe
+    command: "uv run python -m pytest flows/tests/ -v --tb=short"
+    expected:
+      decision: allow
+  - id: uv-run-python-m-pytest-redirect-safe
+    command: "uv run python -m pytest tests/ -v 2>&1"
+    expected:
+      decision: allow
+  - id: uv-run-python3-m-pytest-safe
+    command: "uv run python3 -m pytest tests/"
+    expected:
+      decision: allow
+  - id: uv-run-python3-m-pytest-verbose-safe
+    command: "uv run python3 -m pytest tests/ -v --tb=short 2>&1"
     expected:
       decision: allow

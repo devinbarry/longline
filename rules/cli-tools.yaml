@@ -9,6 +9,8 @@ allowlists:
     - { command: "glp --version", trust: minimal }
     - { command: "glp --help", trust: minimal }
     - { command: "glp -h", trust: minimal }
+    # ── glp: remote-write operations (full trust) ────────────────
+    - { command: "glp retry", trust: full, reason: "Retries a GitLab CI/CD pipeline job" }
     # ── glab (GitLab CLI): read-only invocations ──────────────────
     # Note: mutating API calls (POST/PUT/DELETE/PATCH) caught by glab-api-mutating rule
     - { command: "glab auth status", trust: minimal }
@@ -108,6 +110,20 @@ allowlists:
     - { command: "glab repo delete", trust: full, reason: "Permanently deletes a GitLab repository" }
     - { command: "glab label create", trust: full, reason: "Creates a new label in a GitLab project" }
     - { command: "glab label delete", trust: full, reason: "Deletes a label from a GitLab project" }
+    # ── pfp (Prefect Pipeline CLI): read-only invocations ─────────
+    - { command: "pfp ls", trust: minimal }
+    - { command: "pfp list", trust: minimal }
+    - { command: "pfp runs", trust: minimal }
+    - { command: "pfp logs", trust: minimal }
+    - { command: "pfp --help", trust: minimal }
+    - { command: "pfp -h", trust: minimal }
+    - { command: "pfp --version", trust: minimal }
+    - { command: "pfp -V", trust: minimal }
+    # ── pfp: mutating operations (full trust) ────────────────────
+    - { command: "pfp run", trust: full, reason: "Triggers a Prefect flow run" }
+    - { command: "pfp pause", trust: full, reason: "Pauses a Prefect flow run" }
+    - { command: "pfp resume", trust: full, reason: "Resumes a paused Prefect flow run" }
+    - { command: "pfp cancel", trust: full, reason: "Cancels a Prefect flow run" }
     # ── git-cliff: stdout-only invocations ────────────────────────
     - { command: "git-cliff", trust: standard, reason: "Generates a changelog from git history" }
     - { command: "git-cliff --unreleased", trust: standard, reason: "Generates changelog for unreleased changes" }
