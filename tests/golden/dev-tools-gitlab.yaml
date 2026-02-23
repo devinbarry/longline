@@ -49,6 +49,12 @@ tests:
     command: "glp retry 123"
     expected:
       decision: ask
+    note: "glp retry requires full trust (remote pipeline mutation)"
+  - id: glp-retry-project-ask
+    command: "glp retry 3938 --project tools/pfp"
+    expected:
+      decision: ask
+    note: "glp retry requires full trust (remote pipeline mutation)"
   - id: glp-cancel-ask
     command: "glp cancel 123"
     expected:

@@ -45,3 +45,58 @@ tests:
     command: "rustc --version"
     expected:
       decision: allow
+
+  # ── Rustup safe invocations ────────────────────────────────────
+  - id: rustup-show-safe
+    command: "rustup show"
+    expected:
+      decision: allow
+  - id: rustup-check-safe
+    command: "rustup check"
+    expected:
+      decision: allow
+  - id: rustup-toolchain-list-safe
+    command: "rustup toolchain list"
+    expected:
+      decision: allow
+  - id: rustup-version-safe
+    command: "rustup --version"
+    expected:
+      decision: allow
+  - id: rustup-target-list-safe
+    command: "rustup target list"
+    expected:
+      decision: allow
+  - id: rustup-component-list-safe
+    command: "rustup component list"
+    expected:
+      decision: allow
+  # Negative tests (should ask - modifies toolchain)
+  - id: rustup-default-ask
+    command: "rustup default nightly"
+    expected:
+      decision: ask
+  - id: rustup-install-ask
+    command: "rustup install nightly"
+    expected:
+      decision: ask
+  - id: rustup-update-ask
+    command: "rustup update"
+    expected:
+      decision: ask
+  - id: rustup-toolchain-install-ask
+    command: "rustup toolchain install nightly"
+    expected:
+      decision: ask
+  - id: rustup-target-add-ask
+    command: "rustup target add wasm32-unknown-unknown"
+    expected:
+      decision: ask
+  - id: rustup-component-add-ask
+    command: "rustup component add clippy"
+    expected:
+      decision: ask
+  - id: rustup-override-set-ask
+    command: "rustup override set nightly"
+    expected:
+      decision: ask

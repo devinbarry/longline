@@ -58,6 +58,8 @@ allowlists:
     - { command: pre-commit, trust: standard, reason: "Runs pre-commit hooks" }
     # ── uv: build/test/run tools ───────────────────────────────────
     - { command: "uv run pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run python -m pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run python3 -m pytest", trust: standard, reason: "Runs Python tests" }
     - { command: "uv run mypy", trust: standard, reason: "Type-checks Python code" }
     - { command: "uv run ruff", trust: standard, reason: "Lints and formats Python code" }
     - { command: "uv run black", trust: standard, reason: "Formats Python code" }
@@ -341,5 +343,16 @@ allowlists:
     - { command: "just fmt", trust: standard, reason: "Runs the 'fmt' recipe from the justfile" }
     - { command: "just lint", trust: standard, reason: "Runs the 'lint' recipe from the justfile" }
     - { command: "just release", trust: standard, reason: "Runs the 'release' recipe from the justfile" }
+    - { command: "just release-prep", trust: standard, reason: "Runs the 'release-prep' recipe from the justfile" }
+    - { command: "just release-finish", trust: standard, reason: "Runs the 'release-finish' recipe from the justfile" }
+    - { command: "just install", trust: standard, reason: "Runs the 'install' recipe from the justfile" }
+    # ── Rust toolchain: read-only invocations ──────────────────────────
+    - { command: "rustup show", trust: minimal }
+    - { command: "rustup check", trust: minimal }
+    - { command: "rustup toolchain list", trust: minimal }
+    - { command: "rustup --version", trust: minimal }
+    - { command: "rustup -V", trust: minimal }
+    - { command: "rustup target list", trust: minimal }
+    - { command: "rustup component list", trust: minimal }
 
 rules: []
