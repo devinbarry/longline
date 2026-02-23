@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-02-23
+
+### Added
+
+- Allowlist entries for `pfp` CLI (read-only subcommands at minimal trust, mutating ops at full trust)
+- Allowlist entries for `tmux` read-only subcommands (`list-sessions`, `list-windows`, `list-panes`, `capture-pane`, etc.)
+- Allowlist entries for `rustup` read-only subcommands (`show`, `check`, `toolchain list`, etc.)
+- Allowlist entry for `pstree` (read-only process tree inspection)
+- Allowlist entries for `uv run python -m pytest` and `uv run python3 -m pytest`
+- Allowlist entries for `just release-prep`, `just release-finish`, `just install` recipes
+- Allowlist entry for `glp retry` at full trust
+- Golden tests for all new allowlist entries including negative tests for mutating operations
+
 ## [0.8.0] - 2026-02-22
 
 Pipeline stage flag matching and internal refactoring.
