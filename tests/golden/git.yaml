@@ -702,6 +702,23 @@ tests:
       decision: allow
     # Read-only: verifies a specific ref exists
 
+  # --- git diff-tree (read-only plumbing) ---
+  - id: git-diff-tree-basic
+    command: "git diff-tree --no-commit-id -r HEAD"
+    expected:
+      decision: allow
+    # Read-only: shows changes in a commit
+  - id: git-diff-tree-name-status
+    command: "git diff-tree --no-commit-id -r --name-status c4f7087"
+    expected:
+      decision: allow
+    # Read-only: shows file changes with status letters
+  - id: git-diff-tree-range
+    command: "git diff-tree --no-commit-id -r --name-status f933d86..c4f7087"
+    expected:
+      decision: allow
+    # Read-only: shows changes between two commits
+
   # --- git -C flag (allowlist matches once -C is stripped) ---
   - id: git-C-status-allow
     command: "git -C /tmp status"

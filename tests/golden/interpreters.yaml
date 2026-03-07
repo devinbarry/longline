@@ -139,6 +139,34 @@ tests:
     expected:
       decision: allow
 
+  # ── Standalone linters/checkers (allowed) ─────────────────────
+  - id: yamllint-file
+    command: "yamllint config.yml"
+    expected:
+      decision: allow
+  - id: yamllint-directory
+    command: "yamllint ."
+    expected:
+      decision: allow
+  - id: editorconfig-checker-file
+    command: "editorconfig-checker docker/python/Dockerfile-prefect"
+    expected:
+      decision: allow
+  - id: editorconfig-checker-fallback
+    command: "editorconfig-checker docker/shared/requirements-prefect.yml 2>&1 || true"
+    expected:
+      decision: allow
+
+  # ── uv: linter wrappers (allowed) ───────────────────────────
+  - id: uv-run-yamllint
+    command: "uv run yamllint docker/shared/requirements-prefect.yml"
+    expected:
+      decision: allow
+  - id: uv-run-editorconfig-checker
+    command: "uv run editorconfig-checker ."
+    expected:
+      decision: allow
+
   # ── uv: python invocations (should ask) ───────────────────────
   - id: uv-run-python
     command: "uv run python script.py"

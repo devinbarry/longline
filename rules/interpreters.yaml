@@ -56,6 +56,8 @@ allowlists:
     - { command: bandit, trust: standard, reason: "Scans Python code for security issues" }
     - { command: coverage, trust: standard, reason: "Measures Python code coverage" }
     - { command: pre-commit, trust: standard, reason: "Runs pre-commit hooks" }
+    - { command: yamllint, trust: standard, reason: "Lints YAML files for syntax and style" }
+    - { command: editorconfig-checker, trust: standard, reason: "Checks files against .editorconfig rules" }
     # ── uv: build/test/run tools ───────────────────────────────────
     - { command: "uv run pytest", trust: standard, reason: "Runs Python tests" }
     - { command: "uv run python -m pytest", trust: standard, reason: "Runs Python tests" }
@@ -70,6 +72,8 @@ allowlists:
     - { command: "uv run bandit", trust: standard, reason: "Scans Python code for security issues" }
     - { command: "uv run coverage", trust: standard, reason: "Measures Python code coverage" }
     - { command: "uv run pre-commit", trust: standard, reason: "Runs pre-commit hooks" }
+    - { command: "uv run yamllint", trust: standard, reason: "Lints YAML files for syntax and style" }
+    - { command: "uv run editorconfig-checker", trust: standard, reason: "Checks files against .editorconfig rules" }
     - { command: "uv sync", trust: standard, reason: "Syncs project dependencies with the lockfile" }
     - { command: "uv lock", trust: standard, reason: "Resolves and locks Python dependencies" }
     - { command: "uv venv", trust: standard, reason: "Creates a Python virtual environment" }
