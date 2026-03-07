@@ -113,28 +113,48 @@ fn golden_safe_commands_shell() {
 }
 
 #[test]
-fn golden_safe_commands_rust() {
-    run_golden_suite("safe-commands-rust.yaml");
+fn golden_rust() {
+    run_golden_suite("rust.yaml");
 }
 
 #[test]
-fn golden_node_safe_commands() {
-    run_golden_suite("node-safe-commands.yaml");
+fn golden_rust_dangerous() {
+    run_golden_suite("rust-dangerous.yaml");
 }
 
 #[test]
-fn golden_node_dangerous_commands() {
-    run_golden_suite("node-dangerous-commands.yaml");
+fn golden_node_safe() {
+    run_golden_suite("node-safe.yaml");
 }
 
 #[test]
-fn golden_safe_commands_python() {
-    run_golden_suite("safe-commands-python.yaml");
+fn golden_node_dangerous() {
+    run_golden_suite("node-dangerous.yaml");
 }
 
 #[test]
-fn golden_safe_commands_go() {
-    run_golden_suite("safe-commands-go.yaml");
+fn golden_go() {
+    run_golden_suite("go.yaml");
+}
+
+#[test]
+fn golden_python() {
+    run_golden_suite("python.yaml");
+}
+
+#[test]
+fn golden_package_managers() {
+    run_golden_suite("package-managers.yaml");
+}
+
+#[test]
+fn golden_just() {
+    run_golden_suite("just.yaml");
+}
+
+#[test]
+fn golden_cli_tools() {
+    run_golden_suite("cli-tools.yaml");
 }
 
 #[test]
@@ -235,16 +255,6 @@ fn golden_dev_tools_gitlab() {
 #[test]
 fn golden_dev_tools_github() {
     run_golden_suite("dev-tools-github.yaml");
-}
-
-#[test]
-fn golden_dev_tools_cargo() {
-    run_golden_suite("dev-tools-cargo.yaml");
-}
-
-#[test]
-fn golden_dev_tools_python() {
-    run_golden_suite("dev-tools-python.yaml");
 }
 
 #[test]

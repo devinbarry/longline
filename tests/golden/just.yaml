@@ -1,0 +1,97 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # just: only read-only invocations and known recipes allowed
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow)
+  - id: just-list-safe
+    command: "just --list"
+    expected:
+      decision: allow
+  - id: just-list-short-safe
+    command: "just -l"
+    expected:
+      decision: allow
+  - id: just-version-safe
+    command: "just --version"
+    expected:
+      decision: allow
+  - id: just-help-safe
+    command: "just --help"
+    expected:
+      decision: allow
+  - id: just-help-short-safe
+    command: "just -h"
+    expected:
+      decision: allow
+
+  # Standard dev recipes (should allow)
+  - id: just-build-safe
+    command: "just build"
+    expected:
+      decision: allow
+  - id: just-test-safe
+    command: "just test"
+    expected:
+      decision: allow
+  - id: just-check-safe
+    command: "just check"
+    expected:
+      decision: allow
+  - id: just-fmt-safe
+    command: "just fmt"
+    expected:
+      decision: allow
+  - id: just-lint-safe
+    command: "just lint"
+    expected:
+      decision: allow
+
+  # Standard dev recipes (should allow) - release
+  - id: just-release-safe
+    command: "just release"
+    expected:
+      decision: allow
+  - id: just-release-patch-safe
+    command: "just release patch"
+    expected:
+      decision: allow
+  - id: just-release-minor-safe
+    command: "just release minor"
+    expected:
+      decision: allow
+  - id: just-release-major-safe
+    command: "just release major"
+    expected:
+      decision: allow
+
+  # Release and install recipes (should allow)
+  - id: just-release-prep-safe
+    command: "just release-prep patch"
+    expected:
+      decision: allow
+  - id: just-release-prep-minor-safe
+    command: "just release-prep minor"
+    expected:
+      decision: allow
+  - id: just-release-finish-safe
+    command: "just release-finish"
+    expected:
+      decision: allow
+  - id: just-install-safe
+    command: "just install"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - runs arbitrary recipes or bare command)
+  - id: just-bare
+    command: "just"
+    expected:
+      decision: ask
+  - id: just-recipe-clean
+    command: "just clean"
+    expected:
+      decision: ask
+  - id: just-unknown-recipe
+    command: "just foobar"
+    expected:
+      decision: ask

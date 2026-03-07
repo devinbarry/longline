@@ -21,38 +21,6 @@ tests:
     expected:
       decision: allow
 
-  # ── Node package manager version checks ──────────────────────────
-  - id: yarn-version-safe
-    command: "yarn --version"
-    expected:
-      decision: allow
-  - id: pnpm-version-safe
-    command: "pnpm --version"
-    expected:
-      decision: allow
-  - id: bun-version-safe
-    command: "bun --version"
-    expected:
-      decision: allow
-  - id: deno-version-safe
-    command: "deno --version"
-    expected:
-      decision: allow
-
-  # ── Node package manager read-only commands ──────────────────────
-  - id: yarn-list-safe
-    command: "yarn list"
-    expected:
-      decision: allow
-  - id: pnpm-list-safe
-    command: "pnpm list"
-    expected:
-      decision: allow
-  - id: deno-info-safe
-    command: "deno info"
-    expected:
-      decision: allow
-
   # ── npx: dev tool invocations ────────────────────────────────────
   # -- Test runners --
   - id: npx-vitest-allow
