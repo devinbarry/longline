@@ -24,6 +24,7 @@ allowlists:
     - { command: "git check-ignore", trust: minimal }
     - { command: "git symbolic-ref", trust: minimal }
     - { command: "git show-ref", trust: minimal }
+    - { command: "git diff-tree", trust: minimal }
     # ── Git: info/help commands ───────────────────────────────────
     - { command: "git --version", trust: minimal }
     - { command: "git -v", trust: minimal }
