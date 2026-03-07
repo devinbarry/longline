@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-03-07
+
+### Added
+
+- Allowlist entries for `git diff-tree` (read-only git plumbing command)
+- Allowlist entries for `yamllint` and `editorconfig-checker` (standalone and `uv run` variants)
+
+### Changed
+
+- Split `interpreters.yaml` into language-specific rules files: `python.yaml`, `rust.yaml`, `node.yaml`, `just.yaml`
+- `interpreters.yaml` now only contains Ruby version checks as a catch-all for misc interpreters
+- Reorganize golden tests to mirror rules file structure (rename/split files to match their corresponding rules files)
+
 ## [0.8.1] - 2026-02-23
 
 ### Added
