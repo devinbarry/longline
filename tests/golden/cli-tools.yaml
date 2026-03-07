@@ -1,0 +1,125 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # git-cliff: stdout-only invocations allowed
+  # (allowlisted in rules/cli-tools.yaml)
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow - output to stdout)
+  - id: git-cliff-unreleased-safe
+    command: "git-cliff --unreleased"
+    expected:
+      decision: allow
+  - id: git-cliff-latest-safe
+    command: "git-cliff --latest"
+    expected:
+      decision: allow
+  - id: git-cliff-current-safe
+    command: "git-cliff --current"
+    expected:
+      decision: allow
+
+  - id: git-cliff-bare-safe
+    command: "git-cliff"
+    expected:
+      decision: allow
+
+  # Negative tests (should ask - writes files or other operations)
+  - id: git-cliff-output-ask
+    command: "git-cliff -o CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-long-ask
+    command: "git-cliff --output CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-equals-ask
+    command: "git-cliff --output=CHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-output-short-attached-ask
+    command: "git-cliff -oCHANGELOG.md"
+    expected:
+      decision: ask
+  - id: git-cliff-tag-ask
+    command: "git-cliff --tag v1.0.0"
+    expected:
+      decision: ask
+  - id: git-cliff-tag-equals-ask
+    command: "git-cliff --tag=v1.0.0"
+    expected:
+      decision: ask
+  - id: git-cliff-init-ask
+    command: "git-cliff --init"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # pfp (Prefect Pipeline CLI): read-only invocations allowed
+  # (allowlisted in rules/cli-tools.yaml)
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (should allow - read-only)
+  - id: pfp-ls-safe
+    command: "pfp ls"
+    expected:
+      decision: allow
+  - id: pfp-ls-json-safe
+    command: "pfp ls --json"
+    expected:
+      decision: allow
+  - id: pfp-list-safe
+    command: "pfp list"
+    expected:
+      decision: allow
+  - id: pfp-runs-safe
+    command: "pfp runs happy-t"
+    expected:
+      decision: allow
+  - id: pfp-runs-json-safe
+    command: "pfp runs happy-t --json"
+    expected:
+      decision: allow
+  - id: pfp-logs-safe
+    command: "pfp logs e130c152-db01-428a-9698-e8404cd2c5d3"
+    expected:
+      decision: allow
+  - id: pfp-logs-short-id-safe
+    command: "pfp logs e130c152"
+    expected:
+      decision: allow
+  - id: pfp-help-safe
+    command: "pfp --help"
+    expected:
+      decision: allow
+  - id: pfp-help-short-safe
+    command: "pfp -h"
+    expected:
+      decision: allow
+  - id: pfp-version-safe
+    command: "pfp --version"
+    expected:
+      decision: allow
+  # Mutating operations (should ask at standard trust, require full trust)
+  - id: pfp-run-ask
+    command: "pfp run deploy"
+    expected:
+      decision: ask
+  - id: pfp-pause-ask
+    command: "pfp pause abc123"
+    expected:
+      decision: ask
+  - id: pfp-resume-ask
+    command: "pfp resume abc123"
+    expected:
+      decision: ask
+  - id: pfp-cancel-ask
+    command: "pfp cancel abc123"
+    expected:
+      decision: ask
+  # Negative tests (should ask - bare or unknown)
+  - id: pfp-bare-ask
+    command: "pfp"
+    expected:
+      decision: ask
+  - id: pfp-unknown-ask
+    command: "pfp unknown-command"
+    expected:
+      decision: ask
