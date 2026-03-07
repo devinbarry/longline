@@ -1,0 +1,61 @@
+# Python: interpreter, uv ecosystem, and Python dev tools
+
+allowlists:
+  commands:
+    # ── Python: version checks and read-only tools ──────────────────
+    - { command: "python --version", trust: minimal }
+    - { command: "python -V", trust: minimal }
+    - { command: "python3 --version", trust: minimal }
+    - { command: "python3 -V", trust: minimal }
+    - { command: "python -m json.tool", trust: minimal }
+    - { command: "python3 -m json.tool", trust: minimal }
+    - { command: "python -m py_compile", trust: minimal }
+    - { command: "python3 -m py_compile", trust: minimal }
+    - { command: "python -m compileall", trust: minimal }
+    - { command: "python3 -m compileall", trust: minimal }
+    - { command: "python -m pytest", trust: minimal }
+    - { command: "python3 -m pytest", trust: minimal }
+    # ── Python dev tools (standalone) ────────────────────────────────
+    - { command: pytest, trust: standard, reason: "Runs Python tests" }
+    - { command: mypy, trust: standard, reason: "Type-checks Python code" }
+    - { command: ruff, trust: standard, reason: "Lints and formats Python code" }
+    - { command: black, trust: standard, reason: "Formats Python code" }
+    - { command: isort, trust: standard, reason: "Sorts Python import statements" }
+    - { command: flake8, trust: standard, reason: "Lints Python code for style violations" }
+    - { command: pylint, trust: standard, reason: "Lints Python code" }
+    - { command: pyright, trust: standard, reason: "Type-checks Python code" }
+    - { command: bandit, trust: standard, reason: "Scans Python code for security issues" }
+    - { command: coverage, trust: standard, reason: "Measures Python code coverage" }
+    - { command: pre-commit, trust: standard, reason: "Runs pre-commit hooks" }
+    - { command: yamllint, trust: standard, reason: "Lints YAML files for syntax and style" }
+    - { command: editorconfig-checker, trust: standard, reason: "Checks files against .editorconfig rules" }
+    # ── uv: read-only invocations ──────────────────────────────────
+    - { command: "uv pip list", trust: minimal }
+    - { command: "uv pip show", trust: minimal }
+    - { command: "uv pip freeze", trust: minimal }
+    - { command: "uv pip check", trust: minimal }
+    - { command: "uv --version", trust: minimal }
+    - { command: "uv --help", trust: minimal }
+    - { command: "uv -V", trust: minimal }
+    # ── uv: build/test/run tools ───────────────────────────────────
+    - { command: "uv run pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run python -m pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run python3 -m pytest", trust: standard, reason: "Runs Python tests" }
+    - { command: "uv run mypy", trust: standard, reason: "Type-checks Python code" }
+    - { command: "uv run ruff", trust: standard, reason: "Lints and formats Python code" }
+    - { command: "uv run black", trust: standard, reason: "Formats Python code" }
+    - { command: "uv run isort", trust: standard, reason: "Sorts Python import statements" }
+    - { command: "uv run flake8", trust: standard, reason: "Lints Python code for style violations" }
+    - { command: "uv run pylint", trust: standard, reason: "Lints Python code" }
+    - { command: "uv run pyright", trust: standard, reason: "Type-checks Python code" }
+    - { command: "uv run bandit", trust: standard, reason: "Scans Python code for security issues" }
+    - { command: "uv run coverage", trust: standard, reason: "Measures Python code coverage" }
+    - { command: "uv run pre-commit", trust: standard, reason: "Runs pre-commit hooks" }
+    - { command: "uv run yamllint", trust: standard, reason: "Lints YAML files for syntax and style" }
+    - { command: "uv run editorconfig-checker", trust: standard, reason: "Checks files against .editorconfig rules" }
+    - { command: "uv sync", trust: standard, reason: "Syncs project dependencies with the lockfile" }
+    - { command: "uv lock", trust: standard, reason: "Resolves and locks Python dependencies" }
+    - { command: "uv venv", trust: standard, reason: "Creates a Python virtual environment" }
+    - { command: "uv pip", trust: standard, reason: "Manages Python packages via pip interface" }
+
+rules: []

@@ -12,6 +12,10 @@ const NETWORK: &str = include_str!("../rules/network.yaml");
 const DOCKER: &str = include_str!("../rules/docker.yaml");
 const SYSTEM: &str = include_str!("../rules/system.yaml");
 const INTERPRETERS: &str = include_str!("../rules/interpreters.yaml");
+const PYTHON: &str = include_str!("../rules/python.yaml");
+const RUST: &str = include_str!("../rules/rust.yaml");
+const NODE: &str = include_str!("../rules/node.yaml");
+const JUST: &str = include_str!("../rules/just.yaml");
 
 /// Look up an embedded rule file by name.
 pub fn get(name: &str) -> Option<&'static str> {
@@ -28,6 +32,10 @@ pub fn get(name: &str) -> Option<&'static str> {
         "docker.yaml" => Some(DOCKER),
         "system.yaml" => Some(SYSTEM),
         "interpreters.yaml" => Some(INTERPRETERS),
+        "python.yaml" => Some(PYTHON),
+        "rust.yaml" => Some(RUST),
+        "node.yaml" => Some(NODE),
+        "just.yaml" => Some(JUST),
         _ => None,
     }
 }
@@ -47,6 +55,10 @@ pub fn all_files() -> Vec<(&'static str, &'static str)> {
         ("docker.yaml", DOCKER),
         ("system.yaml", SYSTEM),
         ("interpreters.yaml", INTERPRETERS),
+        ("python.yaml", PYTHON),
+        ("rust.yaml", RUST),
+        ("node.yaml", NODE),
+        ("just.yaml", JUST),
     ]
 }
 
@@ -86,8 +98,8 @@ mod tests {
     fn test_all_files_returns_all() {
         let files = all_files();
         assert!(
-            files.len() >= 12,
-            "Should have at least 12 files (rules.yaml + 11 includes)"
+            files.len() >= 16,
+            "Should have at least 16 files (rules.yaml + 15 includes)"
         );
         assert!(files.iter().any(|(name, _)| *name == "rules.yaml"));
     }

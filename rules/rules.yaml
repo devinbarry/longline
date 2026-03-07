@@ -15,3 +15,7 @@ include:
   - docker.yaml
   - system.yaml
   - interpreters.yaml
+  - python.yaml
+  - rust.yaml
+  - node.yaml
+  - just.yaml
