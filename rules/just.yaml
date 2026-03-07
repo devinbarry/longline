@@ -1,0 +1,22 @@
+# just: command runner
+
+allowlists:
+  commands:
+    # ── just: read-only invocations ──────────────────────────────────
+    - { command: "just --list", trust: minimal }
+    - { command: "just -l", trust: minimal }
+    - { command: "just --version", trust: minimal }
+    - { command: "just --help", trust: minimal }
+    - { command: "just -h", trust: minimal }
+    # ── just: build/test/run recipes ─────────────────────────────────
+    - { command: "just test", trust: standard, reason: "Runs the 'test' recipe from the justfile" }
+    - { command: "just build", trust: standard, reason: "Runs the 'build' recipe from the justfile" }
+    - { command: "just check", trust: standard, reason: "Runs the 'check' recipe from the justfile" }
+    - { command: "just fmt", trust: standard, reason: "Runs the 'fmt' recipe from the justfile" }
+    - { command: "just lint", trust: standard, reason: "Runs the 'lint' recipe from the justfile" }
+    - { command: "just release", trust: standard, reason: "Runs the 'release' recipe from the justfile" }
+    - { command: "just release-prep", trust: standard, reason: "Runs the 'release-prep' recipe from the justfile" }
+    - { command: "just release-finish", trust: standard, reason: "Runs the 'release-finish' recipe from the justfile" }
+    - { command: "just install", trust: standard, reason: "Runs the 'install' recipe from the justfile" }
+
+rules: []

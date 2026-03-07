@@ -1,0 +1,37 @@
+# Rust: cargo build system and rustup toolchain manager
+
+allowlists:
+  commands:
+    # ── Cargo: read-only invocations ─────────────────────────────────
+    - { command: "cargo tree", trust: minimal }
+    - { command: "cargo metadata", trust: minimal }
+    - { command: "cargo deny", trust: minimal }
+    - { command: "cargo audit", trust: minimal }
+    - { command: "cargo outdated", trust: minimal }
+    # ── Cargo: build/test/run tools ──────────────────────────────────
+    - { command: "cargo build", trust: standard, reason: "Compiles a Rust project" }
+    - { command: "cargo test", trust: standard, reason: "Runs Rust tests" }
+    - { command: "cargo check", trust: standard, reason: "Checks a Rust project for errors without building" }
+    - { command: "cargo clippy", trust: standard, reason: "Lints Rust code" }
+    - { command: "cargo fmt", trust: standard, reason: "Formats Rust source code" }
+    - { command: "cargo run", trust: standard, reason: "Compiles and runs a Rust binary" }
+    - { command: "cargo bench", trust: standard, reason: "Runs Rust benchmarks" }
+    - { command: "cargo doc", trust: standard, reason: "Generates Rust documentation" }
+    - { command: "cargo clean", trust: standard, reason: "Removes build artifacts" }
+    - { command: "cargo update", trust: standard, reason: "Updates Rust dependencies" }
+    - { command: "cargo remove", trust: standard, reason: "Removes a dependency from Cargo.toml" }
+    - { command: "cargo init", trust: standard, reason: "Creates a new Rust project in an existing directory" }
+    - { command: "cargo new", trust: standard, reason: "Creates a new Rust project" }
+    - { command: "cargo vendor", trust: standard, reason: "Vendors all dependencies locally" }
+    - { command: "cargo release", trust: standard, reason: "Publishes a Rust crate release" }
+    - { command: "cargo expand", trust: standard, reason: "Expands Rust macros for inspection" }
+    # ── Rustup: toolchain management ─────────────────────────────────
+    - { command: "rustup show", trust: minimal }
+    - { command: "rustup check", trust: minimal }
+    - { command: "rustup toolchain list", trust: minimal }
+    - { command: "rustup --version", trust: minimal }
+    - { command: "rustup -V", trust: minimal }
+    - { command: "rustup target list", trust: minimal }
+    - { command: "rustup component list", trust: minimal }
+
+rules: []
