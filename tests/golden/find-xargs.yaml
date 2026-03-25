@@ -713,3 +713,140 @@ tests:
     command: "find . -name '*.rs' | xargs grep 'use ' | sort | uniq"
     expected:
       decision: allow
+
+  # ════════════════════════════════════════════════════════════
+  # find -exec / xargs with TRANSPARENT WRAPPERS
+  # Extracted inner commands must be unwrapped through
+  # command/builtin/timeout/nice before evaluation.
+  # ════════════════════════════════════════════════════════════
+
+  # ── Passing contract: find -exec without wrappers (existing behavior) ──
+  - id: find-exec-cat-env-deny
+    command: "find . -exec cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+    note: "Baseline: find -exec cat .env correctly denied"
+  - id: find-exec-echo-safe-allow
+    command: "find . -exec echo {} ;"
+    expected:
+      decision: allow
+    note: "Baseline: find -exec echo correctly allowed"
+
+  # ── FAILING: find -exec with command wrapper ──────────────
+  - id: find-exec-command-cat-env-deny
+    command: "find . -exec command cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+    note: "command wrapper must be unwrapped to evaluate inner cat .env"
+  - id: find-exec-command-rm-deny
+    command: "find . -exec command rm -rf / ;"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: find-exec-command-ls-allow
+    command: "find . -exec command ls ;"
+    expected:
+      decision: allow
+    note: "command + safe inner = allow after unwrapping"
+
+  # ── FAILING: find -exec with builtin wrapper ─────────────
+  - id: find-exec-builtin-cat-env-deny
+    command: "find . -exec builtin cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── FAILING: find -exec with timeout wrapper ─────────────
+  - id: find-exec-timeout-cat-env-deny
+    command: "find . -exec timeout 30 cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: find-exec-timeout-rm-deny
+    command: "find . -exec timeout 30 rm -rf / ;"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: find-exec-timeout-ls-allow
+    command: "find . -exec timeout 30 ls ;"
+    expected:
+      decision: allow
+
+  # ── FAILING: find -exec with nice wrapper ────────────────
+  - id: find-exec-nice-cat-env-deny
+    command: "find . -exec nice cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── FAILING: find -execdir with wrappers ─────────────────
+  - id: find-execdir-command-cat-env-deny
+    command: "find . -execdir command cat .env ;"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── Passing contract: xargs without wrappers (existing behavior) ──
+  - id: xargs-cat-env-deny
+    command: "echo foo | xargs cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+    note: "Baseline: xargs cat .env correctly denied"
+
+  # ── FAILING: xargs with command wrapper ──────────────────
+  - id: xargs-command-cat-env-deny
+    command: "echo foo | xargs command cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: xargs-command-rm-deny
+    command: "echo foo | xargs command rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: xargs-command-ls-allow
+    command: "echo foo | xargs command ls"
+    expected:
+      decision: allow
+
+  # ── FAILING: xargs with builtin wrapper ──────────────────
+  - id: xargs-builtin-cat-env-deny
+    command: "echo foo | xargs builtin cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── FAILING: xargs with timeout wrapper ──────────────────
+  - id: xargs-timeout-cat-env-deny
+    command: "echo foo | xargs timeout 30 cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: xargs-timeout-rm-deny
+    command: "echo foo | xargs timeout 30 rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+
+  # ── FAILING: xargs with flags + wrapper ──────────────────
+  - id: xargs-flags-command-cat-env-deny
+    command: "echo foo | xargs -I{} command cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+
+  # ── Pipeline: find | xargs with wrappers ─────────────────
+  - id: find-pipe-xargs-command-cat-env-allow
+    command: "find . -name '*.env' | xargs command cat"
+    expected:
+      decision: allow
+    note: "xargs extracts 'command cat' → unwraps to 'cat' (no .env arg visible statically)"
+  - id: find-pipe-xargs-command-rm-deny
+    command: "find . -name '*.tmp' | xargs command rm -rf"
+    expected:
+      decision: ask
+      rule_id: xargs-rm
+    note: "xargs extracts 'command rm -rf' → unwraps to 'rm -rf' → matches xargs-rm rule"

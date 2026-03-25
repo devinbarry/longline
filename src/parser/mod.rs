@@ -743,4 +743,88 @@ mod tests {
             other => panic!("Expected List for 'unset && echo', got {other:?}"),
         }
     }
+
+    // --- Process substitution parsing ---
+
+    #[test]
+    fn test_parse_process_substitution_extracted() {
+        // Process substitution inner commands should be extracted like command substitutions
+        let stmt = parse("echo <(rm -rf /)").unwrap();
+        let leaves = flatten(&stmt);
+        let has_rm = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("rm")
+            } else {
+                false
+            }
+        });
+        assert!(
+            has_rm,
+            "Process substitution <(rm -rf /) should be extracted and flattened"
+        );
+    }
+
+    #[test]
+    fn test_parse_process_substitution_safe() {
+        let stmt = parse("diff <(date) <(date -u)").unwrap();
+        let leaves = flatten(&stmt);
+        let date_count = leaves
+            .iter()
+            .filter(|leaf| {
+                if let Statement::SimpleCommand(cmd) = leaf {
+                    cmd.name.as_deref() == Some("date")
+                } else {
+                    false
+                }
+            })
+            .count();
+        assert!(
+            date_count >= 2,
+            "Both process substitutions should be extracted, got {date_count} date commands"
+        );
+    }
+
+    #[test]
+    fn test_parse_process_substitution_in_diff() {
+        // diff <(cat .env) <(echo test) should extract cat
+        let stmt = parse("diff <(cat .env) <(echo test)").unwrap();
+        let leaves = flatten(&stmt);
+        let has_cat = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("cat")
+            } else {
+                false
+            }
+        });
+        assert!(
+            has_cat,
+            "Process substitution <(cat .env) should extract 'cat' for evaluation"
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_substitutions() {
+        // Both command sub and process sub should be extracted
+        let stmt = parse("echo $(date) <(rm -rf /)").unwrap();
+        let leaves = flatten(&stmt);
+        let has_date = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("date")
+            } else {
+                false
+            }
+        });
+        let has_rm = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("rm")
+            } else {
+                false
+            }
+        });
+        assert!(has_date, "Command substitution $(date) should be extracted");
+        assert!(
+            has_rm,
+            "Process substitution <(rm -rf /) should be extracted"
+        );
+    }
 }

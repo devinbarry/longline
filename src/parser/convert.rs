@@ -57,13 +57,12 @@ fn convert_node(node: Node, source: &str) -> Statement {
     }
 }
 
-/// Recursively collect command_substitution nodes from within
-/// string, concatenation, and other compound argument nodes.
-/// Stops recursion at command_substitution boundaries to avoid
-/// double-processing (the substitution's own children are handled
-/// by convert_command_substitution).
+/// Recursively collect command_substitution and process_substitution nodes
+/// from within string, concatenation, and other compound argument nodes.
+/// Stops recursion at substitution boundaries to avoid double-processing
+/// (the substitution's own children are handled by convert_command_substitution).
 fn collect_descendant_substitutions(node: Node, source: &str, out: &mut Vec<Statement>) {
-    if node.kind() == "command_substitution" {
+    if node.kind() == "command_substitution" || node.kind() == "process_substitution" {
         out.push(convert_command_substitution(node, source));
         return;
     }
