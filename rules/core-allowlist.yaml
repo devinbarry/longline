@@ -95,6 +95,12 @@ allowlists:
     - { command: nice, trust: minimal }
     - { command: nohup, trust: standard, reason: "Runs a command immune to hangup signals" }
     - { command: strace, trust: standard, reason: "Traces system calls made by a process" }
+    - { command: command, trust: minimal }
+    - { command: builtin, trust: minimal }
+    # NOTE: source/. are intentionally NOT allowlisted here.
+    # secrets.yaml deny rules only cover cat/less/more/head/tail/bat,
+    # so allowlisting source would let `source ~/.ssh/id_rsa` through.
+    # Projects that need source allowlisted should do so per-project.
     # ── Always safe: dev tools (no publish risk) ──────────────────
     - { command: make, trust: standard, reason: "Runs build targets from a Makefile" }
     - { command: cmake, trust: standard, reason: "Generates build system files from CMakeLists" }

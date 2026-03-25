@@ -607,4 +607,140 @@ mod tests {
         assert_eq!(leaves.len(), 1, "Empty should flatten to itself");
         assert!(matches!(leaves[0], Statement::Empty));
     }
+
+    // --- Declaration command parsing (export/declare/local/readonly/typeset) ---
+
+    #[test]
+    fn test_parse_export_var() {
+        let stmt = parse("export FOO=bar").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("export"));
+            }
+            other => panic!("Expected SimpleCommand for export, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_export_name_only() {
+        let stmt = parse("export FOO").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("export"));
+                assert_eq!(cmd.argv, vec!["FOO"]);
+            }
+            other => panic!("Expected SimpleCommand for export, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_declare_x() {
+        let stmt = parse("declare -x FOO=bar").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("declare"));
+            }
+            other => panic!("Expected SimpleCommand for declare, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_local_var() {
+        let stmt = parse("local x=1").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("local"));
+            }
+            other => panic!("Expected SimpleCommand for local, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_readonly_var() {
+        let stmt = parse("readonly X=42").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("readonly"));
+            }
+            other => panic!("Expected SimpleCommand for readonly, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_typeset_var() {
+        let stmt = parse("typeset -i num=5").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("typeset"));
+            }
+            other => panic!("Expected SimpleCommand for typeset, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_export_in_list() {
+        // export in a && list should produce a List, not Opaque
+        let stmt = parse("export FOO=bar && echo hello").unwrap();
+        match &stmt {
+            Statement::List(_) => {
+                let leaves = flatten(&stmt);
+                assert!(
+                    leaves.len() >= 2,
+                    "export && echo should have at least 2 leaves, got {}",
+                    leaves.len()
+                );
+                // Neither leaf should be Opaque
+                for leaf in &leaves {
+                    assert!(
+                        !matches!(leaf, Statement::Opaque(_)),
+                        "No leaf should be Opaque in 'export FOO=bar && echo hello'"
+                    );
+                }
+            }
+            other => panic!("Expected List for 'export && echo', got {other:?}"),
+        }
+    }
+
+    // --- Unset command parsing ---
+
+    #[test]
+    fn test_parse_unset_var() {
+        let stmt = parse("unset FOO").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("unset"));
+                assert_eq!(cmd.argv, vec!["FOO"]);
+            }
+            other => panic!("Expected SimpleCommand for unset, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unset_f() {
+        let stmt = parse("unset -f my_function").unwrap();
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                assert_eq!(cmd.name.as_deref(), Some("unset"));
+                assert_eq!(cmd.argv, vec!["-f", "my_function"]);
+            }
+            other => panic!("Expected SimpleCommand for unset -f, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unset_in_list() {
+        let stmt = parse("unset FOO && echo done").unwrap();
+        match &stmt {
+            Statement::List(_) => {
+                let leaves = flatten(&stmt);
+                for leaf in &leaves {
+                    assert!(
+                        !matches!(leaf, Statement::Opaque(_)),
+                        "No leaf should be Opaque in 'unset FOO && echo done'"
+                    );
+                }
+            }
+            other => panic!("Expected List for 'unset && echo', got {other:?}"),
+        }
+    }
 }

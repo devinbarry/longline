@@ -46,6 +46,10 @@ fn convert_node(node: Node, source: &str) -> Statement {
         "case_statement" => convert_case_statement(node, source),
         "compound_statement" => convert_compound_statement(node, source),
         "function_definition" => convert_function_definition(node, source),
+        // Shell declaration builtins (export/declare/local/readonly/typeset)
+        "declaration_command" => convert_declaration_command(node, source),
+        // Shell unset/unsetenv builtins
+        "unset_command" => convert_unset_command(node, source),
         // Test commands and comments - no executable commands inside
         "test_command" => convert_test_command(node, source),
         "comment" => Statement::Empty,
@@ -316,6 +320,72 @@ fn convert_bare_assignment(node: Node, source: &str) -> Statement {
         argv: vec![],
         redirects: vec![],
         assignments,
+        embedded_substitutions,
+    })
+}
+
+/// Convert a "declaration_command" node (export/declare/local/readonly/typeset).
+/// The keyword is the first anonymous child; remaining named children are
+/// variable_assignment, variable_name, or literal arguments (e.g. flags like -x).
+fn convert_declaration_command(node: Node, source: &str) -> Statement {
+    // First child (anonymous) is the keyword: export, declare, local, readonly, typeset
+    let keyword = node
+        .child(0)
+        .map(|c| node_text(c, source).to_string())
+        .unwrap_or_default();
+
+    let mut argv: Vec<String> = Vec::new();
+    let mut assignments: Vec<Assignment> = Vec::new();
+    let mut embedded_substitutions: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        match child.kind() {
+            "variable_assignment" => {
+                let (assignment, subs) = parse_assignment(child, source);
+                assignments.push(assignment);
+                embedded_substitutions.extend(subs);
+            }
+            _ => {
+                argv.push(resolve_node_text(child, source));
+                collect_descendant_substitutions(child, source, &mut embedded_substitutions);
+            }
+        }
+    }
+
+    Statement::SimpleCommand(SimpleCommand {
+        name: Some(keyword),
+        argv,
+        redirects: vec![],
+        assignments,
+        embedded_substitutions,
+    })
+}
+
+/// Convert an "unset_command" node (unset/unsetenv).
+/// The keyword is the first anonymous child; remaining named children are
+/// variable_name or literal arguments (e.g. flags like -f, -v).
+fn convert_unset_command(node: Node, source: &str) -> Statement {
+    // First child (anonymous) is the keyword: unset or unsetenv
+    let keyword = node
+        .child(0)
+        .map(|c| node_text(c, source).to_string())
+        .unwrap_or_default();
+
+    let mut argv: Vec<String> = Vec::new();
+    let mut embedded_substitutions: Vec<Statement> = Vec::new();
+
+    let mut cursor = node.walk();
+    for child in node.named_children(&mut cursor) {
+        argv.push(resolve_node_text(child, source));
+        collect_descendant_substitutions(child, source, &mut embedded_substitutions);
+    }
+
+    Statement::SimpleCommand(SimpleCommand {
+        name: Some(keyword),
+        argv,
+        redirects: vec![],
+        assignments: vec![],
         embedded_substitutions,
     })
 }
