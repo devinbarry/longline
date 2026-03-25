@@ -1,0 +1,276 @@
+# Shell builtins: declaration commands, unset, source, command, builtin
+# These test proper parsing and evaluation of Bash built-in commands.
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # export (tree-sitter: declaration_command)
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Bare export: no matching rule → ask ───────────────────────
+  - id: export-var-ask
+    command: "export FOO=bar"
+    expected:
+      decision: ask
+  - id: export-multiple-ask
+    command: "export FOO=bar BAZ=qux"
+    expected:
+      decision: ask
+  - id: export-name-only-ask
+    command: "export FOO"
+    expected:
+      decision: ask
+  - id: export-path-ask
+    command: "export PATH=/usr/bin:$PATH"
+    expected:
+      decision: ask
+
+  # ── export in compound: should not poison other leaves ────────
+  - id: export-and-ls-ask
+    command: "export FOO=bar && ls"
+    expected:
+      decision: ask
+    note: "export is ask (no allowlist), ls is allow → ask wins (not opaque)"
+  - id: export-and-echo-ask
+    command: "export FOO=bar && echo hello"
+    expected:
+      decision: ask
+    note: "export is ask, echo is allow → ask (not opaque/unrecognized)"
+
+  # ════════════════════════════════════════════════════════════════
+  # declare (tree-sitter: declaration_command)
+  # ════════════════════════════════════════════════════════════════
+  - id: declare-var-ask
+    command: "declare -x FOO=bar"
+    expected:
+      decision: ask
+  - id: declare-array-ask
+    command: "declare -a arr=(1 2 3)"
+    expected:
+      decision: ask
+  - id: declare-integer-ask
+    command: "declare -i count=0"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # local (tree-sitter: declaration_command)
+  # ════════════════════════════════════════════════════════════════
+  - id: local-var-ask
+    command: "local x=1"
+    expected:
+      decision: ask
+  - id: local-multiple-ask
+    command: "local a=1 b=2"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # readonly (tree-sitter: declaration_command)
+  # ════════════════════════════════════════════════════════════════
+  - id: readonly-var-ask
+    command: "readonly X=42"
+    expected:
+      decision: ask
+  - id: readonly-name-only-ask
+    command: "readonly FOO"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # typeset (tree-sitter: declaration_command)
+  # ════════════════════════════════════════════════════════════════
+  - id: typeset-var-ask
+    command: "typeset -i num=5"
+    expected:
+      decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # unset (tree-sitter: unset_command)
+  # ════════════════════════════════════════════════════════════════
+  - id: unset-var-ask
+    command: "unset FOO"
+    expected:
+      decision: ask
+  - id: unset-multiple-ask
+    command: "unset FOO BAR BAZ"
+    expected:
+      decision: ask
+  - id: unset-f-ask
+    command: "unset -f my_function"
+    expected:
+      decision: ask
+  - id: unset-v-ask
+    command: "unset -v MY_VAR"
+    expected:
+      decision: ask
+
+  # ── unset in compound: should not poison other leaves ─────────
+  - id: unset-and-echo-ask
+    command: "unset FOO && echo done"
+    expected:
+      decision: ask
+    note: "unset is ask, echo is allow → ask (not opaque/unrecognized)"
+
+  # ════════════════════════════════════════════════════════════════
+  # source / . (parsed as SimpleCommand, NOT allowlisted)
+  # source/. are intentionally not in the core allowlist because
+  # secrets.yaml deny rules only cover cat/less/more/head/tail/bat,
+  # not source. Allowlisting source would let `source ~/.ssh/id_rsa`
+  # through unchecked. See bypass-attempts.yaml for security tests.
+  # ════════════════════════════════════════════════════════════════
+
+  # ── source: defaults to ask (not allowlisted) ────────────────
+  - id: source-bashrc-ask
+    command: "source ~/.bashrc"
+    expected:
+      decision: ask
+  - id: source-bash-aliases-ask
+    command: "source ~/.bash_aliases"
+    expected:
+      decision: ask
+  - id: source-cargo-env-ask
+    command: "source ~/.cargo/env"
+    expected:
+      decision: ask
+  - id: dot-bashrc-ask
+    command: ". ~/.bashrc"
+    expected:
+      decision: ask
+  - id: dot-cargo-env-ask
+    command: ". ~/.cargo/env"
+    expected:
+      decision: ask
+  - id: source-script-ask
+    command: "source ./setup.sh"
+    expected:
+      decision: ask
+  - id: dot-script-ask
+    command: ". ./setup.sh"
+    expected:
+      decision: ask
+
+  # ── Dangerous source: denied by rules ─────────────────────────
+  - id: source-env-deny
+    command: "source .env"
+    expected:
+      decision: deny
+      rule_id: source-env
+  - id: source-env-local-deny
+    command: "source .env.local"
+    expected:
+      decision: deny
+      rule_id: source-env
+  - id: dot-env-deny
+    command: ". .env"
+    expected:
+      decision: deny
+      rule_id: source-env
+  - id: dot-envrc-deny
+    command: ". .envrc"
+    expected:
+      decision: deny
+      rule_id: source-env
+
+  # ════════════════════════════════════════════════════════════════
+  # command (transparent wrapper — unwraps to inner command)
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Positive: command + safe inner = allow ────────────────────
+  - id: command-ls-allow
+    command: "command ls"
+    expected:
+      decision: allow
+  - id: command-echo-allow
+    command: "command echo hello"
+    expected:
+      decision: allow
+  - id: command-grep-allow
+    command: "command grep -r pattern src/"
+    expected:
+      decision: allow
+  - id: command-git-status-allow
+    command: "command git status"
+    expected:
+      decision: allow
+  - id: command-cat-allow
+    command: "command cat README.md"
+    expected:
+      decision: allow
+
+  # ── command with flags ────────────────────────────────────────
+  - id: command-v-allow
+    command: "command -v ls"
+    expected:
+      decision: allow
+    note: "command -v is like which — safe"
+  - id: command-V-allow
+    command: "command -V ls"
+    expected:
+      decision: allow
+  - id: command-p-allow
+    command: "command -p ls"
+    expected:
+      decision: allow
+
+  # ── Negative: command + dangerous inner = deny ────────────────
+  - id: command-rm-deny
+    command: "command rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: command-cat-env-deny
+    command: "command cat .env"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: command-unknown-ask
+    command: "command some_unknown_command"
+    expected:
+      decision: ask
+
+  # ── Edge cases ────────────────────────────────────────────────
+  - id: command-bare-allow
+    command: "command"
+    expected:
+      decision: allow
+    note: "No inner command — wrapper itself is allowlisted"
+
+  # ── Chained: command + other wrappers ─────────────────────────
+  - id: command-timeout-ls-allow
+    command: "command timeout 30 ls"
+    expected:
+      decision: allow
+  - id: command-timeout-rm-deny
+    command: "command timeout 30 rm -rf /"
+    expected:
+      decision: deny
+
+  # ════════════════════════════════════════════════════════════════
+  # builtin (transparent wrapper — unwraps to inner command)
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Positive: builtin + safe inner = allow ────────────────────
+  - id: builtin-echo-allow
+    command: "builtin echo hello"
+    expected:
+      decision: allow
+  - id: builtin-cd-allow
+    command: "builtin cd /tmp"
+    expected:
+      decision: allow
+  - id: builtin-type-allow
+    command: "builtin type ls"
+    expected:
+      decision: allow
+
+  # ── Negative: builtin + dangerous inner ───────────────────────
+  - id: builtin-unknown-ask
+    command: "builtin some_unknown_command"
+    expected:
+      decision: ask
+
+  # ── Edge cases ────────────────────────────────────────────────
+  - id: builtin-bare-allow
+    command: "builtin"
+    expected:
+      decision: allow
+    note: "No inner command — wrapper itself is allowlisted"

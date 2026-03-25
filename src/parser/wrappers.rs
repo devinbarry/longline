@@ -96,6 +96,20 @@ static WRAPPERS: &[WrapperDef] = &[
         ],
         skip: ArgSkip::None,
     },
+    WrapperDef {
+        name: "command",
+        subcommand: None,
+        value_flags: &[],
+        bool_flags: &["-v", "-V", "-p"],
+        skip: ArgSkip::None,
+    },
+    WrapperDef {
+        name: "builtin",
+        subcommand: None,
+        value_flags: &[],
+        bool_flags: &[],
+        skip: ArgSkip::None,
+    },
 ];
 
 /// Extract basename from a command name for wrapper matching.
