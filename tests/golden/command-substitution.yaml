@@ -81,3 +81,77 @@ tests:
     expected:
       decision: deny
       rule_id: rm-recursive-root
+
+  # ════════════════════════════════════════════════════════════
+  # Process substitutions <(...) — inner commands must be
+  # evaluated just like command substitutions $(...).
+  # ════════════════════════════════════════════════════════════
+
+  # ── Safe process substitutions (allow) ───────────────────
+  - id: procsub-safe-diff-dates
+    command: "diff <(date) <(date -u)"
+    expected:
+      decision: allow
+  - id: procsub-safe-diff-ls
+    command: "diff <(ls dir1) <(ls dir2)"
+    expected:
+      decision: allow
+  - id: procsub-safe-cat
+    command: "cat <(echo hello)"
+    expected:
+      decision: allow
+  - id: procsub-safe-grep
+    command: "grep pattern <(echo test)"
+    expected:
+      decision: allow
+  - id: procsub-safe-sort
+    command: "sort <(echo 3) <(echo 1)"
+    expected:
+      decision: allow
+
+  # ── Dangerous process substitutions (deny) ───────────────
+  - id: procsub-deny-rm-rf-root
+    command: "echo <(rm -rf /)"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: procsub-deny-cat-env
+    command: "diff <(cat .env) <(echo test)"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: procsub-deny-cat-env-grep
+    command: "grep pattern <(cat .env)"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+  - id: procsub-deny-cat-ssh-key
+    command: "echo <(cat ~/.ssh/id_rsa)"
+    expected:
+      decision: deny
+      rule_id: cat-ssh-key
+  - id: procsub-deny-rm-in-diff
+    command: "diff <(echo safe) <(rm -rf /)"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+
+  # ── Process substitution with unknown commands (ask) ──────
+  - id: procsub-ask-unknown
+    command: "diff <(some_unknown_command) <(echo test)"
+    expected:
+      decision: ask
+
+  # ── Mixed: command sub + process sub ──────────────────────
+  - id: mixed-cmd-sub-safe-proc-sub-deny
+    command: "echo $(date) <(cat .env)"
+    expected:
+      decision: deny
+      rule_id: cat-env-file
+    note: "command sub is safe, process sub is dangerous → deny wins"
+  - id: mixed-proc-sub-safe-cmd-sub-deny
+    command: "echo <(date) $(rm -rf /)"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "process sub is safe, command sub is dangerous → deny wins"

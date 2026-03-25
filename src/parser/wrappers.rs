@@ -332,15 +332,20 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                 collect_inner_commands(sub, out);
             }
             // Special-case: find -exec / xargs
+            // Extracted commands are pushed AND passed through unwrap_recursive
+            // so transparent wrappers (command, builtin, timeout, etc.) are
+            // peeled off before evaluation.
             if let Some(ref name) = cmd.name {
                 let basename = wrapper_basename(name);
                 if basename == "find" {
                     for inner in extract_find_exec(cmd) {
-                        out.push(Statement::SimpleCommand(inner));
+                        out.push(Statement::SimpleCommand(inner.clone()));
+                        unwrap_recursive(&inner, out, 0);
                     }
                 } else if basename == "xargs" {
                     if let Some(inner) = extract_xargs_command(cmd) {
-                        out.push(Statement::SimpleCommand(inner));
+                        out.push(Statement::SimpleCommand(inner.clone()));
+                        unwrap_recursive(&inner, out, 0);
                     }
                 }
             }
