@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1] - 2026-03-25
+
+Parser and security improvements based on audit of production hook logs.
+
+### Added
+
+- Parser handles `declaration_command` nodes: `export`, `declare`, `local`, `readonly`, `typeset` are now parsed as `SimpleCommand` instead of falling through to `Opaque`
+- Parser handles `unset_command` nodes: `unset` and `unsetenv` parsed as `SimpleCommand`
+- `command` and `builtin` added as transparent wrappers — inner commands are evaluated by rules (fixes bypass where `command rm -rf /` was `ask` instead of `deny`)
+- `command` and `builtin` added to core allowlist at minimal trust
+- Process substitutions `<(...)` now have inner commands evaluated alongside command substitutions `$(...)`
+- find -exec and xargs extracted commands are now unwrapped through transparent wrappers before evaluation
+- 100+ new golden tests covering shell builtins, process substitutions, find-exec/xargs wrappers, and security regression scenarios
+- 14 new parser unit tests
+- Static analysis boundary documentation in SECURITY.md
+
+### Fixed
+
+- `export FOO=bar && ls` no longer produces `Opaque` — compound commands containing declaration builtins are properly parsed
+- `command rm -rf /` now correctly denies instead of asking (security fix)
+- `echo <(rm -rf /)` now correctly denies instead of allowing (security fix)
+- `find . -exec command cat .env ;` now correctly denies instead of allowing (security fix)
+- `echo foo | xargs timeout 30 cat .env` now correctly denies instead of allowing (security fix)
+
+### Security
+
+- `source`/`.` are intentionally NOT added to the core allowlist — secrets.yaml deny rules only cover `cat/less/more/head/tail/bat`, so allowlisting source would let `source ~/.ssh/id_rsa` through unchecked. Security regression tests enforce this.
+
 ## [0.9.0] - 2026-03-07
 
 ### Added
