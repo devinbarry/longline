@@ -10,8 +10,26 @@ pub fn convert_program(node: Node, source: &str) -> Statement {
     let mut children: Vec<Statement> = Vec::new();
 
     let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        children.push(convert_node(child, source));
+    let named: Vec<Node> = node.named_children(&mut cursor).collect();
+
+    let mut i = 0;
+    while i < named.len() {
+        let child = named[i];
+        if child.is_error() {
+            // ERROR node: try to merge into the preceding command/pipeline.
+            // This handles tree-sitter parse failures from backticks inside
+            // double-quoted strings (e.g. grep -oE "Host\(`[^`]+`\)") where
+            // the parser splits the command at the backtick boundary.
+            if let Some(prev) = children.last_mut() {
+                merge_error_into_statement(prev, child, source);
+            } else {
+                // No preceding statement to merge into
+                children.push(Statement::Opaque(node_text(child, source).to_string()));
+            }
+        } else {
+            children.push(convert_node(child, source));
+        }
+        i += 1;
     }
 
     match children.len() {
@@ -23,6 +41,29 @@ pub fn convert_program(node: Node, source: &str) -> Statement {
             let first = Box::new(iter.next().unwrap());
             let rest: Vec<(ListOp, Statement)> = iter.map(|s| (ListOp::Semi, s)).collect();
             Statement::List(List { first, rest })
+        }
+    }
+}
+
+/// Merge an ERROR node's text into the last SimpleCommand of a statement.
+/// This recovers command identity when tree-sitter fails on argument content
+/// (e.g. backticks in regex patterns) but successfully parsed the command name.
+fn merge_error_into_statement(stmt: &mut Statement, error_node: Node, source: &str) {
+    let error_text = node_text(error_node, source).to_string();
+    match stmt {
+        Statement::SimpleCommand(cmd) => {
+            cmd.argv.push(error_text);
+        }
+        Statement::Pipeline(pipeline) => {
+            // Merge into the last stage of the pipeline
+            if let Some(last) = pipeline.stages.last_mut() {
+                merge_error_into_statement(last, error_node, source);
+            }
+        }
+        _ => {
+            // Can't merge into other statement types; leave as-is
+            // (the ERROR will be silently dropped, which is acceptable
+            // since the preceding statement already determines the decision)
         }
     }
 }

@@ -827,4 +827,51 @@ mod tests {
             "Process substitution <(rm -rf /) should be extracted"
         );
     }
+
+    // --- Error recovery: backticks in arguments ---
+
+    #[test]
+    fn test_parse_grep_backtick_regex_recovers_command() {
+        // tree-sitter splits this at the backtick boundary: `grep -oE` (command) +
+        // ERROR (the double-quoted pattern). We should recover the command name
+        // so grep can still match the allowlist.
+        let cmd = r#"grep -oE "Host\(\`[^`]+\`\)" file.txt"#;
+        let result = parse(cmd).unwrap();
+        let leaves = flatten(&result);
+        let has_grep = leaves.iter().any(|leaf| {
+            if let Statement::SimpleCommand(cmd) = leaf {
+                cmd.name.as_deref() == Some("grep")
+            } else {
+                false
+            }
+        });
+        assert!(
+            has_grep,
+            "Should recover grep command name despite backtick parse error, got: {result:?}"
+        );
+        // Should NOT have any Opaque nodes
+        let has_opaque = leaves
+            .iter()
+            .any(|leaf| matches!(leaf, Statement::Opaque(_)));
+        assert!(
+            !has_opaque,
+            "Recovered command should not produce Opaque leaves, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_parse_backtick_error_recovery_in_pipeline() {
+        // Same issue but in a pipeline: grep | grep-with-backticks | sort
+        let cmd = r#"grep -r "pattern" src/ | grep -oE "Host\(\`[^`]+\`\)" | sort -u"#;
+        let result = parse(cmd).unwrap();
+        let leaves = flatten(&result);
+        // Should have grep (x2) and sort - no Opaque
+        let has_opaque = leaves
+            .iter()
+            .any(|leaf| matches!(leaf, Statement::Opaque(_)));
+        assert!(
+            !has_opaque,
+            "Pipeline with backtick regex should not produce Opaque, got: {result:?}"
+        );
+    }
 }

@@ -169,6 +169,20 @@ tests:
       decision: deny
       rule_id: rm-recursive-root
 
+  # Pipeline with while-read (common Claude Code pattern)
+  - id: find-pipe-while-read-allow
+    command: 'find . -name "*.tf" | while read f; do echo "$f"; done'
+    expected:
+      decision: allow
+  - id: grep-pipe-while-read-allow
+    command: 'grep -r "TODO" src/ | while read -r line; do echo "$line"; done'
+    expected:
+      decision: allow
+  - id: ls-pipe-while-read-allow
+    command: "ls | while read f; do echo $f; done"
+    expected:
+      decision: allow
+
   # Tree fallback pattern (common for directory exploration)
   - id: tree-or-find-fallback-safe
     command: "tree -L 3 /path 2>/dev/null || find /path -type d | head -20"

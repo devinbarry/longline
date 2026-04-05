@@ -58,6 +58,7 @@ allowlists:
     - { command: od, trust: minimal }
     - { command: base64, trust: minimal }
     - { command: time, trust: minimal }
+    - { command: read, trust: minimal }
     # ── System info: read-only ───────────────────────────────────────
     - { command: env, trust: minimal }
     - { command: printenv, trust: minimal }

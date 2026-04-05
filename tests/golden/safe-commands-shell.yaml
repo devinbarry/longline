@@ -40,6 +40,11 @@ tests:
     command: "grep -r 'function' src/"
     expected:
       decision: allow
+  - id: grep-backtick-regex-safe
+    command: "grep -oE \"Host\\(\\`[^`]+\\`\\)\" file.txt"
+    expected:
+      decision: allow
+    note: "Backticks in double-quoted regex should not break parsing"
   - id: make-safe
     command: "make build"
     expected:
@@ -331,6 +336,20 @@ tests:
       decision: ask
       rule_id: longline-init
 
+  # ── read builtin ──────────────────────────────────────────────────
+  - id: read-safe
+    command: "read line"
+    expected:
+      decision: allow
+  - id: read-r-safe
+    command: "read -r line"
+    expected:
+      decision: allow
+  - id: read-multiple-vars-safe
+    command: "read -r key value rest"
+    expected:
+      decision: allow
+
   # ── pstree safe invocations ──────────────────────────────────────
   - id: pstree-safe
     command: "pstree"
@@ -378,6 +397,17 @@ tests:
     command: "tmux display-message -p '#{session_name}'"
     expected:
       decision: allow
+  # tmux: boolean flags before subcommand (should still match allowlist)
+  - id: tmux-boolean-flag-before-ls
+    command: "tmux -v ls"
+    expected:
+      decision: allow
+    note: "Boolean flags before subcommand should be skipped for matching"
+  - id: tmux-boolean-flag-before-list-sessions
+    command: "tmux -v list-sessions"
+    expected:
+      decision: allow
+
   # tmux: mutating operations (should ask - not allowlisted)
   - id: tmux-send-keys-ask
     command: "tmux send-keys -t 'session:0' 'ls' Enter"
