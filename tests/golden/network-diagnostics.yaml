@@ -59,6 +59,26 @@ tests:
     expected:
       decision: allow
 
+  # ── ip: flags before subcommand (should still match allowlist) ──
+  - id: ip-brief-addr-show
+    command: "ip -br addr show"
+    expected:
+      decision: allow
+    note: "-br flag before subcommand should be skipped for matching"
+  - id: ip-brief-link-show
+    command: "ip -br link show"
+    expected:
+      decision: allow
+  - id: ip-json-route-show
+    command: "ip --json route show"
+    expected:
+      decision: allow
+  # ip: flags before mutating subcommand (should still ask)
+  - id: ip-brief-addr-add-ask
+    command: "ip -br addr add 192.168.1.1/24 dev eth0"
+    expected:
+      decision: ask
+
   # ── ip: mutating subcommands (ask) ──────────────────────────
   - id: ip-addr-add-ask
     command: "ip addr add 192.168.1.1/24 dev eth0"

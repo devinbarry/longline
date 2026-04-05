@@ -101,15 +101,29 @@ fn normalize_arg(arg: &str) -> &str {
 
 /// Check if required args match as an ordered prefix of argv.
 /// Uses path normalization for safe relative paths.
+/// When a required arg is not a flag (doesn't start with `-`), flag-like
+/// argv elements are skipped so that `logcli --addr=... labels` matches
+/// an allowlist entry for `logcli labels`.
 fn args_match_prefix(required_args: &[&str], argv: &[String]) -> bool {
-    if required_args.len() > argv.len() {
-        return false;
+    let mut argv_idx = 0;
+    for req in required_args {
+        // If the required arg is a subcommand (not a flag), skip any
+        // flag-like argv elements to find the matching subcommand.
+        if !req.starts_with('-') {
+            while argv_idx < argv.len() && argv[argv_idx].starts_with('-') {
+                argv_idx += 1;
+            }
+        }
+        if argv_idx >= argv.len() {
+            return false;
+        }
+        let normalized = normalize_arg(&argv[argv_idx]);
+        if *req != normalized {
+            return false;
+        }
+        argv_idx += 1;
     }
-
-    required_args.iter().zip(argv.iter()).all(|(req, actual)| {
-        let normalized = normalize_arg(actual);
-        *req == normalized
-    })
+    true
 }
 
 /// Find the first allowlist entry matching the command.
@@ -599,6 +613,100 @@ mod tests {
 
         let cmd = test_git_cmd(vec!["-C", "/tmp", "clean", "-f"]);
         assert_eq!(find_allowlist_match(&config, &cmd), None);
+    }
+
+    // ================================================================
+    // args_match_prefix: flag-skipping for subcommand matching
+    // ================================================================
+
+    #[test]
+    fn test_args_match_prefix_skips_flags_before_subcommand() {
+        // logcli --addr=http://foo:3100 labels host
+        // should match required_args ["labels"] by skipping --addr=...
+        let required = &["labels"];
+        let argv = vec![
+            "--addr=http://foo:3100".to_string(),
+            "labels".to_string(),
+            "host".to_string(),
+        ];
+        assert!(
+            args_match_prefix(required, &argv),
+            "Should skip --addr= flag to match 'labels' subcommand"
+        );
+    }
+
+    #[test]
+    fn test_args_match_prefix_skips_multiple_flags() {
+        // logcli --addr=http://foo:3100 -q labels host
+        let required = &["labels"];
+        let argv = vec![
+            "--addr=http://foo:3100".to_string(),
+            "-q".to_string(),
+            "labels".to_string(),
+            "host".to_string(),
+        ];
+        assert!(
+            args_match_prefix(required, &argv),
+            "Should skip multiple flags to match subcommand"
+        );
+    }
+
+    #[test]
+    fn test_args_match_prefix_no_flags_still_works() {
+        // logcli labels host (no flags) should still match
+        let required = &["labels"];
+        let argv = vec!["labels".to_string(), "host".to_string()];
+        assert!(args_match_prefix(required, &argv));
+    }
+
+    #[test]
+    fn test_args_match_prefix_multi_subcommand_with_flags() {
+        // uv --quiet run prefect config view
+        let required = &["run", "prefect", "config", "view"];
+        let argv = vec![
+            "--quiet".to_string(),
+            "run".to_string(),
+            "prefect".to_string(),
+            "config".to_string(),
+            "view".to_string(),
+        ];
+        assert!(
+            args_match_prefix(required, &argv),
+            "Should skip --quiet to match multi-word subcommand chain"
+        );
+    }
+
+    #[test]
+    fn test_args_match_prefix_flag_in_required_still_matches() {
+        // If allowlist entry requires a flag, it should match literally
+        let required = &["push", "--force"];
+        let argv = vec!["push".to_string(), "--force".to_string()];
+        assert!(
+            args_match_prefix(required, &argv),
+            "Required flags should match literally"
+        );
+    }
+
+    #[test]
+    fn test_args_match_prefix_wrong_subcommand_after_flags() {
+        // logcli --addr=http://foo:3100 query (should NOT match "labels")
+        let required = &["labels"];
+        let argv = vec!["--addr=http://foo:3100".to_string(), "query".to_string()];
+        assert!(
+            !args_match_prefix(required, &argv),
+            "Wrong subcommand should not match even after skipping flags"
+        );
+    }
+
+    #[test]
+    fn test_args_match_prefix_only_flags_no_subcommand() {
+        // logcli --addr=http://foo:3100 -q (no subcommand at all)
+        let required = &["labels"];
+        let argv = vec!["--addr=http://foo:3100".to_string(), "-q".to_string()];
+        assert!(
+            !args_match_prefix(required, &argv),
+            "Should not match if no subcommand present after flags"
+        );
     }
 
     #[test]
