@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2] - 2026-04-05
+
+Fixes for false-positive `ask` decisions discovered from production hook logs.
+
+### Fixed
+
+- Add `read` builtin to core allowlist — `find | while read f; do ...; done` no longer asks
+- Recover tree-sitter ERROR nodes from backtick-in-regex patterns — `grep -oE "Host(\`[^`]+\`)"` no longer produces Opaque/ask
+- Skip flag-like argv elements when matching multi-word allowlist entries — e.g. `ip -br addr show` now matches `ip addr show`, `tmux -v ls` matches `tmux ls`
+
 ## [0.9.1] - 2026-03-25
 
 Parser and security improvements based on audit of production hook logs.
