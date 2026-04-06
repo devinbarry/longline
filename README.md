@@ -4,13 +4,13 @@ A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 
 
 ## What it does
 
-longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands before execution, parses them using tree-sitter, evaluates them against YAML-defined safety rules, and returns allow/ask/deny decisions.
+longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands before execution, parses them using tree-sitter, evaluates them against YAML-defined safety rules, and returns allow/ask/deny decisions. It also handles Read, Grep, and Glob tools with path-based sensitive-file protection.
 
 **Key features:**
 - Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, and compound statements
 - Configurable safety levels (critical, high, strict) and trust levels (minimal, standard, full)
 - Optional AI evaluation for inline interpreter code
-- 1600+ golden test cases for accuracy
+- 1850+ golden test cases for accuracy
 - JSONL audit logging
 - Fail-closed design: unknown/unparseable constructs default to `ask`
 
@@ -40,6 +40,33 @@ Add to your Claude Code settings (`~/.claude/settings.json`):
     "PreToolUse": [
       {
         "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "longline"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "longline"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "longline"
+          }
+        ]
+      },
+      {
+        "matcher": "Glob",
         "hooks": [
           {
             "type": "command",
