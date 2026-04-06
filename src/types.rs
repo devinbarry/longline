@@ -19,8 +19,9 @@ pub struct ToolInput {
     pub command: Option<String>,
     #[allow(dead_code)]
     pub description: Option<String>,
-    #[allow(dead_code)]
     pub file_path: Option<String>,
+    pub path: Option<String>,
+    pub pattern: Option<String>,
 }
 
 /// Decision output for the hook protocol.
