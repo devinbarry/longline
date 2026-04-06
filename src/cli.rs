@@ -460,7 +460,21 @@ fn run_hook(
         }
     };
 
-    // Only handle Bash tool - passthrough for everything else
+    // Handle Read tool - path-based evaluation
+    if hook_input.tool_name == "Read" {
+        let decision = match &hook_input.tool_input.file_path {
+            Some(path) => evaluate_read_path(path),
+            None => {
+                // No file_path field - allow (shouldn't happen in practice)
+                (Decision::Allow, "longline: Read tool (no path)".to_string())
+            }
+        };
+        let output = HookOutput::decision(decision.0, &decision.1);
+        print_json(&output);
+        return 0;
+    }
+
+    // Passthrough for all other non-Bash tools
     if hook_input.tool_name != "Bash" {
         println!("{{}}");
         return 0;
@@ -606,6 +620,32 @@ fn run_hook(
     }
 
     0
+}
+
+/// Sensitive path patterns for the Read tool.
+/// Paths matching these are escalated to `ask` instead of auto-allowed.
+const SENSITIVE_PATH_PATTERNS: &[&str] = &["/.ssh/", "/.aws/", "/.gnupg/"];
+const SENSITIVE_EXACT_PATHS: &[&str] = &["/etc/shadow"];
+
+/// Evaluate a file path from the Read tool and return (decision, reason).
+fn evaluate_read_path(path: &str) -> (Decision, String) {
+    for pattern in SENSITIVE_PATH_PATTERNS {
+        if path.contains(pattern) {
+            return (
+                Decision::Ask,
+                format!("longline: Read sensitive path ({pattern}): {path}"),
+            );
+        }
+    }
+    for exact in SENSITIVE_EXACT_PATHS {
+        if path == *exact {
+            return (
+                Decision::Ask,
+                format!("longline: Read sensitive path: {path}"),
+            );
+        }
+    }
+    (Decision::Allow, format!("longline: Read allowed: {path}"))
 }
 
 fn run_check(
