@@ -432,6 +432,42 @@ pub fn run_hook_with_config(tool_name: &str, command: &str, config: &str) -> Run
     }
 }
 
+/// Run longline in hook mode for a Read tool call with --config pointing to rules/rules.yaml.
+pub fn run_hook_read(file_path: &str) -> RunResult {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": { "file_path": file_path },
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let config = rules_path();
+    let home = static_test_home().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
 /// Run a longline subcommand with the shared static HOME.
 pub fn run_subcommand(args: &[&str]) -> RunResult {
     let home = static_test_home().to_string_lossy().to_string();

@@ -20,7 +20,7 @@ fn test_e2e_dangerous_command_denies() {
 
 #[test]
 fn test_e2e_non_bash_tool_passes_through() {
-    let result = run_hook("Read", "");
+    let result = run_hook("Write", "");
     assert_eq!(result.exit_code, 0);
     assert_eq!(
         result.stdout.trim(),
