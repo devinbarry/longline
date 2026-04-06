@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-04-06
+
+Longline now evaluates Read, Grep, and Glob tool calls instead of passing them through to Claude Code's built-in permission system. Most file reads and searches are auto-allowed; credential stores are escalated to ask.
+
+### Added
+
+- Read tool support — evaluates `file_path` against sensitive path patterns
+- Grep and Glob tool support — evaluates `path` field against the same patterns
+- Sensitive path protection for `/.ssh/`, `/.aws/`, `/.gnupg/`, and `/etc/shadow`
+- 30 new integration tests for read-only tool evaluation
+- `path` and `pattern` fields added to `ToolInput` deserialization
+
 ## [0.9.2] - 2026-04-05
 
 Fixes for false-positive `ask` decisions discovered from production hook logs.
