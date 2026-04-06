@@ -468,6 +468,88 @@ pub fn run_hook_read(file_path: &str) -> RunResult {
     }
 }
 
+/// Run longline in hook mode for a Grep tool call with --config pointing to rules/rules.yaml.
+pub fn run_hook_grep(pattern: &str, path: Option<&str>) -> RunResult {
+    let mut tool_input = serde_json::json!({ "pattern": pattern });
+    if let Some(p) = path {
+        tool_input["path"] = serde_json::Value::String(p.to_string());
+    }
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Grep",
+        "tool_input": tool_input,
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let config = rules_path();
+    let home = static_test_home().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
+/// Run longline in hook mode for a Glob tool call with --config pointing to rules/rules.yaml.
+pub fn run_hook_glob(pattern: &str, path: Option<&str>) -> RunResult {
+    let mut tool_input = serde_json::json!({ "pattern": pattern });
+    if let Some(p) = path {
+        tool_input["path"] = serde_json::Value::String(p.to_string());
+    }
+
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Glob",
+        "tool_input": tool_input,
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let config = rules_path();
+    let home = static_test_home().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .args(["--config", &config])
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
 /// Run a longline subcommand with the shared static HOME.
 pub fn run_subcommand(args: &[&str]) -> RunResult {
     let home = static_test_home().to_string_lossy().to_string();
