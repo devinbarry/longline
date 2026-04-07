@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-04-07
+
+### Fixed
+
+- AI judge: add `--full-auto`, `--ephemeral`, `--skip-git-repo-check`, and `--enable fast_mode` to default codex exec command — fixes hangs and unparseable responses caused by codex stalling on null stdin without auto-approval
+
 ## [0.10.0] - 2026-04-06
 
 Longline now evaluates Read, Grep, and Glob tool calls instead of passing them through to Claude Code's built-in permission system. Most file reads and searches are auto-allowed; credential stores are escalated to ask.
