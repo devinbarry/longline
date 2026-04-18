@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.2] - 2026-04-18
+
+### Fixed
+
+- AI judge: update default codex model from `gpt-5.1-codex-mini` (delisted and rejected for ChatGPT-account auth) to `gpt-5.4-mini`, which is right-sized for safety classification of inline interpreter code
+
 ## [0.10.1] - 2026-04-07
 
 ### Fixed
