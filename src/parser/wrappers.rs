@@ -355,6 +355,14 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                 }
             }
 
+            // Known precision gap: find -exec bash -c '...' \; and xargs bash -c '...'
+            // produce inner SimpleCommands that we DO NOT re-run through shell-c unwrap
+            // here. That means `find . -exec bash -c 'rm -rf /' \;` currently asks
+            // rather than denying. This is fail-closed (safe — no silent allow), but a
+            // precision gap compared to the top-level `bash -c 'rm -rf /'` which denies.
+            // A follow-up could iterate the find/xargs output through collect_shell_c_recursive
+            // to close this gap; out of scope for Spec B.
+
             // Apply shell-c to the outer cmd AND to any SimpleCommands
             // produced by argv-skip wrapper unwrapping (e.g., the bash
             // extracted from `timeout 30 bash -c "docker ps"`). Each is
