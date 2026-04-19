@@ -125,13 +125,16 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
 ///   `brace_expression`, `concatenation` → `UnsafeString`
 /// - bare `$` (grammar-legal as an argument token) → `UnsafeString`
 /// - anything else (unknown / error) → `UnsafeString` (conservative default)
-#[allow(dead_code)]
 pub fn classify_arg_node(node: Node, source: &str) -> ArgMeta {
     match node.kind() {
         "word" | "number" => ArgMeta::PlainWord,
         "raw_string" => ArgMeta::RawString,
         "string" => classify_string_node(node, source),
         // Everything below is UnsafeString — text may differ from bash execution value.
+        // Some arms (`translated_string`, `brace_expression`) are not produced by
+        // tree-sitter-bash 0.25 in practice (`$"..."` parses as `string`, `{a,b,c}`
+        // as `concatenation`) but are retained as defense-in-depth against future
+        // grammar changes.
         "ansi_c_string"
         | "translated_string"
         | "simple_expansion"
@@ -148,7 +151,6 @@ pub fn classify_arg_node(node: Node, source: &str) -> ArgMeta {
 }
 
 /// Classify a `string` node (double-quoted).
-#[allow(dead_code)]
 fn classify_string_node(node: Node, source: &str) -> ArgMeta {
     let mut cursor = node.walk();
     let mut children = node.named_children(&mut cursor).peekable();
@@ -283,6 +285,7 @@ mod classification_tests {
 
     #[test]
     fn safe_string_single_space() {
+        // tree-sitter emits zero named children for " " (whitespace-only body); SafeString via the zero-children rule.
         assert_eq!(classify_first_arg("\" \"").meta, ArgMeta::SafeString);
     }
 
