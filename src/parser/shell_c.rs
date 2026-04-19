@@ -399,6 +399,25 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn bash_rcfile_equals_form_consumed() {
+        // `bash --rcfile=/tmp/my -c 'docker ps'` — the --rcfile=value form
+        // is a single argv token consumed by the =-form branch, not the
+        // exact-match branch which consumes two tokens.
+        let cmd = mk_cmd(
+            "bash",
+            vec![
+                arg("--rcfile=/tmp/my", ArgMeta::PlainWord),
+                arg("-c", ArgMeta::PlainWord),
+                arg("docker ps", ArgMeta::SafeString),
+            ],
+        );
+        assert!(matches!(
+            unwrap_shell_c(&cmd),
+            Some(Statement::SimpleCommand(_))
+        ));
+    }
+
     // ── Missing-c pass-through (4 tests) — I1 regression guard ───
     #[test]
     fn bash_version_returns_none() {
