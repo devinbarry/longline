@@ -1843,7 +1843,15 @@ rules: []
 
     #[test]
     fn bash_help_asks_under_change_d() {
-        // Accepted minor regression: --help not matched by is_version_check.
+        // Accepted minor regression under Change D: --help is not matched by
+        // is_version_check (which only accepts --version/-V). bash is not
+        // bare-allowlisted (SECURITY: bare-allowlisting would let bash -i
+        // --rcfile /tmp/payload silently execute arbitrary code). So --help
+        // falls through to default ask.
+        //
+        // DO NOT "fix" this by adding bash to core-allowlist.yaml or by
+        // extending is_version_check to match --help — either reintroduces
+        // the bare-shell bypass that the round-2 Codex review caught.
         let stmt = parser::parse("bash --help").unwrap();
         let result = evaluate(&load_embedded_rules().unwrap(), &stmt);
         assert_eq!(result.decision, Decision::Ask);
