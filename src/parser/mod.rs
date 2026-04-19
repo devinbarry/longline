@@ -1,5 +1,6 @@
 mod convert;
 mod helpers;
+pub(crate) mod shell_c;
 pub mod wrappers;
 
 use std::fmt;
