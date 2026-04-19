@@ -79,7 +79,7 @@ impl AsRef<str> for Arg {
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimpleCommand {
     pub name: Option<String>,
-    pub argv: Vec<String>,
+    pub argv: Vec<Arg>,
     pub redirects: Vec<Redirect>,
     pub assignments: Vec<Assignment>,
     pub embedded_substitutions: Vec<Statement>,
@@ -214,7 +214,7 @@ mod tests {
             stages: vec![
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("curl".into()),
-                    argv: vec!["http://example.com".into()],
+                    argv: vec![Arg::plain("http://example.com")],
                     redirects: vec![],
                     assignments: vec![],
                     embedded_substitutions: vec![],
@@ -238,7 +238,7 @@ mod tests {
         let list = Statement::List(List {
             first: Box::new(Statement::SimpleCommand(SimpleCommand {
                 name: Some("echo".into()),
-                argv: vec!["hello".into()],
+                argv: vec![Arg::plain("hello")],
                 redirects: vec![],
                 assignments: vec![],
                 embedded_substitutions: vec![],
@@ -247,7 +247,7 @@ mod tests {
                 ListOp::And,
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("rm".into()),
-                    argv: vec!["-rf".into(), "/".into()],
+                    argv: vec![Arg::plain("-rf"), Arg::plain("/")],
                     redirects: vec![],
                     assignments: vec![],
                     embedded_substitutions: vec![],
@@ -271,14 +271,14 @@ mod tests {
             stages: vec![
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("cat".into()),
-                    argv: vec!["/etc/passwd".into()],
+                    argv: vec![Arg::plain("/etc/passwd")],
                     redirects: vec![],
                     assignments: vec![],
                     embedded_substitutions: vec![],
                 }),
                 Statement::SimpleCommand(SimpleCommand {
                     name: Some("grep".into()),
-                    argv: vec!["root".into()],
+                    argv: vec![Arg::plain("root")],
                     redirects: vec![],
                     assignments: vec![],
                     embedded_substitutions: vec![],
@@ -305,7 +305,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("ls"));
-                assert_eq!(cmd.argv, vec!["-la", "/tmp"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("-la"), Arg::plain("/tmp")]);
             }
             other => panic!("Expected SimpleCommand, got {other:?}"),
         }
@@ -381,7 +381,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("rm"));
-                assert_eq!(cmd.argv, vec!["-rf", "/"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("-rf"), Arg::plain("/")]);
             }
             other => panic!("Expected SimpleCommand, got {other:?}"),
         }
@@ -411,7 +411,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("git"));
-                assert_eq!(cmd.argv, vec!["status"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("status")]);
             }
             other => panic!("Expected SimpleCommand, got {other:?}"),
         }
@@ -683,7 +683,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("export"));
-                assert_eq!(cmd.argv, vec!["FOO"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("FOO")]);
             }
             other => panic!("Expected SimpleCommand for export, got {other:?}"),
         }
@@ -765,7 +765,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("unset"));
-                assert_eq!(cmd.argv, vec!["FOO"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("FOO")]);
             }
             other => panic!("Expected SimpleCommand for unset, got {other:?}"),
         }
@@ -777,7 +777,7 @@ mod tests {
         match stmt {
             Statement::SimpleCommand(cmd) => {
                 assert_eq!(cmd.name.as_deref(), Some("unset"));
-                assert_eq!(cmd.argv, vec!["-f", "my_function"]);
+                assert_eq!(cmd.argv, vec![Arg::plain("-f"), Arg::plain("my_function")]);
             }
             other => panic!("Expected SimpleCommand for unset -f, got {other:?}"),
         }

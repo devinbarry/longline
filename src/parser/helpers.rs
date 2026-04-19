@@ -127,7 +127,7 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
 /// - anything else (unknown / error) → `UnsafeString` (conservative default)
 pub fn classify_arg_node(node: Node, source: &str) -> ArgMeta {
     match node.kind() {
-        "word" | "number" => ArgMeta::PlainWord,
+        "word" | "number" | "variable_name" => ArgMeta::PlainWord,
         "raw_string" => ArgMeta::RawString,
         "string" => classify_string_node(node, source),
         // Everything below is UnsafeString — text may differ from bash execution value.

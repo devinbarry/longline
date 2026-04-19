@@ -6,7 +6,7 @@
 //!
 //! To add a new wrapper: add one entry to the WRAPPERS table.
 
-use super::{SimpleCommand, Statement};
+use super::{Arg, SimpleCommand, Statement};
 
 /// Maximum recursion depth for chained wrappers.
 /// If exceeded, evaluation falls back to ask via an Opaque node.
@@ -152,7 +152,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
 
     // If wrapper requires a subcommand, check that argv[0] matches
     let start_idx = if let Some(sub) = wrapper.subcommand {
-        if argv.first().map(|s| s.as_str()) != Some(sub) {
+        if argv.first().map(|a| a.text.as_str()) != Some(sub) {
             return None;
         }
         1 // skip the subcommand
@@ -164,7 +164,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
 
     // Phase 1: Consume flags
     while i < argv.len() {
-        let token = &argv[i];
+        let token = argv[i].text.as_str();
 
         // -- ends flag processing
         if token == "--" {
@@ -173,7 +173,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
         }
 
         // Check value_flag exact match (e.g., "-s" followed by value)
-        if wrapper.value_flags.iter().any(|f| *f == token) {
+        if wrapper.value_flags.contains(&token) {
             i += 2; // skip flag + value
             continue;
         }
@@ -200,7 +200,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
         }
 
         // Check bool_flag exact match
-        if wrapper.bool_flags.iter().any(|f| *f == token) {
+        if wrapper.bool_flags.contains(&token) {
             i += 1;
             continue;
         }
@@ -215,7 +215,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
             i += n;
         }
         ArgSkip::Assignments => {
-            while i < argv.len() && is_env_assignment(&argv[i]) {
+            while i < argv.len() && is_env_assignment(argv[i].text.as_str()) {
                 i += 1;
             }
         }
@@ -227,8 +227,9 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
         return None;
     }
 
-    let inner_name = argv[i].clone();
-    let inner_argv: Vec<String> = argv[i + 1..].to_vec();
+    // Slice-preserve: inner argv elements retain their original ArgMeta.
+    let inner_name = argv[i].text.clone();
+    let inner_argv: Vec<Arg> = argv[i + 1..].to_vec();
 
     Some(SimpleCommand {
         name: Some(inner_name),
@@ -247,18 +248,19 @@ fn extract_find_exec(cmd: &SimpleCommand) -> Vec<SimpleCommand> {
     let mut i = 0;
 
     while i < argv.len() {
-        if argv[i] == "-exec" || argv[i] == "-execdir" {
+        if argv[i].text == "-exec" || argv[i].text == "-execdir" {
             i += 1; // skip -exec/-execdir
             let start = i;
             // Scan forward to find \; or +
-            while i < argv.len() && argv[i] != ";" && argv[i] != "+" {
+            while i < argv.len() && argv[i].text != ";" && argv[i].text != "+" {
                 i += 1;
             }
             if i > start {
-                let exec_name = argv[start].clone();
-                let exec_argv: Vec<String> = argv[start + 1..i]
+                let exec_name = argv[start].text.clone();
+                // Preserve original Arg values (incl. meta); filter {} tokens.
+                let exec_argv: Vec<Arg> = argv[start + 1..i]
                     .iter()
-                    .filter(|a| a.as_str() != "{}")
+                    .filter(|a| a.text != "{}")
                     .cloned()
                     .collect();
                 results.push(SimpleCommand {
@@ -288,10 +290,10 @@ fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
 
     // Skip xargs flags
     while i < argv.len() {
-        let token = &argv[i];
+        let token = argv[i].text.as_str();
         if token.starts_with('-') {
             // Known xargs value flags that consume the next token
-            if ["-I", "-L", "-n", "-P", "-s", "-E", "-d"].contains(&token.as_str()) {
+            if ["-I", "-L", "-n", "-P", "-s", "-E", "-d"].contains(&token) {
                 i += 2; // skip flag + value
             } else {
                 i += 1; // bool flag
@@ -302,8 +304,8 @@ fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     }
 
     if i < argv.len() {
-        let xargs_cmd_name = argv[i].clone();
-        let xargs_cmd_argv: Vec<String> = argv[i + 1..].to_vec();
+        let xargs_cmd_name = argv[i].text.clone();
+        let xargs_cmd_argv: Vec<Arg> = argv[i + 1..].to_vec();
         Some(SimpleCommand {
             name: Some(xargs_cmd_name),
             argv: xargs_cmd_argv,
@@ -383,12 +385,13 @@ fn unwrap_recursive(cmd: &SimpleCommand, out: &mut Vec<Statement>, depth: usize)
 
 #[cfg(test)]
 mod tests {
+    use super::super::Arg;
     use super::*;
 
     fn make_cmd(name: &str, argv: &[&str]) -> SimpleCommand {
         SimpleCommand {
             name: Some(name.to_string()),
-            argv: argv.iter().map(|s| s.to_string()).collect(),
+            argv: argv.iter().map(|s| Arg::plain(*s)).collect(),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -470,7 +473,7 @@ mod tests {
         let cmd = make_cmd("timeout", &["30", "ls", "-la"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("ls"));
-        assert_eq!(inner.argv, vec!["-la"]);
+        assert_eq!(inner.argv, vec![Arg::plain("-la")]);
     }
 
     #[test]
@@ -486,7 +489,7 @@ mod tests {
         let cmd = make_cmd("timeout", &["--signal=TERM", "10", "echo", "hi"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("echo"));
-        assert_eq!(inner.argv, vec!["hi"]);
+        assert_eq!(inner.argv, vec![Arg::plain("hi")]);
     }
 
     #[test]
@@ -550,7 +553,7 @@ mod tests {
         let cmd = make_cmd("timeout", &["30", "rm", "-rf", "/"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("rm"));
-        assert_eq!(inner.argv, vec!["-rf", "/"]);
+        assert_eq!(inner.argv, vec![Arg::plain("-rf"), Arg::plain("/")]);
     }
 
     #[test]
@@ -568,7 +571,7 @@ mod tests {
         let cmd = make_cmd("nice", &["ls", "-la"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("ls"));
-        assert_eq!(inner.argv, vec!["-la"]);
+        assert_eq!(inner.argv, vec![Arg::plain("-la")]);
     }
 
     #[test]
@@ -597,7 +600,7 @@ mod tests {
         let cmd = make_cmd("nice", &["-n", "-5", "echo", "hello"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("echo"));
-        assert_eq!(inner.argv, vec!["hello"]);
+        assert_eq!(inner.argv, vec![Arg::plain("hello")]);
     }
 
     #[test]
@@ -613,7 +616,7 @@ mod tests {
         let cmd = make_cmd("env", &["FOO=bar", "echo", "hello"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("echo"));
-        assert_eq!(inner.argv, vec!["hello"]);
+        assert_eq!(inner.argv, vec![Arg::plain("hello")]);
     }
 
     #[test]
@@ -729,7 +732,7 @@ mod tests {
         let cmd = make_cmd("nohup", &["echo", "hello"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("echo"));
-        assert_eq!(inner.argv, vec!["hello"]);
+        assert_eq!(inner.argv, vec![Arg::plain("hello")]);
     }
 
     #[test]
@@ -752,7 +755,7 @@ mod tests {
         let cmd = make_cmd("strace", &["-f", "ls", "-la"]);
         let inner = unwrap_transparent(&cmd).unwrap();
         assert_eq!(inner.name.as_deref(), Some("ls"));
-        assert_eq!(inner.argv, vec!["-la"]);
+        assert_eq!(inner.argv, vec![Arg::plain("-la")]);
     }
 
     #[test]
@@ -789,7 +792,7 @@ mod tests {
     fn test_no_name_returns_none() {
         let cmd = SimpleCommand {
             name: None,
-            argv: vec!["foo".to_string()],
+            argv: vec![Arg::plain("foo")],
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -804,7 +807,7 @@ mod tests {
         use crate::parser::{Redirect, RedirectOp};
         let cmd = SimpleCommand {
             name: Some("timeout".to_string()),
-            argv: vec!["30".to_string(), "ls".to_string()],
+            argv: vec![Arg::plain("30"), Arg::plain("ls")],
             redirects: vec![Redirect {
                 fd: None,
                 op: RedirectOp::Write,
@@ -948,5 +951,33 @@ mod tests {
         } else {
             panic!("Expected SimpleCommand(ls)");
         }
+    }
+
+    #[test]
+    fn test_unwrap_preserves_arg_meta() {
+        use super::super::{Arg, ArgMeta};
+
+        let cmd = SimpleCommand {
+            name: Some("timeout".to_string()),
+            argv: vec![
+                Arg::plain("30"),
+                Arg::plain("bash"),
+                Arg::plain("-c"),
+                Arg {
+                    text: "$VAR".to_string(),
+                    meta: ArgMeta::UnsafeString,
+                },
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        let inner = unwrap_transparent(&cmd).expect("unwrap");
+        assert_eq!(inner.name.as_deref(), Some("bash"));
+        assert_eq!(inner.argv.len(), 2);
+        assert_eq!(inner.argv[0].text, "-c");
+        assert_eq!(inner.argv[0].meta, ArgMeta::PlainWord);
+        assert_eq!(inner.argv[1].text, "$VAR");
+        assert_eq!(inner.argv[1].meta, ArgMeta::UnsafeString);
     }
 }

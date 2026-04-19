@@ -1,6 +1,6 @@
 //! Allowlist matching logic.
 
-use crate::parser::{SimpleCommand, Statement};
+use crate::parser::{Arg, SimpleCommand, Statement};
 
 use super::config::{AllowlistEntry, RulesConfig};
 use super::matching::normalize_command_name;
@@ -28,12 +28,12 @@ pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
 
 /// Check if a command is a bare version check (e.g., `foo --version` or `foo -V`).
 pub(super) fn is_version_check(cmd: &SimpleCommand) -> bool {
-    cmd.argv.len() == 1 && (cmd.argv[0] == "--version" || cmd.argv[0] == "-V")
+    cmd.argv.len() == 1 && (cmd.argv[0].text == "--version" || cmd.argv[0].text == "-V")
 }
 
 /// Git supports global options like `-C <path>` that appear before the subcommand.
 /// Strip those so allowlist entries like `git status` still match `git -C /tmp status`.
-fn strip_git_global_c_flag(argv: &[String]) -> Vec<String> {
+fn strip_git_global_c_flag(argv: &[Arg]) -> Vec<Arg> {
     let mut out = Vec::with_capacity(argv.len());
     let mut i = 0;
     let mut in_global_opts = true;
@@ -42,7 +42,7 @@ fn strip_git_global_c_flag(argv: &[String]) -> Vec<String> {
         let arg = &argv[i];
 
         if in_global_opts {
-            if arg == "--" {
+            if arg.text == "--" {
                 // End of options marker; everything after is command args.
                 in_global_opts = false;
                 out.push(arg.clone());
@@ -50,7 +50,7 @@ fn strip_git_global_c_flag(argv: &[String]) -> Vec<String> {
                 continue;
             }
 
-            if arg == "-C" {
+            if arg.text == "-C" {
                 // Skip `-C` and its path argument (if present).
                 i += 1;
                 if i < argv.len() {
@@ -60,7 +60,7 @@ fn strip_git_global_c_flag(argv: &[String]) -> Vec<String> {
             }
 
             // First non-flag token is the git subcommand; stop treating subsequent args as global opts.
-            if !arg.starts_with('-') {
+            if !arg.text.starts_with('-') {
                 in_global_opts = false;
             }
         }
@@ -104,20 +104,20 @@ fn normalize_arg(arg: &str) -> &str {
 /// When a required arg is not a flag (doesn't start with `-`), flag-like
 /// argv elements are skipped so that `logcli --addr=... labels` matches
 /// an allowlist entry for `logcli labels`.
-fn args_match_prefix(required_args: &[&str], argv: &[String]) -> bool {
+fn args_match_prefix(required_args: &[&str], argv: &[Arg]) -> bool {
     let mut argv_idx = 0;
     for req in required_args {
         // If the required arg is a subcommand (not a flag), skip any
         // flag-like argv elements to find the matching subcommand.
         if !req.starts_with('-') {
-            while argv_idx < argv.len() && argv[argv_idx].starts_with('-') {
+            while argv_idx < argv.len() && argv[argv_idx].text.starts_with('-') {
                 argv_idx += 1;
             }
         }
         if argv_idx >= argv.len() {
             return false;
         }
-        let normalized = normalize_arg(&argv[argv_idx]);
+        let normalized = normalize_arg(&argv[argv_idx].text);
         if *req != normalized {
             return false;
         }
@@ -138,7 +138,7 @@ fn find_matching_entry<'a>(
         None => return None,
     };
 
-    let argv: Cow<[String]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a == "-C") {
+    let argv: Cow<[Arg]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a.text == "-C") {
         Cow::Owned(strip_git_global_c_flag(&cmd.argv))
     } else {
         Cow::Borrowed(&cmd.argv)
@@ -226,10 +226,14 @@ pub fn is_covered_by_wrapper_entry(
 mod tests {
     use super::*;
 
+    fn make_argv(args: &[&str]) -> Vec<Arg> {
+        args.iter().map(|s| Arg::plain(*s)).collect()
+    }
+
     fn test_git_cmd(argv: Vec<&str>) -> SimpleCommand {
         SimpleCommand {
             name: Some("git".to_string()),
-            argv: argv.into_iter().map(|s| s.to_string()).collect(),
+            argv: argv.into_iter().map(Arg::plain).collect(),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -289,7 +293,7 @@ mod tests {
     #[test]
     fn test_args_match_prefix_exact_match() {
         let required = &["manage.py", "check"];
-        let argv = vec!["manage.py".to_string(), "check".to_string()];
+        let argv = make_argv(&["manage.py", "check"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -297,11 +301,7 @@ mod tests {
     fn test_args_match_prefix_with_extra_trailing_args() {
         // Extra args at end should be OK
         let required = &["manage.py", "check"];
-        let argv = vec![
-            "manage.py".to_string(),
-            "check".to_string(),
-            "--deploy".to_string(),
-        ];
+        let argv = make_argv(&["manage.py", "check", "--deploy"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -309,11 +309,7 @@ mod tests {
     fn test_args_match_prefix_wrong_first_arg_fails() {
         // evil.py in first position should NOT match
         let required = &["manage.py", "check"];
-        let argv = vec![
-            "evil.py".to_string(),
-            "manage.py".to_string(),
-            "check".to_string(),
-        ];
+        let argv = make_argv(&["evil.py", "manage.py", "check"]);
         assert!(!args_match_prefix(required, &argv));
     }
 
@@ -321,7 +317,7 @@ mod tests {
     fn test_args_match_prefix_out_of_order_fails() {
         // Args in wrong order should NOT match
         let required = &["manage.py", "check"];
-        let argv = vec!["check".to_string(), "manage.py".to_string()];
+        let argv = make_argv(&["check", "manage.py"]);
         assert!(!args_match_prefix(required, &argv));
     }
 
@@ -329,7 +325,7 @@ mod tests {
     fn test_args_match_prefix_with_path_normalization() {
         // ./manage.py should match manage.py after normalization
         let required = &["manage.py", "check"];
-        let argv = vec!["./manage.py".to_string(), "check".to_string()];
+        let argv = make_argv(&["./manage.py", "check"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -337,7 +333,7 @@ mod tests {
     fn test_args_match_prefix_subdir_path_normalization() {
         // server/manage.py should match manage.py after normalization
         let required = &["manage.py", "check"];
-        let argv = vec!["server/manage.py".to_string(), "check".to_string()];
+        let argv = make_argv(&["server/manage.py", "check"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -345,7 +341,7 @@ mod tests {
     fn test_args_match_prefix_absolute_path_no_normalization() {
         // /tmp/manage.py should NOT be normalized, so won't match
         let required = &["manage.py", "check"];
-        let argv = vec!["/tmp/manage.py".to_string(), "check".to_string()];
+        let argv = make_argv(&["/tmp/manage.py", "check"]);
         assert!(!args_match_prefix(required, &argv));
     }
 
@@ -353,7 +349,7 @@ mod tests {
     fn test_args_match_prefix_traversal_no_normalization() {
         // ../manage.py should NOT be normalized, so won't match
         let required = &["manage.py", "check"];
-        let argv = vec!["../manage.py".to_string(), "check".to_string()];
+        let argv = make_argv(&["../manage.py", "check"]);
         assert!(!args_match_prefix(required, &argv));
     }
 
@@ -361,7 +357,7 @@ mod tests {
     fn test_args_match_prefix_not_enough_args() {
         // Fewer args than required should fail
         let required = &["manage.py", "check"];
-        let argv = vec!["manage.py".to_string()];
+        let argv = make_argv(&["manage.py"]);
         assert!(!args_match_prefix(required, &argv));
     }
 
@@ -369,7 +365,7 @@ mod tests {
     fn test_args_match_prefix_empty_required() {
         // Empty required args should match anything
         let required: &[&str] = &[];
-        let argv = vec!["anything".to_string()];
+        let argv = make_argv(&["anything"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -379,20 +375,14 @@ mod tests {
 
     #[test]
     fn test_strip_git_global_c_flag_basic() {
-        let argv = vec!["-C".to_string(), "/tmp".to_string(), "status".to_string()];
-        assert_eq!(strip_git_global_c_flag(&argv), vec!["status".to_string()]);
+        let argv = make_argv(&["-C", "/tmp", "status"]);
+        assert_eq!(strip_git_global_c_flag(&argv), make_argv(&["status"]));
     }
 
     #[test]
     fn test_strip_git_global_c_flag_multiple() {
-        let argv = vec![
-            "-C".to_string(),
-            "/tmp".to_string(),
-            "-C".to_string(),
-            "/other".to_string(),
-            "status".to_string(),
-        ];
-        assert_eq!(strip_git_global_c_flag(&argv), vec!["status".to_string()]);
+        let argv = make_argv(&["-C", "/tmp", "-C", "/other", "status"]);
+        assert_eq!(strip_git_global_c_flag(&argv), make_argv(&["status"]));
     }
 
     #[test]
@@ -467,7 +457,7 @@ mod tests {
 
         let go_cmd = SimpleCommand {
             name: Some("go".to_string()),
-            argv: vec!["build".to_string()],
+            argv: make_argv(&["build"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -480,7 +470,7 @@ mod tests {
 
         let docker_cmd = SimpleCommand {
             name: Some("docker".to_string()),
-            argv: vec!["run".to_string()],
+            argv: make_argv(&["run"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -624,11 +614,7 @@ mod tests {
         // logcli --addr=http://foo:3100 labels host
         // should match required_args ["labels"] by skipping --addr=...
         let required = &["labels"];
-        let argv = vec![
-            "--addr=http://foo:3100".to_string(),
-            "labels".to_string(),
-            "host".to_string(),
-        ];
+        let argv = make_argv(&["--addr=http://foo:3100", "labels", "host"]);
         assert!(
             args_match_prefix(required, &argv),
             "Should skip --addr= flag to match 'labels' subcommand"
@@ -639,12 +625,7 @@ mod tests {
     fn test_args_match_prefix_skips_multiple_flags() {
         // logcli --addr=http://foo:3100 -q labels host
         let required = &["labels"];
-        let argv = vec![
-            "--addr=http://foo:3100".to_string(),
-            "-q".to_string(),
-            "labels".to_string(),
-            "host".to_string(),
-        ];
+        let argv = make_argv(&["--addr=http://foo:3100", "-q", "labels", "host"]);
         assert!(
             args_match_prefix(required, &argv),
             "Should skip multiple flags to match subcommand"
@@ -655,7 +636,7 @@ mod tests {
     fn test_args_match_prefix_no_flags_still_works() {
         // logcli labels host (no flags) should still match
         let required = &["labels"];
-        let argv = vec!["labels".to_string(), "host".to_string()];
+        let argv = make_argv(&["labels", "host"]);
         assert!(args_match_prefix(required, &argv));
     }
 
@@ -663,13 +644,7 @@ mod tests {
     fn test_args_match_prefix_multi_subcommand_with_flags() {
         // uv --quiet run prefect config view
         let required = &["run", "prefect", "config", "view"];
-        let argv = vec![
-            "--quiet".to_string(),
-            "run".to_string(),
-            "prefect".to_string(),
-            "config".to_string(),
-            "view".to_string(),
-        ];
+        let argv = make_argv(&["--quiet", "run", "prefect", "config", "view"]);
         assert!(
             args_match_prefix(required, &argv),
             "Should skip --quiet to match multi-word subcommand chain"
@@ -680,7 +655,7 @@ mod tests {
     fn test_args_match_prefix_flag_in_required_still_matches() {
         // If allowlist entry requires a flag, it should match literally
         let required = &["push", "--force"];
-        let argv = vec!["push".to_string(), "--force".to_string()];
+        let argv = make_argv(&["push", "--force"]);
         assert!(
             args_match_prefix(required, &argv),
             "Required flags should match literally"
@@ -691,7 +666,7 @@ mod tests {
     fn test_args_match_prefix_wrong_subcommand_after_flags() {
         // logcli --addr=http://foo:3100 query (should NOT match "labels")
         let required = &["labels"];
-        let argv = vec!["--addr=http://foo:3100".to_string(), "query".to_string()];
+        let argv = make_argv(&["--addr=http://foo:3100", "query"]);
         assert!(
             !args_match_prefix(required, &argv),
             "Wrong subcommand should not match even after skipping flags"
@@ -702,7 +677,7 @@ mod tests {
     fn test_args_match_prefix_only_flags_no_subcommand() {
         // logcli --addr=http://foo:3100 -q (no subcommand at all)
         let required = &["labels"];
-        let argv = vec!["--addr=http://foo:3100".to_string(), "-q".to_string()];
+        let argv = make_argv(&["--addr=http://foo:3100", "-q"]);
         assert!(
             !args_match_prefix(required, &argv),
             "Should not match if no subcommand present after flags"
@@ -732,11 +707,7 @@ mod tests {
 
         let original_leaf = Statement::SimpleCommand(SimpleCommand {
             name: Some("uv".to_string()),
-            argv: vec![
-                "run".to_string(),
-                "yamllint".to_string(),
-                ".gitlab-ci.yml".to_string(),
-            ],
+            argv: make_argv(&["run", "yamllint", ".gitlab-ci.yml"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -744,7 +715,7 @@ mod tests {
 
         let extra_leaf_covered = Statement::SimpleCommand(SimpleCommand {
             name: Some("yamllint".to_string()),
-            argv: vec![".gitlab-ci.yml".to_string()],
+            argv: make_argv(&[".gitlab-ci.yml"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -794,12 +765,7 @@ mod tests {
         // Original leaf: uv run prefect config view
         let original_leaf = Statement::SimpleCommand(SimpleCommand {
             name: Some("uv".to_string()),
-            argv: vec![
-                "run".to_string(),
-                "prefect".to_string(),
-                "config".to_string(),
-                "view".to_string(),
-            ],
+            argv: make_argv(&["run", "prefect", "config", "view"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -808,7 +774,7 @@ mod tests {
         // Extra leaf: prefect (the unwrapped inner command)
         let extra_leaf_covered = Statement::SimpleCommand(SimpleCommand {
             name: Some("prefect".to_string()),
-            argv: vec!["config".to_string(), "view".to_string()],
+            argv: make_argv(&["config", "view"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
@@ -857,7 +823,7 @@ mod tests {
 
         let original_leaf = Statement::SimpleCommand(SimpleCommand {
             name: Some("timeout".to_string()),
-            argv: vec!["10".to_string(), "unknown_command".to_string()],
+            argv: make_argv(&["10", "unknown_command"]),
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
