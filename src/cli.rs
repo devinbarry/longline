@@ -541,7 +541,14 @@ fn run_hook(
             .as_deref()
             .filter(|s| !s.is_empty())
             .unwrap_or(".");
-        match ai_judge::extract_code(command, &stmt, cwd, &ai_config) {
+        let extracted = ai_judge::extract_code(command, &stmt, cwd, &ai_config).or_else(|| {
+            // Change C: also check shell-c-unwrapped inner statements.
+            parser::wrappers::extract_inner_commands(&stmt)
+                .iter()
+                .find_map(|inner_stmt| ai_judge::extract_code(command, inner_stmt, cwd, &ai_config))
+        });
+
+        match extracted {
             Some(extracted) => {
                 let (ai_decision, reason) = if ask_ai_lenient {
                     ai_judge::evaluate_lenient(
