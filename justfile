@@ -43,28 +43,50 @@ release-prep level:
     echo "  2. Review all changes: git diff"
     echo "  3. Run: just release-finish"
 
-# Step 2: Commit, tag, push, and install (run after reviewing release-prep changes)
+# Step 2: Commit (if needed), tag, push, install. Supports uncommitted + pre-committed flows.
 release-finish:
     #!/usr/bin/env bash
     set -euo pipefail
 
     VERSION=$(cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])")
-    echo "Releasing v${VERSION}"
+    TAG="v${VERSION}"
+    echo "Releasing ${TAG}"
 
-    # Verify there are staged or unstaged changes to commit
-    if git diff --quiet && git diff --cached --quiet; then
-        echo "Error: no changes to commit. Did you run 'just release-prep' and edit CHANGELOG.md?"
+    # If the tag already exists, refuse — releasing the same version twice
+    # is almost certainly a mistake.
+    if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+        echo "Error: tag ${TAG} already exists. Bump the version via 'just release-prep' first."
         exit 1
     fi
 
-    # Commit, tag, push, install
-    git add Cargo.toml Cargo.lock CHANGELOG.md
-    git commit -m "chore: release v${VERSION}"
-    git tag -a "v${VERSION}" -m "v${VERSION}"
+    HEAD_SUBJECT=$(git log -1 --pretty=%s)
+    EXPECTED_RELEASE_SUBJECT="chore: release ${TAG}"
+
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        # Flow A: uncommitted changes present. Ensure it's the Cargo.toml bump
+        # + CHANGELOG edits we expect, then commit them.
+        echo "Flow A: committing pending Cargo.toml / Cargo.lock / CHANGELOG.md"
+        git add Cargo.toml Cargo.lock CHANGELOG.md
+        git commit -m "${EXPECTED_RELEASE_SUBJECT}"
+    elif [ "${HEAD_SUBJECT}" = "${EXPECTED_RELEASE_SUBJECT}" ]; then
+        # Flow B: the release commit is already HEAD. Nothing to commit.
+        echo "Flow B: release commit already at HEAD (${HEAD_SUBJECT}); skipping commit step"
+    else
+        # Nothing to commit, and HEAD isn't the expected release commit.
+        echo "Error: no changes to commit and HEAD subject is not \"${EXPECTED_RELEASE_SUBJECT}\"."
+        echo "       Either run 'just release-prep' and edit CHANGELOG.md, or"
+        echo "       ensure HEAD is the release commit produced by your automation."
+        echo "       HEAD subject: ${HEAD_SUBJECT}"
+        exit 1
+    fi
+
+    # Tag + push + install. These are safe to re-run; the tag-exists check
+    # above is the primary idempotency guard.
+    git tag -a "${TAG}" -m "${TAG}"
     git push && git push --tags
     cargo install --path . --force
     echo ""
-    echo "Released v${VERSION}"
+    echo "Released ${TAG}"
 
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
