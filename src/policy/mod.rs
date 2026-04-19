@@ -142,26 +142,45 @@ fn collect_pipelines(stmt: &Statement) -> Vec<&parser::Pipeline> {
     }
 }
 
-/// Returns true if `leaf` is a shell-c wrapper whose inner statement was
-/// successfully produced AND that inner statement is present in `extra_stmts`.
-/// This ensures an outer bash/sh/sg leaf is only treated as covered when the
-/// inner command has actually been extracted for evaluation (Change D).
+/// Returns true if `leaf` is a shell-c wrapper SimpleCommand whose
+/// re-parsed inner Statement is actually present in `extra_stmts`.
 ///
-/// Uses `is_covered_shell_c_wrapper` as a fast pre-filter before the
-/// extra_stmts membership check.
+/// SECURITY: the `extra_stmts.contains(&inner)` check is load-bearing.
+/// Without it, an outer shell-c wrapper would be treated as covered
+/// whenever `unwrap_shell_c` COULD produce a valid inner Statement —
+/// even if `collect_inner_commands` never actually extracted that
+/// inner for separate evaluation. At commit boundaries where
+/// `unwrap_shell_c` is defined but not yet wired into
+/// `collect_inner_commands` (e.g. the Task 2 → Task 3 window for
+/// Spec B), using `is_covered_shell_c_wrapper(leaf)` alone would
+/// silently allow `bash -c <anything>` because the outer leaf would
+/// pass the coverage predicate while the inner command was never
+/// evaluated against any rule.
+///
+/// The membership check guarantees that if the outer is marked
+/// covered, the inner IS being separately evaluated — the invariant
+/// that makes it safe to not bare-allowlist shell-c wrappers.
+///
+/// Note: `Statement` derives `PartialEq`, so `contains` is an O(N)
+/// walk comparing full trees. `extra_stmts` is typically tiny (1-2
+/// entries per outer wrapper), so this is not a hot-path concern.
 fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bool {
-    if !parser::shell_c::is_covered_shell_c_wrapper(leaf) {
-        return false;
-    }
-    // The leaf is structurally a valid shell-c wrapper. Now check that the
-    // inner statement was actually placed into extra_stmts — i.e., that
-    // unwrap_shell_c was called on this leaf by collect_inner_commands.
     let Statement::SimpleCommand(cmd) = leaf else {
         return false;
     };
     match parser::shell_c::unwrap_shell_c(cmd) {
         None | Some(Statement::Opaque(_)) => false,
-        Some(inner) => extra_stmts.contains(&inner),
+        Some(inner) => {
+            // INVARIANT: if we reach this branch, is_covered_shell_c_wrapper must
+            // also return true for the same leaf — they both gate on unwrap_shell_c
+            // returning a non-Opaque value. Checked in debug builds only to avoid
+            // double-parsing in release.
+            debug_assert!(
+                parser::shell_c::is_covered_shell_c_wrapper(leaf),
+                "shell_c_covered_via_extras: structural predicate out of sync with unwrap"
+            );
+            extra_stmts.contains(&inner)
+        }
     }
 }
 
@@ -1706,6 +1725,58 @@ rules: []
 
         let config = load_embedded_rules().unwrap();
         let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        assert_eq!(result.decision, Decision::Ask);
+    }
+
+    #[test]
+    fn shell_c_covered_requires_inner_in_extras() {
+        // SECURITY INVARIANT (Task 2 → Task 3 commit-boundary guard):
+        // shell_c_covered_via_extras must return false when the outer
+        // shell-c wrapper has a valid unwrap candidate BUT the inner
+        // Statement is not present in extra_stmts. Without this check,
+        // `bash -c <anything>` with a RawString/SafeString body would
+        // be silently allowed during the window where unwrap_shell_c
+        // is defined but not yet wired into collect_inner_commands.
+        //
+        // Pins the design choice documented on shell_c_covered_via_extras.
+        use crate::parser::{Arg, ArgMeta, SimpleCommand};
+
+        let outer = Statement::SimpleCommand(SimpleCommand {
+            name: Some("bash".to_string()),
+            argv: vec![
+                Arg {
+                    text: "-c".to_string(),
+                    meta: ArgMeta::PlainWord,
+                },
+                Arg {
+                    text: "docker ps".to_string(),
+                    meta: ArgMeta::RawString,
+                },
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+        let leaves = parser::flatten(&outer);
+        let pipelines = collect_pipelines(&outer);
+        // extra_stmts deliberately empty — simulating the intermediate
+        // state where unwrap_shell_c is callable but collect_inner_commands
+        // hasn't been updated to call it.
+        let extra_stmts: Vec<Statement> = vec![];
+
+        // Confirm the structural predicate says "yes, this is a shell-c wrapper"
+        // (it has -c + a RawString body). The coverage check still fails because
+        // the inner Statement is absent from extra_stmts — that's the invariant.
+        assert!(
+            parser::shell_c::is_covered_shell_c_wrapper(&outer),
+            "outer must pass structural check for this test to be meaningful"
+        );
+
+        let config = load_embedded_rules().expect("load embedded rules");
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+
+        // Must be Ask, NOT Allow. If this flips to Allow, shell_c coverage
+        // has been incorrectly decoupled from the inner-evaluation invariant.
         assert_eq!(result.decision, Decision::Ask);
     }
 }
