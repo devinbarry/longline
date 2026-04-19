@@ -106,7 +106,6 @@ fn find_shell_c_def(name: &str) -> Option<&'static ShellCDef> {
 /// re-parseable, parse it and return the resulting Statement. See the
 /// module docs and the design spec (docs/plans/2026-04-19-shell-c-wrappers-design.md)
 /// for the full decision tree.
-#[allow(dead_code)]
 pub(crate) fn unwrap_shell_c(cmd: &SimpleCommand) -> Option<Statement> {
     let cmd_name = cmd.name.as_deref()?;
     let def = find_shell_c_def(cmd_name)?;

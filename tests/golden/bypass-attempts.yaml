@@ -28,12 +28,14 @@ tests:
   - id: sh-c-rm
     command: "sh -c 'rm -rf /'"
     expected:
-      decision: ask
+      decision: deny  # Spec B: shell-c unwrap surfaces inner rm; rm-deny rule fires
+      rule_id: rm-recursive-root
 
   - id: bash-c-rm
     command: "bash -c 'rm -rf /'"
     expected:
-      decision: ask
+      decision: deny  # Spec B: shell-c unwrap surfaces inner rm; rm-deny rule fires
+      rule_id: rm-recursive-root
 
   # ── Eval / builtin bypass ───────────────────────────────────
   - id: eval-rm

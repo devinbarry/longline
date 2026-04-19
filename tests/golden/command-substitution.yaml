@@ -73,7 +73,8 @@ tests:
   - id: subst-ask-sh-c
     command: "echo $(sh -c 'rm -rf /')"
     expected:
-      decision: ask
+      decision: deny  # Spec B: embedded_substitutions + shell-c unwrap both surface rm
+      rule_id: rm-recursive-root
 
   # ── Nested substitutions ───────────────────────────────────
   - id: subst-nested-deny-rm

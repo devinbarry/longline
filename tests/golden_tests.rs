@@ -291,3 +291,8 @@ fn golden_bare_assignments() {
 fn golden_shell_builtins() {
     run_golden_suite("shell-builtins.yaml");
 }
+
+#[test]
+fn golden_shell_c_wrappers() {
+    run_golden_suite("shell-c-wrappers.yaml");
+}

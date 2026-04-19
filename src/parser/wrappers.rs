@@ -329,7 +329,10 @@ pub fn extract_inner_commands(stmt: &Statement) -> Vec<Statement> {
 fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
     match stmt {
         Statement::SimpleCommand(cmd) => {
+            // Record start so we can apply shell-c to argv-skip-unwrap results below.
+            let before_unwrap = out.len();
             unwrap_recursive(cmd, out, 0);
+            let unwrap_end = out.len();
             for sub in &cmd.embedded_substitutions {
                 collect_inner_commands(sub, out);
             }
@@ -350,6 +353,66 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                         unwrap_recursive(&inner, out, 0);
                     }
                 }
+            }
+
+            // Apply shell-c to the outer cmd AND to any SimpleCommands
+            // produced by argv-skip wrapper unwrapping (e.g., the bash
+            // extracted from `timeout 30 bash -c "docker ps"`). Each is
+            // processed with depth=0 — these are semantically independent
+            // shell-c invocations, not continuations of a nesting chain.
+            let cmds_to_shell_c: Vec<SimpleCommand> = {
+                let mut v = vec![cmd.clone()];
+                for st in &out[before_unwrap..unwrap_end] {
+                    if let Statement::SimpleCommand(sc) = st {
+                        v.push(sc.clone());
+                    }
+                }
+                v
+            };
+            for sc in cmds_to_shell_c {
+                if let Some(inner) = crate::parser::shell_c::unwrap_shell_c(&sc) {
+                    // Push the inner Statement as an extra; evaluate() will
+                    // flatten() and collect_pipelines() over it per Change B.
+                    collect_shell_c_recursive(&inner, out, 0);
+                }
+            }
+        }
+        Statement::Pipeline(p) => {
+            for stage in &p.stages {
+                collect_inner_commands(stage, out);
+            }
+        }
+        Statement::List(l) => {
+            collect_inner_commands(&l.first, out);
+            for (_, s) in &l.rest {
+                collect_inner_commands(s, out);
+            }
+        }
+        Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
+            collect_inner_commands(inner, out);
+        }
+        Statement::Opaque(_) | Statement::Empty => {}
+    }
+}
+
+fn collect_shell_c_recursive(stmt: &Statement, out: &mut Vec<Statement>, depth: usize) {
+    if depth >= MAX_UNWRAP_DEPTH {
+        out.push(Statement::Opaque(
+            "wrapper depth limit exceeded".to_string(),
+        ));
+        return;
+    }
+    out.push(stmt.clone());
+    // Recurse into the inner Statement to peel further wrappers/substitutions.
+    // Depth increments here so nested shell-c (bash -c 'bash -c "..."') is bounded.
+    match stmt {
+        Statement::SimpleCommand(inner_cmd) => {
+            unwrap_recursive(inner_cmd, out, 0);
+            for sub in &inner_cmd.embedded_substitutions {
+                collect_inner_commands(sub, out);
+            }
+            if let Some(nested) = crate::parser::shell_c::unwrap_shell_c(inner_cmd) {
+                collect_shell_c_recursive(&nested, out, depth + 1);
             }
         }
         Statement::Pipeline(p) => {
