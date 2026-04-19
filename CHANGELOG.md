@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2026-04-19
+
+### Changed (breaking)
+
+- `SimpleCommand.argv` is now `Vec<Arg>` instead of `Vec<String>`. Each `Arg` carries both the original text and an `ArgMeta` classification derived from the tree-sitter AST node that produced it (`PlainWord`, `RawString`, `SafeString`, `UnsafeString`). Downstream consumers of the `longline` library should migrate argv accesses to `argv[i].text` / `argv[i].as_ref()`.
+
+### Added
+
+- `Arg` and `ArgMeta` public types in `longline::parser`.
+- `Arg::plain(...)` helper for tests.
+- `impl AsRef<str> for Arg`.
+- Classification unit tests covering all recognised tree-sitter-bash argv node kinds (~29 tests).
+
+### Internal
+
+- `classify_arg_node` and `classify_string_node` in `src/parser/helpers.rs`.
+- `convert_arg_node` in `src/parser/convert.rs`.
+- `unwrap_transparent`, `extract_find_exec`, `extract_xargs_command` now slice-preserve original `Arg` values (including `ArgMeta`) when synthesizing inner commands. Dedicated meta-preservation unit tests cover all three paths.
+
+### Compatibility
+
+No changes to policy decisions. All existing golden, integration, and red-policy tests pass unchanged.
+
 ## [0.10.2] - 2026-04-18
 
 ### Fixed
