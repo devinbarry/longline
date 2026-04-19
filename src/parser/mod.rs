@@ -20,6 +20,62 @@ pub enum Statement {
     Empty,
 }
 
+/// A single command argument, carrying both its text and a classification of
+/// the original AST node that produced it.
+///
+/// Classification exists so that a future consumer (the shell-c wrapper
+/// unwrapper described in Spec B) can decide whether the text is safe to
+/// re-parse as a shell command — a decision that depends on whether bash
+/// would execute the text verbatim (raw single-quoted strings, escape-free
+/// double-quoted strings) or transform it at runtime (expansions,
+/// substitutions, escaped strings, concatenations).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Arg {
+    pub text: String,
+    pub meta: ArgMeta,
+}
+
+/// Classification of an argv element based on its AST origin.
+///
+/// See `classify_arg_node` in `helpers.rs` for the rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ArgMeta {
+    /// Bareword token: `ls`, `--flag`, `FOO=bar`, `/usr/bin/ls`, `42`.
+    PlainWord,
+    /// Single-quoted string: `'docker ps'`. Contents are literal — no escape
+    /// interpretation, no variable expansion. Text is exactly what bash sees.
+    RawString,
+    /// Double-quoted string containing only plain content (no backslash
+    /// escapes, no `$expansions`, no `$(substitutions)`). Text is exactly
+    /// what bash sees. An empty double-quoted string is `SafeString`.
+    SafeString,
+    /// Any argument whose extracted text may diverge from what bash actually
+    /// executes: escapes, expansions, substitutions, concatenations, ANSI-C
+    /// strings, process substitutions, arithmetic expansions, brace
+    /// expressions, parse-recovery error fragments, or unknown node kinds.
+    /// Spec B's shell-c unwrapper must refuse to re-parse these.
+    UnsafeString,
+}
+
+impl Arg {
+    /// Test helper: construct an `Arg` with `PlainWord` meta. Production
+    /// code (parser/wrappers/extractors) must NOT use this — synthesized
+    /// inner commands preserve their original `ArgMeta` by slicing the
+    /// existing `Vec<Arg>`.
+    pub fn plain(text: impl Into<String>) -> Self {
+        Arg {
+            text: text.into(),
+            meta: ArgMeta::PlainWord,
+        }
+    }
+}
+
+impl AsRef<str> for Arg {
+    fn as_ref(&self) -> &str {
+        &self.text
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SimpleCommand {
     pub name: Option<String>,
