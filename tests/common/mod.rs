@@ -4,6 +4,10 @@
 //! 1. `TestEnv` builder -- isolated HOME/project dirs, no --config flag (uses embedded defaults)
 //! 2. Standalone helper functions -- shared static HOME, uses --config pointing to rules/rules.yaml
 
+// Many helpers in this module are shared across multiple test binaries; not all are used by every
+// binary, so dead_code warnings are expected and intentional.
+#![allow(dead_code)]
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -115,6 +119,7 @@ pub struct TestEnv {
 
 impl TestEnv {
     /// Start building a new test environment.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> TestEnvBuilder {
         TestEnvBuilder {
             project_config: None,
@@ -213,7 +218,7 @@ impl TestEnv {
     /// If a project dir exists and no --dir is in args, auto-adds --dir.
     pub fn run_subcommand(&self, args: &[&str]) -> RunResult {
         let home = self.home_dir.path().to_string_lossy().to_string();
-        let has_dir_flag = args.iter().any(|a| *a == "--dir");
+        let has_dir_flag = args.contains(&"--dir");
 
         let mut full_args: Vec<&str> = args.to_vec();
 

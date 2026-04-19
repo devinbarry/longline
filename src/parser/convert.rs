@@ -2,8 +2,25 @@
 
 use tree_sitter::Node;
 
-use super::helpers::{node_text, parse_assignment, parse_redirect, resolve_node_text};
-use super::{Assignment, List, ListOp, Pipeline, Redirect, SimpleCommand, Statement};
+use super::helpers::{
+    classify_arg_node, node_text, parse_assignment, parse_redirect, resolve_node_text,
+};
+use super::{Arg, Assignment, List, ListOp, Pipeline, Redirect, SimpleCommand, Statement};
+
+/// Convert an argv-position tree-sitter node into an `Arg` carrying both the
+/// resolved text and an `ArgMeta` classification.
+///
+/// This is the single entry point for building `Arg` values from the AST.
+/// Used by `convert_command` for every argv child, and by
+/// `merge_error_into_statement` for recovered ERROR fragments (which always
+/// classify as `UnsafeString`).
+#[allow(dead_code)]
+pub(crate) fn convert_arg_node(node: Node, source: &str) -> Arg {
+    Arg {
+        text: resolve_node_text(node, source),
+        meta: classify_arg_node(node, source),
+    }
+}
 
 /// Handle the top-level "program" node.
 pub fn convert_program(node: Node, source: &str) -> Statement {

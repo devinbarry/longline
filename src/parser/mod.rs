@@ -531,7 +531,7 @@ mod tests {
         let leaves = flatten(&stmt);
         // Should extract the echo command from the loop body
         assert!(
-            leaves.len() >= 1,
+            !leaves.is_empty(),
             "For loop should have at least 1 leaf, got {}",
             leaves.len()
         );
@@ -635,7 +635,7 @@ mod tests {
         let stmt = parse("for ((i=0; i<10; i++)); do echo $i; done").unwrap();
         let leaves = flatten(&stmt);
         assert!(
-            leaves.len() >= 1,
+            !leaves.is_empty(),
             "C-style for loop should have at least 1 leaf, got {}",
             leaves.len()
         );
