@@ -980,4 +980,61 @@ mod tests {
         assert_eq!(inner.argv[1].text, "$VAR");
         assert_eq!(inner.argv[1].meta, ArgMeta::UnsafeString);
     }
+
+    #[test]
+    fn test_find_exec_preserves_arg_meta() {
+        // `find . -exec cat "$VAR" \;` must produce an inner command with
+        // the $VAR argument retaining UnsafeString so Spec B refuses to re-parse.
+        use super::super::ArgMeta;
+
+        let cmd = SimpleCommand {
+            name: Some("find".to_string()),
+            argv: vec![
+                Arg::plain("."),
+                Arg::plain("-exec"),
+                Arg::plain("cat"),
+                Arg {
+                    text: "$VAR".to_string(),
+                    meta: ArgMeta::UnsafeString,
+                },
+                Arg::plain(";"),
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        let inners = extract_find_exec(&cmd);
+        assert_eq!(inners.len(), 1);
+        let inner = &inners[0];
+        assert_eq!(inner.name.as_deref(), Some("cat"));
+        assert_eq!(inner.argv.len(), 1);
+        assert_eq!(inner.argv[0].text, "$VAR");
+        assert_eq!(inner.argv[0].meta, ArgMeta::UnsafeString);
+    }
+
+    #[test]
+    fn test_xargs_preserves_arg_meta() {
+        // `xargs cat "$VAR"` must produce an inner command with the $VAR
+        // argument retaining UnsafeString so Spec B refuses to re-parse.
+        use super::super::ArgMeta;
+
+        let cmd = SimpleCommand {
+            name: Some("xargs".to_string()),
+            argv: vec![
+                Arg::plain("cat"),
+                Arg {
+                    text: "$VAR".to_string(),
+                    meta: ArgMeta::UnsafeString,
+                },
+            ],
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        };
+        let inner = extract_xargs_command(&cmd).expect("extract");
+        assert_eq!(inner.name.as_deref(), Some("cat"));
+        assert_eq!(inner.argv.len(), 1);
+        assert_eq!(inner.argv[0].text, "$VAR");
+        assert_eq!(inner.argv[0].meta, ArgMeta::UnsafeString);
+    }
 }
