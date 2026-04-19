@@ -429,3 +429,45 @@ fn test_safe_pipeline_extraction_no_network_context() {
         "Pipeline without network commands should not set network context"
     );
 }
+
+// ============================================================
+// Shell-c composition tests (Change C)
+// ============================================================
+
+#[test]
+fn extract_code_finds_inner_python_c_via_shell_c_unwrap() {
+    // bash -c "python -c 'print(1)'" — the inner python -c lives in
+    // extract_inner_commands output. Change C (CLI composition) iterates
+    // extras through extract_code.
+    use crate::parser::wrappers;
+    let command = "bash -c \"python -c 'print(1)'\"";
+    let stmt = parser::parse(command).unwrap();
+    let config = test_config();
+    // Primary: no python -c on the outer bash stmt (it's inside the string).
+    assert!(extract_code(command, &stmt, "/tmp", &config).is_none());
+    // Composition: scan extra_stmts.
+    let extras = wrappers::extract_inner_commands(&stmt);
+    let extracted = extras
+        .iter()
+        .find_map(|s| extract_code(command, s, "/tmp", &config));
+    let ec = extracted.expect("inner python -c must be extracted");
+    assert_eq!(ec.language, "python");
+    assert_eq!(ec.code.trim(), "print(1)");
+}
+
+#[test]
+fn extract_code_does_not_spuriously_extract_from_unsafe_shell_c() {
+    // bash -c "python -c \"$VAR\"" — outer arg is UnsafeString (has $VAR).
+    // shell-c refuses re-parse; extras contains Opaque, not a python -c
+    // SimpleCommand. Composition must NOT falsely extract.
+    use crate::parser::wrappers;
+    let command = "bash -c \"python -c \\\"$VAR\\\"\"";
+    let stmt = parser::parse(command).unwrap();
+    let config = test_config();
+    assert!(extract_code(command, &stmt, "/tmp", &config).is_none());
+    let extras = wrappers::extract_inner_commands(&stmt);
+    let extracted = extras
+        .iter()
+        .find_map(|s| extract_code(command, s, "/tmp", &config));
+    assert!(extracted.is_none());
+}
