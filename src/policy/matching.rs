@@ -1,6 +1,6 @@
 //! Matching logic for policy rules.
 
-use crate::parser::{self, SimpleCommand, Statement};
+use crate::parser::{self, Arg, SimpleCommand, Statement};
 
 use super::config::{FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
 
@@ -38,13 +38,13 @@ fn arg_matches_flag(arg: &str, flag: &str) -> bool {
 
 /// Check if a FlagsMatcher's constraints are satisfied by the given argv.
 /// Returns true if all active constraints pass. Empty constraint fields are skipped.
-fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
+fn flags_match(flags_matcher: &FlagsMatcher, argv: &[Arg]) -> bool {
     // any_of: at least one of these flags must be present
     if !flags_matcher.any_of.is_empty() {
         let has_any = flags_matcher
             .any_of
             .iter()
-            .any(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+            .any(|f| argv.iter().any(|a| arg_matches_flag(a.as_ref(), f)));
         if !has_any {
             return false;
         }
@@ -54,7 +54,7 @@ fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
         let has_all = flags_matcher
             .all_of
             .iter()
-            .all(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+            .all(|f| argv.iter().any(|a| arg_matches_flag(a.as_ref(), f)));
         if !has_all {
             return false;
         }
@@ -64,7 +64,7 @@ fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
         let has_any_excluded = flags_matcher
             .none_of
             .iter()
-            .any(|f| argv.iter().any(|a| arg_matches_flag(a, f)));
+            .any(|f| argv.iter().any(|a| arg_matches_flag(a.as_ref(), f)));
         if has_any_excluded {
             return false;
         }
@@ -74,7 +74,7 @@ fn flags_match(flags_matcher: &FlagsMatcher, argv: &[String]) -> bool {
         let has_prefix = flags_matcher
             .starts_with
             .iter()
-            .any(|prefix| argv.iter().any(|a| a.starts_with(prefix)));
+            .any(|prefix| argv.iter().any(|a| a.as_ref().starts_with(prefix.as_str())));
         if !has_prefix {
             return false;
         }
@@ -106,10 +106,11 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             // Check args with glob matching
             if let Some(args_matcher) = args {
                 if !args_matcher.any_of.is_empty() {
-                    let has_any = args_matcher
-                        .any_of
-                        .iter()
-                        .any(|pattern| cmd.argv.iter().any(|a| glob_match::glob_match(pattern, a)));
+                    let has_any = args_matcher.any_of.iter().any(|pattern| {
+                        cmd.argv
+                            .iter()
+                            .any(|a| glob_match::glob_match(pattern, a.as_ref()))
+                    });
                     if !has_any {
                         return false;
                     }
@@ -191,6 +192,7 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
 mod tests {
     use super::arg_matches_flag;
     use super::matches_pipeline;
+    use crate::parser::Arg;
     use crate::policy::config::{FlagsMatcher, PipelineMatcher, StageMatcher, StringOrList};
 
     fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {
@@ -418,8 +420,8 @@ mod tests {
         }
     }
 
-    fn argv(args: &[&str]) -> Vec<String> {
-        args.iter().map(|s| s.to_string()).collect()
+    fn argv(args: &[&str]) -> Vec<Arg> {
+        args.iter().map(|s| Arg::plain(*s)).collect()
     }
 
     #[test]

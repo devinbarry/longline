@@ -5,7 +5,7 @@ use tree_sitter::Node;
 use super::helpers::{
     classify_arg_node, node_text, parse_assignment, parse_redirect, resolve_node_text,
 };
-use super::{Arg, Assignment, List, ListOp, Pipeline, Redirect, SimpleCommand, Statement};
+use super::{Arg, ArgMeta, Assignment, List, ListOp, Pipeline, Redirect, SimpleCommand, Statement};
 
 /// Convert an argv-position tree-sitter node into an `Arg` carrying both the
 /// resolved text and an `ArgMeta` classification.
@@ -14,7 +14,6 @@ use super::{Arg, Assignment, List, ListOp, Pipeline, Redirect, SimpleCommand, St
 /// Used by `convert_command` for every argv child, and by
 /// `merge_error_into_statement` for recovered ERROR fragments (which always
 /// classify as `UnsafeString`).
-#[allow(dead_code)]
 pub(crate) fn convert_arg_node(node: Node, source: &str) -> Arg {
     Arg {
         text: resolve_node_text(node, source),
@@ -69,7 +68,10 @@ fn merge_error_into_statement(stmt: &mut Statement, error_node: Node, source: &s
     let error_text = node_text(error_node, source).to_string();
     match stmt {
         Statement::SimpleCommand(cmd) => {
-            cmd.argv.push(error_text);
+            cmd.argv.push(Arg {
+                text: error_text,
+                meta: ArgMeta::UnsafeString,
+            });
         }
         Statement::Pipeline(pipeline) => {
             // Merge into the last stage of the pipeline
@@ -138,7 +140,7 @@ pub fn collect_descendant_substitutions_pub(node: Node, source: &str, out: &mut 
 /// Convert a "command" node to a SimpleCommand.
 fn convert_command(node: Node, source: &str) -> Statement {
     let mut name: Option<String> = None;
-    let mut argv: Vec<String> = Vec::new();
+    let mut argv: Vec<Arg> = Vec::new();
     let mut redirects: Vec<Redirect> = Vec::new();
     let mut assignments: Vec<Assignment> = Vec::new();
     let mut embedded_substitutions: Vec<Statement> = Vec::new();
@@ -150,14 +152,16 @@ fn convert_command(node: Node, source: &str) -> Statement {
                 name = Some(resolve_node_text(child, source));
             }
             "command_substitution" => {
-                // Keep the raw text as an argument for display/matching purposes
-                argv.push(resolve_node_text(child, source));
+                argv.push(convert_arg_node(child, source));
                 // Parse the inner command for security evaluation
                 embedded_substitutions.push(convert_command_substitution(child, source));
             }
             "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion"
-            | "expansion" | "string_content" => {
-                argv.push(resolve_node_text(child, source));
+            | "expansion" => {
+                // NOTE: "string_content" removed — it is only a child of `string`,
+                // never a direct argv child. If it ever appears here the
+                // catch-all below will still classify it as UnsafeString.
+                argv.push(convert_arg_node(child, source));
                 collect_descendant_substitutions(child, source, &mut embedded_substitutions);
             }
             "variable_assignment" => {
@@ -171,8 +175,8 @@ fn convert_command(node: Node, source: &str) -> Statement {
                 embedded_substitutions.extend(subs);
             }
             _ => {
-                // Other argument-like nodes: treat as arguments
-                argv.push(resolve_node_text(child, source));
+                // Other argument-like nodes: treat as UnsafeString via convert_arg_node's default.
+                argv.push(convert_arg_node(child, source));
                 collect_descendant_substitutions(child, source, &mut embedded_substitutions);
             }
         }
@@ -391,7 +395,7 @@ fn convert_declaration_command(node: Node, source: &str) -> Statement {
         .map(|c| node_text(c, source).to_string())
         .unwrap_or_default();
 
-    let mut argv: Vec<String> = Vec::new();
+    let mut argv: Vec<Arg> = Vec::new();
     let mut assignments: Vec<Assignment> = Vec::new();
     let mut embedded_substitutions: Vec<Statement> = Vec::new();
 
@@ -404,7 +408,7 @@ fn convert_declaration_command(node: Node, source: &str) -> Statement {
                 embedded_substitutions.extend(subs);
             }
             _ => {
-                argv.push(resolve_node_text(child, source));
+                argv.push(convert_arg_node(child, source));
                 collect_descendant_substitutions(child, source, &mut embedded_substitutions);
             }
         }
@@ -429,12 +433,12 @@ fn convert_unset_command(node: Node, source: &str) -> Statement {
         .map(|c| node_text(c, source).to_string())
         .unwrap_or_default();
 
-    let mut argv: Vec<String> = Vec::new();
+    let mut argv: Vec<Arg> = Vec::new();
     let mut embedded_substitutions: Vec<Statement> = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        argv.push(resolve_node_text(child, source));
+        argv.push(convert_arg_node(child, source));
         collect_descendant_substitutions(child, source, &mut embedded_substitutions);
     }
 

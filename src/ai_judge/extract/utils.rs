@@ -48,7 +48,7 @@ pub(super) fn tokens_from_simple_command(cmd: &SimpleCommand) -> Option<Vec<Stri
     let name = cmd.name.as_ref()?;
     let mut out = Vec::with_capacity(1 + cmd.argv.len());
     out.push(basename(name).to_string());
-    out.extend(cmd.argv.iter().cloned());
+    out.extend(cmd.argv.iter().map(|a| a.text.clone()));
     Some(out)
 }
 
