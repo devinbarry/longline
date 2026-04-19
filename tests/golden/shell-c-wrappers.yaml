@@ -39,6 +39,21 @@ tests:
     expected:
       decision: allow
 
+  - id: dash-c-ls-allow
+    command: 'dash -c "ls -la"'
+    expected:
+      decision: allow
+
+  - id: ash-c-cat-etc-hostname-allow
+    command: 'ash -c "cat /etc/hostname"'
+    expected:
+      decision: allow
+
+  - id: ksh-c-docker-ps-allow
+    command: 'ksh -c "docker ps"'
+    expected:
+      decision: allow
+
   # ── Security improvements → deny (flipped from ask) ──────────
   - id: bash-c-rm-root-deny
     command: "bash -c 'rm -rf /'"
@@ -57,6 +72,12 @@ tests:
     expected:
       decision: deny
       rule_id: cat-env-file
+
+  - id: ash-c-rm-root-deny
+    command: 'ash -c "rm -rf /"'
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
 
   # ── Fail-closed on unsafe meta → ask ─────────────────────────
   - id: bash-c-unsafe-var-expansion-ask
