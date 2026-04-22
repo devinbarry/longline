@@ -124,6 +124,28 @@ fn find_wrapper(name: &str) -> Option<&'static WrapperDef> {
     WRAPPERS.iter().find(|w| w.name == basename)
 }
 
+/// Return the value-flags (flags that consume the following token) for a
+/// recognized wrapper invocation, or an empty slice otherwise.
+///
+/// For subcommand-based wrappers like `uv run`, `first_arg` must match the
+/// wrapper's subcommand — otherwise the invocation isn't actually the wrapper
+/// (e.g. `uv pip …` is not a `uv run` wrapper), and we return `&[]`.
+///
+/// Consumed by the allowlist matcher so it can skip `--flag VALUE` pairs when
+/// scanning for the inner subcommand (e.g. matching `uv run ruff` against
+/// `uv run --project /tmp ruff`).
+pub fn value_flags_for(cmd_name: &str, first_arg: Option<&str>) -> &'static [&'static str] {
+    let Some(wrapper) = find_wrapper(cmd_name) else {
+        return &[];
+    };
+    if let Some(sub) = wrapper.subcommand {
+        if first_arg != Some(sub) {
+            return &[];
+        }
+    }
+    wrapper.value_flags
+}
+
 /// Check if a token is a valid environment variable assignment (NAME=VALUE).
 /// NAME must match [A-Za-z_][A-Za-z0-9_]*.
 fn is_env_assignment(token: &str) -> bool {

@@ -31,6 +31,34 @@ pub(super) fn is_version_check(cmd: &SimpleCommand) -> bool {
     cmd.argv.len() == 1 && (cmd.argv[0].text == "--version" || cmd.argv[0].text == "-V")
 }
 
+/// Strip `--flag VALUE` pairs where `--flag` is a known wrapper value-flag.
+///
+/// Used so an allowlist entry like `uv run ruff` still matches invocations that
+/// pass space-separated wrapper value-flags between the subcommand and the inner
+/// command (e.g. `uv run --project /tmp ruff`). The equals form `--project=/tmp`
+/// is a single token and is already handled by `args_match_prefix`'s flag-skip
+/// logic; we don't need to strip those.
+///
+/// Short combined forms like `-pVALUE` are also a single token and pass through
+/// the existing flag-skip unchanged.
+fn strip_wrapper_value_flag_pairs(argv: &[Arg], value_flags: &[&str]) -> Vec<Arg> {
+    if value_flags.is_empty() {
+        return argv.to_vec();
+    }
+    let mut out = Vec::with_capacity(argv.len());
+    let mut i = 0;
+    while i < argv.len() {
+        let token = argv[i].text.as_str();
+        if value_flags.contains(&token) && i + 1 < argv.len() {
+            i += 2;
+            continue;
+        }
+        out.push(argv[i].clone());
+        i += 1;
+    }
+    out
+}
+
 /// Git supports global options like `-C <path>` that appear before the subcommand.
 /// Strip those so allowlist entries like `git status` still match `git -C /tmp status`.
 fn strip_git_global_c_flag(argv: &[Arg]) -> Vec<Arg> {
@@ -141,7 +169,18 @@ fn find_matching_entry<'a>(
     let argv: Cow<[Arg]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a.text == "-C") {
         Cow::Owned(strip_git_global_c_flag(&cmd.argv))
     } else {
-        Cow::Borrowed(&cmd.argv)
+        let first_arg = cmd.argv.first().map(|a| a.text.as_str());
+        let value_flags = crate::parser::wrappers::value_flags_for(cmd_name, first_arg);
+        if !value_flags.is_empty()
+            && cmd
+                .argv
+                .iter()
+                .any(|a| value_flags.contains(&a.text.as_str()))
+        {
+            Cow::Owned(strip_wrapper_value_flag_pairs(&cmd.argv, value_flags))
+        } else {
+            Cow::Borrowed(&cmd.argv)
+        }
     };
 
     for entry in &config.allowlists.commands {
@@ -843,5 +882,118 @@ mod tests {
             !is_covered_by_wrapper_entry(&config, &leaves, &extra_leaf),
             "Bare 'timeout' entry should NOT cover unknown_command"
         );
+    }
+
+    // ================================================================
+    // find_allowlist_match: wrapper value-flag awareness (uv run --project …)
+    // ================================================================
+    //
+    // `uv run` takes value-flags like `--project PATH`, `-p PATH`, `--directory PATH`,
+    // and `--python VERSION`. When these appear in space-separated form between
+    // `uv run` and the inner command, the allowlist matcher's generic flag-skip
+    // logic (skip tokens starting with `-`) stops at the VALUE (which doesn't start
+    // with `-`) and fails to reach the inner command. The equals form works because
+    // the whole token starts with `-`.
+
+    fn uv_cmd(argv: &[&str]) -> SimpleCommand {
+        SimpleCommand {
+            name: Some("uv".to_string()),
+            argv: argv.iter().map(|s| Arg::plain(*s)).collect(),
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        }
+    }
+
+    fn uv_run_ruff_config() -> RulesConfig {
+        RulesConfig {
+            version: 1,
+            default_decision: crate::types::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::Standard,
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "uv run ruff".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        }
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_project_space_value() {
+        // `uv run --project /tmp ruff --version` must match `uv run ruff` entry.
+        // This is the bug: space-separated value-flag broke the matcher.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--project", "/tmp", "ruff", "--version"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_short_flag_p_space_value() {
+        // `uv run -p /tmp ruff` must match `uv run ruff` entry.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "-p", "/tmp", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_directory_space_value() {
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--directory", "/tmp", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_python_version_space_value() {
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--python", "3.12", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_equals_form_still_matches() {
+        // Regression: --project=VALUE form already worked, must keep working.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--project=/tmp", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_bool_flag_still_matches() {
+        // Regression: bool flags like --isolated must keep matching.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--isolated", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_no_flags_still_matches() {
+        // Regression: the simple form must keep matching.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_project_does_not_match_other_subcommand() {
+        // Security: --project /tmp must not let an unrelated tool sneak past.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--project", "/tmp", "dangeroustool"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), None);
+    }
+
+    #[test]
+    fn test_find_match_uv_run_project_value_is_not_the_subcommand() {
+        // Edge: if the value IS "ruff" (e.g. project literally named ruff),
+        // we should still require the real ruff token to follow.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--project", "ruff"]);
+        // "ruff" is consumed as --project's value, no subcommand follows.
+        assert_eq!(find_allowlist_match(&config, &cmd), None);
     }
 }
