@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1] - 2026-04-22
+
+### Fixed
+
+- Allowlist entries of the form `"wrapper subcommand inner"` (e.g. `uv run ruff`)
+  now match when space-separated wrapper value-flags appear between the
+  subcommand and the inner command. Previously, `uv run --project /tmp ruff` and
+  `uv run -p /tmp ruff` fell through to the default `ask` because the matcher's
+  flag-skip logic stopped at the flag's VALUE. The equals form
+  (`uv run --project=/tmp ruff`) already worked. Covers `--project`, `-p`,
+  `--directory`, and `--python` for `uv run`, plus the value-flags declared on
+  `timeout`, `env`, and `strace` wrappers.
+
+### Internal
+
+- New `parser::wrappers::value_flags_for(cmd_name, first_arg)` returns a
+  recognized wrapper's value-flags, gated on the wrapper's subcommand so it
+  only fires for genuine wrapper invocations (returns `&[]` for e.g. `uv pip`).
+- New `strip_wrapper_value_flag_pairs` in `policy::allowlist` canonicalizes
+  argv before `args_match_prefix`, mirroring the existing
+  `strip_git_global_c_flag` pattern.
+
 ## [0.12.0] - 2026-04-19
 
 ### Changed (policy behavior)
