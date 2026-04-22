@@ -126,3 +126,39 @@ tests:
     command: "uv run python3 -m pytest tests/ -v --tb=short 2>&1"
     expected:
       decision: allow
+
+  # uv run value-flag forms: space-separated values (--project /path, -p /path,
+  # --directory /path, --python VER) must match "uv run X" allowlist entries.
+  # The equals form and bool flags also must keep working.
+  - id: uv-run-project-space-ruff-safe
+    command: "uv run --project /tmp ruff check ."
+    expected:
+      decision: allow
+  - id: uv-run-project-space-pytest-safe
+    command: "uv run --project /tmp pytest"
+    expected:
+      decision: allow
+  - id: uv-run-short-p-space-ruff-safe
+    command: "uv run -p /tmp ruff --version"
+    expected:
+      decision: allow
+  - id: uv-run-directory-space-mypy-safe
+    command: "uv run --directory /tmp mypy src/"
+    expected:
+      decision: allow
+  - id: uv-run-python-version-space-ruff-safe
+    command: "uv run --python 3.12 ruff check ."
+    expected:
+      decision: allow
+  - id: uv-run-project-equals-ruff-safe
+    command: "uv run --project=/tmp ruff check ."
+    expected:
+      decision: allow
+  - id: uv-run-isolated-ruff-safe
+    command: "uv run --isolated ruff --version"
+    expected:
+      decision: allow
+  - id: uv-run-project-original-report-safe
+    command: 'uv run --project /Users/a/proj ruff --version 2>/dev/null || echo "cannot run ruff"'
+    expected:
+      decision: allow
