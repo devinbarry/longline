@@ -158,6 +158,11 @@ fn golden_cli_tools() {
 }
 
 #[test]
+fn golden_codex() {
+    run_golden_suite("codex.yaml");
+}
+
+#[test]
 fn golden_safe_commands_other() {
     run_golden_suite("safe-commands-other.yaml");
 }

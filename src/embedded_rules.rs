@@ -4,6 +4,7 @@ const RULES_YAML: &str = include_str!("../rules/rules.yaml");
 const CORE_ALLOWLIST: &str = include_str!("../rules/core-allowlist.yaml");
 const GIT: &str = include_str!("../rules/git.yaml");
 const CLI_TOOLS: &str = include_str!("../rules/cli-tools.yaml");
+const CODEX: &str = include_str!("../rules/codex.yaml");
 const FILESYSTEM: &str = include_str!("../rules/filesystem.yaml");
 const SECRETS: &str = include_str!("../rules/secrets.yaml");
 const DJANGO: &str = include_str!("../rules/django.yaml");
@@ -24,6 +25,7 @@ pub fn get(name: &str) -> Option<&'static str> {
         "core-allowlist.yaml" => Some(CORE_ALLOWLIST),
         "git.yaml" => Some(GIT),
         "cli-tools.yaml" => Some(CLI_TOOLS),
+        "codex.yaml" => Some(CODEX),
         "filesystem.yaml" => Some(FILESYSTEM),
         "secrets.yaml" => Some(SECRETS),
         "django.yaml" => Some(DJANGO),
@@ -47,6 +49,7 @@ pub fn all_files() -> Vec<(&'static str, &'static str)> {
         ("core-allowlist.yaml", CORE_ALLOWLIST),
         ("git.yaml", GIT),
         ("cli-tools.yaml", CLI_TOOLS),
+        ("codex.yaml", CODEX),
         ("filesystem.yaml", FILESYSTEM),
         ("secrets.yaml", SECRETS),
         ("django.yaml", DJANGO),
