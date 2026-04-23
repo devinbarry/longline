@@ -43,6 +43,22 @@ fn kill_process_group(pid: u32) {
     }
 }
 
+/// Remove any occurrence of `--ephemeral` from argv when debug_enabled is true.
+/// Used via the `LONGLINE_AI_JUDGE_DEBUG` env var to keep codex session rollouts
+/// for post-mortem inspection.
+fn maybe_strip_ephemeral(argv: Vec<String>, debug_enabled: bool) -> Vec<String> {
+    if !debug_enabled {
+        return argv;
+    }
+    argv.into_iter().filter(|a| a != "--ephemeral").collect()
+}
+
+fn judge_debug_enabled() -> bool {
+    std::env::var("LONGLINE_AI_JUDGE_DEBUG")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+}
+
 fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, String) {
     let parts: Vec<String> = config
         .command
@@ -54,6 +70,7 @@ fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, St
         eprintln!("longline: ai-judge command is empty");
         return (Decision::Ask, reason);
     }
+    let parts = maybe_strip_ephemeral(parts, judge_debug_enabled());
 
     let timeout = std::time::Duration::from_secs(config.timeout);
 
@@ -264,6 +281,48 @@ echo "ALLOW: safe computation"
             Option<&str>,
             Option<&str>,
         ) -> (Decision, String) = evaluate_lenient;
+    }
+
+    #[test]
+    fn test_strip_ephemeral_when_debug_env_set() {
+        let argv = vec![
+            "codex".to_string(),
+            "exec".to_string(),
+            "--ephemeral".to_string(),
+            "-m".to_string(),
+            "gpt-5.4-mini".to_string(),
+        ];
+        let stripped = maybe_strip_ephemeral(argv.clone(), true);
+        assert!(
+            !stripped.iter().any(|a| a == "--ephemeral"),
+            "--ephemeral should be stripped when debug is enabled: {stripped:?}"
+        );
+        assert_eq!(stripped, vec!["codex", "exec", "-m", "gpt-5.4-mini"]);
+    }
+
+    #[test]
+    fn test_preserve_ephemeral_when_debug_env_unset() {
+        let argv = vec![
+            "codex".to_string(),
+            "exec".to_string(),
+            "--ephemeral".to_string(),
+            "-m".to_string(),
+            "gpt-5.4-mini".to_string(),
+        ];
+        let stripped = maybe_strip_ephemeral(argv.clone(), false);
+        assert_eq!(stripped, argv, "argv should be unchanged when debug is off");
+    }
+
+    #[test]
+    fn test_strip_ephemeral_noop_when_absent() {
+        let argv = vec![
+            "codex".to_string(),
+            "exec".to_string(),
+            "-m".to_string(),
+            "gpt-5.4-mini".to_string(),
+        ];
+        let stripped = maybe_strip_ephemeral(argv.clone(), true);
+        assert_eq!(stripped, argv, "argv with no --ephemeral is unchanged");
     }
 
     #[cfg(unix)]
