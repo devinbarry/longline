@@ -233,6 +233,15 @@ impl StringOrList {
     }
 }
 
+/// Per-project AI judge customization in `.claude/longline.yaml`.
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectAiJudgeConfig {
+    /// Free-text domain hints injected into the AI judge prompt.
+    /// Wrapped with a safety-floor preamble at render time.
+    pub context: Option<String>,
+}
+
 /// Per-project config loaded from `.claude/longline.yaml`.
 /// All fields are optional; only specified fields override the global config.
 #[derive(Debug, Deserialize)]
@@ -243,6 +252,7 @@ pub struct ProjectConfig {
     pub allowlists: Option<Allowlists>,
     pub rules: Option<Vec<Rule>>,
     pub disable_rules: Option<Vec<String>>,
+    pub ai_judge: Option<ProjectAiJudgeConfig>,
 }
 
 /// Walk up from `cwd` to find the project root.
@@ -1064,6 +1074,7 @@ disable_rules:
             allowlists: None,
             rules: None,
             disable_rules: None,
+            ai_judge: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.safety_level, SafetyLevel::Strict);
@@ -1101,6 +1112,7 @@ disable_rules:
             }),
             rules: None,
             disable_rules: None,
+            ai_judge: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands.len(), 2);
@@ -1153,6 +1165,7 @@ disable_rules:
             allowlists: None,
             rules: None,
             disable_rules: Some(vec!["rule-a".to_string()]),
+            ai_judge: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.rules.len(), 1);
@@ -1208,6 +1221,7 @@ rules:
             allowlists: None,
             rules: None,
             disable_rules: None,
+            ai_judge: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.safety_level, SafetyLevel::High);
@@ -1399,6 +1413,7 @@ rules:
             }),
             rules: None,
             disable_rules: None,
+            ai_judge: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands[0].source, RuleSource::BuiltIn);
@@ -1528,5 +1543,39 @@ rules:
 "#;
         let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.rules.len(), 1);
+    }
+
+    #[test]
+    fn test_project_config_parses_ai_judge_context() {
+        let yaml = r#"
+ai_judge:
+  context: |
+    Domain: finance analysis. Expected httpx to polymarket.com.
+"#;
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
+        let aj = config.ai_judge.expect("ai_judge should be Some");
+        let ctx = aj.context.expect("context should be Some");
+        assert!(ctx.contains("polymarket.com"));
+    }
+
+    #[test]
+    fn test_project_config_parses_without_ai_judge() {
+        let yaml = "allowlists: { commands: [] }";
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
+        assert!(config.ai_judge.is_none());
+    }
+
+    #[test]
+    fn test_project_config_rejects_unknown_ai_judge_fields() {
+        let yaml = r#"
+ai_judge:
+  context: hi
+  weird_field: true
+"#;
+        let result: Result<ProjectConfig, _> = serde_norway::from_str(yaml);
+        assert!(
+            result.is_err(),
+            "deny_unknown_fields should reject weird_field"
+        );
     }
 }
