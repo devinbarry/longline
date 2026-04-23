@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-04-23
+
+### Added
+
+- OpenAI `codex` CLI allowlist (new `rules/codex.yaml`). Allowlists the
+  non-interactive `codex exec` entrypoint (including `codex exec review` and
+  `codex exec resume` subcommands) plus `codex --version` / `--help`. Bare
+  `codex` (interactive TUI), `codex login`, and config-mutating subcommands
+  remain gated and fall through to the default `ask`. Safety for
+  `codex exec` rests on the caller's codex profile
+  (`sandbox_mode = "read-only"`, `approval_policy = "never"`), not on this
+  allowlist. Unblocks the common `codex-review` skill launcher which sets
+  env vars, prepares output paths, and invokes
+  `CODEX_HOME=… codex --profile <name> exec …` in one compound command.
+- Codex global value-flag stripping in the allowlist matcher so
+  `codex --profile review exec …`, `codex -c model="gpt-5.4" exec …`, and
+  `codex --model gpt-5.4 exec …` all reduce to `codex exec …` for matching.
+  Stripped flags: `--profile`, `--model`, `-m`, `--config`, `-c`.
+
+### Internal
+
+- New `strip_codex_global_flags` in `policy::allowlist`, mirroring the
+  existing git `-C <path>` handling. Codex is deliberately not added to the
+  transparent-wrapper table — it is not a wrapper (it does not delegate to
+  an inner command), so `unwrap_transparent` must not treat `codex exec`
+  as an extraction target.
+- `find_matching_entry` gains a codex branch alongside the git branch that
+  invokes the strip function when any supported global value-flag is
+  present in argv.
+- New `golden_codex` test suite (10 cases) covering the canonical launcher,
+  `--profile` and `CODEX_HOME` prefixed invocations, subcommands, and the
+  negative case for `codex login`.
+
 ## [0.13.0] - 2026-04-23
 
 ### Added
