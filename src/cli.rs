@@ -279,6 +279,13 @@ fn load_config(explicit_path: Option<&PathBuf>) -> Result<policy::RulesConfig, S
     policy::load_embedded_rules()
 }
 
+/// Output of `finalize_config` — the merged rules plus any side-channel values
+/// that don't live on `RulesConfig` (like per-repo AI-judge context).
+struct FinalConfig {
+    rules: policy::RulesConfig,
+    project_ai_context: Option<String>,
+}
+
 /// Finalize config by merging all overlay layers in correct precedence order.
 ///
 /// Precedence (highest to lowest):
@@ -295,20 +302,27 @@ fn finalize_config(
     project_dir: Option<&std::path::Path>,
     cli_trust_level: Option<&TrustLevelArg>,
     cli_safety_level: Option<&SafetyLevelArg>,
-) -> Result<policy::RulesConfig, String> {
-    // 1. Merge global config overlay
+) -> Result<FinalConfig, String> {
+    // 1. Global overlay.
     if let Some(global_config) = policy::load_global_config(home)? {
         policy::merge_overlay_config(&mut config, global_config, policy::RuleSource::Global);
     }
 
-    // 2. Merge project config
+    // 2. Project overlay — also extract ai_judge.context for separate plumbing.
+    let mut project_ai_context: Option<String> = None;
     if let Some(dir) = project_dir {
         if let Some(project_config) = policy::load_project_config(dir)? {
+            project_ai_context = project_config
+                .ai_judge
+                .as_ref()
+                .and_then(|a| a.context.as_ref())
+                .filter(|c| !c.trim().is_empty())
+                .cloned();
             policy::merge_project_config(&mut config, project_config);
         }
     }
 
-    // 3. Apply CLI overrides (always last = always wins)
+    // 3. CLI overrides (always last = always wins).
     if let Some(level) = cli_trust_level {
         config.trust_level = level.to_trust_level();
     }
@@ -316,7 +330,10 @@ fn finalize_config(
         config.safety_level = level.to_safety_level();
     }
 
-    Ok(config)
+    Ok(FinalConfig {
+        rules: config,
+        project_ai_context,
+    })
 }
 
 /// Main entry point. Returns the process exit code.
@@ -352,7 +369,7 @@ pub fn run() -> i32 {
     // For hook mode: pass base config to run_hook() which finalizes after reading cwd from stdin
     let (rules_config, project_config_path) = if cli.command.is_some() {
         let project_dir = resolve_dir(cli.dir.as_ref());
-        let config = match finalize_config(
+        let final_config = match finalize_config(
             base_config,
             &home_dir(),
             project_dir.as_deref(),
@@ -365,6 +382,8 @@ pub fn run() -> i32 {
                 return 2;
             }
         };
+        let rules_config = final_config.rules;
+        let _project_ai_context = final_config.project_ai_context;
 
         // Track project config path for display banners
         let pcp = project_dir.and_then(|dir| {
@@ -378,7 +397,7 @@ pub fn run() -> i32 {
             })
         });
 
-        (config, pcp)
+        (rules_config, pcp)
     } else {
         (base_config, None)
     };
@@ -446,7 +465,7 @@ fn run_hook(
         .cwd
         .as_ref()
         .map(|s| std::path::Path::new(s.as_str()));
-    let rules_config = match finalize_config(
+    let final_config = match finalize_config(
         rules_config,
         &home_dir(),
         cwd,
@@ -459,6 +478,9 @@ fn run_hook(
             return 2;
         }
     };
+    let rules_config = final_config.rules;
+    let project_ai_context = final_config.project_ai_context; // wired into AI judge in Task 7
+    let _ = &project_ai_context; // suppress unused warning until Task 7 wires this in
 
     // Handle Read tool - path-based evaluation using file_path
     if hook_input.tool_name == "Read" {
@@ -1189,8 +1211,8 @@ mod tests {
 
         let result = finalize_config(config, home.path(), None, None, None).unwrap();
 
-        assert_eq!(result.trust_level, original_trust);
-        assert_eq!(result.safety_level, original_safety);
+        assert_eq!(result.rules.trust_level, original_trust);
+        assert_eq!(result.rules.safety_level, original_safety);
     }
 
     #[test]
@@ -1207,7 +1229,7 @@ mod tests {
         let config = policy::load_embedded_rules().unwrap();
         let result = finalize_config(config, home.path(), None, None, None).unwrap();
 
-        assert_eq!(result.trust_level, policy::TrustLevel::Full);
+        assert_eq!(result.rules.trust_level, policy::TrustLevel::Full);
     }
 
     #[test]
@@ -1240,7 +1262,7 @@ mod tests {
             finalize_config(config, home.path(), Some(project_dir.path()), None, None).unwrap();
 
         assert_eq!(
-            result.trust_level,
+            result.rules.trust_level,
             policy::TrustLevel::Minimal,
             "Project config should override global config"
         );
@@ -1283,7 +1305,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            result.trust_level,
+            result.rules.trust_level,
             policy::TrustLevel::Standard,
             "CLI --trust-level should override both global and project config"
         );
@@ -1305,7 +1327,7 @@ mod tests {
         let result = finalize_config(config, home.path(), None, None, Some(&safety_arg)).unwrap();
 
         assert_eq!(
-            result.safety_level,
+            result.rules.safety_level,
             policy::SafetyLevel::Critical,
             "CLI --safety-level should override global config"
         );
@@ -1345,9 +1367,97 @@ mod tests {
 
         // Should have base + 1 global entry (not base + 2 from double load)
         assert_eq!(
-            result.allowlists.commands.len(),
+            result.rules.allowlists.commands.len(),
             base_count + 1,
             "Global config allowlist should be merged exactly once"
+        );
+    }
+
+    #[test]
+    fn test_finalize_config_extracts_project_ai_context() {
+        use std::fs;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        fs::create_dir(repo.join(".claude")).unwrap();
+        fs::write(
+            repo.join(".claude").join("longline.yaml"),
+            "ai_judge:\n  context: test-domain-hint\n",
+        )
+        .unwrap();
+        fs::create_dir(repo.join(".git")).unwrap();
+
+        let base = policy::RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: policy::SafetyLevel::High,
+            trust_level: policy::TrustLevel::Standard,
+            allowlists: policy::Allowlists {
+                commands: vec![],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
+            .expect("finalize_config should succeed");
+
+        assert_eq!(
+            result.project_ai_context.as_deref(),
+            Some("test-domain-hint"),
+            "project_ai_context should be extracted from the project's YAML"
+        );
+    }
+
+    #[test]
+    fn test_finalize_config_no_project_ai_context_when_absent() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+
+        let base = policy::RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: policy::SafetyLevel::High,
+            trust_level: policy::TrustLevel::Standard,
+            allowlists: policy::Allowlists {
+                commands: vec![],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
+            .expect("finalize_config should succeed");
+        assert!(result.project_ai_context.is_none());
+    }
+
+    #[test]
+    fn test_finalize_config_empty_project_ai_context_is_none() {
+        use std::fs;
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path();
+        fs::create_dir(repo.join(".claude")).unwrap();
+        fs::write(
+            repo.join(".claude").join("longline.yaml"),
+            "ai_judge:\n  context: \"   \"\n",
+        )
+        .unwrap();
+        fs::create_dir(repo.join(".git")).unwrap();
+
+        let base = policy::RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: policy::SafetyLevel::High,
+            trust_level: policy::TrustLevel::Standard,
+            allowlists: policy::Allowlists {
+                commands: vec![],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
+            .expect("finalize_config should succeed");
+        assert!(
+            result.project_ai_context.is_none(),
+            "all-whitespace context must be filtered to None"
         );
     }
 }
