@@ -7,6 +7,7 @@ include:
   - core-allowlist.yaml
   - git.yaml
   - cli-tools.yaml
+  - codex.yaml
   - filesystem.yaml
   - secrets.yaml
   - django.yaml

@@ -100,6 +100,47 @@ fn strip_git_global_c_flag(argv: &[Arg]) -> Vec<Arg> {
     out
 }
 
+/// Codex supports global value-flags like `--profile <name>`, `--model <name>`,
+/// `-m <name>`, `--config <key=value>`, `-c <key=value>` that appear before the
+/// subcommand. Strip those so allowlist entries like `codex exec` still match
+/// `codex --profile review exec …` or `codex -c model="gpt-5.4" exec …`.
+fn strip_codex_global_flags(argv: &[Arg]) -> Vec<Arg> {
+    const VALUE_FLAGS: &[&str] = &["--profile", "--model", "-m", "--config", "-c"];
+    let mut out = Vec::with_capacity(argv.len());
+    let mut i = 0;
+    let mut in_global_opts = true;
+
+    while i < argv.len() {
+        let arg = &argv[i];
+
+        if in_global_opts {
+            if arg.text == "--" {
+                in_global_opts = false;
+                out.push(arg.clone());
+                i += 1;
+                continue;
+            }
+
+            if VALUE_FLAGS.contains(&arg.text.as_str()) {
+                i += 1;
+                if i < argv.len() {
+                    i += 1;
+                }
+                continue;
+            }
+
+            if !arg.text.starts_with('-') {
+                in_global_opts = false;
+            }
+        }
+
+        out.push(arg.clone());
+        i += 1;
+    }
+
+    out
+}
+
 /// Normalize a path-like argument for matching.
 /// Returns the basename if:
 /// - The argument contains a `/` (is path-like)
@@ -168,6 +209,15 @@ fn find_matching_entry<'a>(
 
     let argv: Cow<[Arg]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a.text == "-C") {
         Cow::Owned(strip_git_global_c_flag(&cmd.argv))
+    } else if cmd_name == "codex"
+        && cmd.argv.iter().any(|a| {
+            matches!(
+                a.text.as_str(),
+                "--profile" | "--model" | "-m" | "--config" | "-c"
+            )
+        })
+    {
+        Cow::Owned(strip_codex_global_flags(&cmd.argv))
     } else {
         let first_arg = cmd.argv.first().map(|a| a.text.as_str());
         let value_flags = crate::parser::wrappers::value_flags_for(cmd_name, first_arg);

@@ -195,6 +195,7 @@ rules/
   core-allowlist.yaml     # Generic safe commands (ls, cat, grep...)
   git.yaml                # Git allowlist + destructive git rules
   cli-tools.yaml          # gh/glab/glp allowlist + API mutation rules
+  codex.yaml              # OpenAI codex CLI allowlist
   filesystem.yaml         # Filesystem destruction rules
   secrets.yaml            # Secrets exposure rules
   django.yaml             # Django allowlist + destructive rules

@@ -1,0 +1,69 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # codex CLI (OpenAI Codex)
+  # Allowlisted in rules/codex.yaml.
+  #
+  # The primary caller is the codex-review skill, which launches:
+  #   CODEX_HOME=... codex --profile <name> exec "$(cat prompt.txt)" \
+  #     </dev/null >OUT 2>ERR
+  # Profiles in ~/.config/codex-review/config.toml pin
+  # sandbox_mode=read-only + approval_policy=never, so codex exec cannot
+  # modify the filesystem or prompt mid-run.
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Positive: codex exec in common invocation shapes ───────────
+  - id: codex-exec-bare
+    command: 'codex exec "review this"'
+    expected:
+      decision: allow
+
+  - id: codex-exec-with-profile
+    command: 'codex --profile review exec "review this"'
+    expected:
+      decision: allow
+
+  - id: codex-exec-with-codex-home-prefix
+    command: 'CODEX_HOME=$HOME/.config/codex-review codex --profile review exec "review"'
+    expected:
+      decision: allow
+
+  - id: codex-exec-review-subcommand
+    command: "codex exec review --base master"
+    expected:
+      decision: allow
+
+  - id: codex-exec-resume
+    command: "codex exec resume --last"
+    expected:
+      decision: allow
+
+  # ── Positive: realistic launcher matching skill's canonical pattern ──
+  # This is the exact multi-line shape that produced the single remaining
+  # "ask" prompt before rules/codex.yaml existed. Compound statement with
+  # env-var assignments, echo+redirect, then the gated codex invocation.
+  - id: codex-launcher-canonical
+    command: |
+      OUTPUT_FILE="/tmp/codex-review-$(date +%s).md"
+      STDERR_FILE="/tmp/codex-review-stderr-$(date +%s).log"
+      echo "OUTPUT=${OUTPUT_FILE}" > /tmp/codex-review-paths.env
+      echo "STDERR=${STDERR_FILE}" >> /tmp/codex-review-paths.env
+      CODEX_HOME=$HOME/.config/codex-review codex --profile review-xhigh exec "$(cat /tmp/codex-review-prompt.txt)" </dev/null >"${OUTPUT_FILE}" 2>"${STDERR_FILE}"
+    expected:
+      decision: allow
+
+  # ── Positive: version/help ──────────────────────────────────────
+  - id: codex-version
+    command: "codex --version"
+    expected:
+      decision: allow
+
+  - id: codex-help
+    command: "codex --help"
+    expected:
+      decision: allow
+
+  # ── Negative: login mutates auth state, keep it gated ──────────
+  - id: codex-login-ask
+    command: "codex login"
+    expected:
+      decision: ask

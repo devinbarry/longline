@@ -1,0 +1,27 @@
+# codex CLI (OpenAI Codex)
+#
+# Allowlist the non-interactive `codex exec` entrypoint plus version/help.
+# The primary caller is the user's codex-review skill, which invokes:
+#   CODEX_HOME=~/.config/codex-review codex --profile <name> exec \
+#     "$(cat prompt.txt)" </dev/null >OUT 2>ERR
+#
+# Safety rests on the active codex profile, not on this allowlist — the
+# `review`, `review-xhigh`, and `adversarial` profiles in
+# ~/.config/codex-review/config.toml pin `sandbox_mode = "read-only"` and
+# `approval_policy = "never"`, so codex exec cannot modify the filesystem
+# or prompt mid-run regardless of the prompt content.
+#
+# Deliberately NOT allowlisted:
+#   - `codex login`     — mutates auth state; keep interactive.
+#   - `codex` with no subcommand — opens the interactive TUI.
+#   - `codex install`, `codex mcp add`, etc. — config-mutating.
+# These fall through to the default (ask).
+
+allowlists:
+  commands:
+    - { command: "codex exec", trust: standard, reason: "Non-interactive codex invocation; sandbox/approval enforced by codex profile" }
+    - { command: "codex exec review", trust: standard, reason: "codex exec review subcommand" }
+    - { command: "codex exec resume", trust: standard, reason: "codex exec resume — continues a prior session" }
+    - { command: "codex --version", trust: minimal }
+    - { command: "codex --help", trust: minimal }
+    - { command: "codex -h", trust: minimal }
