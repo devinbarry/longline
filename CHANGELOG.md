@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2026-04-23
+
+### Added
+
+- Per-repo `ai_judge.context` in `.claude/longline.yaml` customizes the AI
+  judge's prompt with domain-specific hints. The judge sees a sanitized
+  `<project_context_XXXXXX>` wrapper with a user-provided preamble, the
+  user-supplied text, and a restated non-overridable safety floor (secrets,
+  subprocess, dynamic eval, package installs, writes outside repo/temp dirs).
+  Project context appends to — not replaces — any extractor-emitted context
+  (Django shell tag, curl-pipe provenance), preserving tactical safety
+  guidance. User input is stripped of `</project_context_XXXXXX>` closing-tag
+  patterns to defend against delimiter injection.
+- `LONGLINE_AI_JUDGE_DEBUG` environment variable: when set to a non-empty
+  value, strips `--ephemeral` from the codex invocation so AI-judge sessions
+  are persisted to `~/.codex/sessions/` for post-mortem inspection. Off by
+  default. Intended as a narrow dev/debug knob, not a user-facing feature.
+
+### Internal
+
+- `finalize_config` now returns `FinalConfig { rules, project_ai_context }`
+  so per-repo AI-judge context can be threaded through the hook flow
+  without living on `RulesConfig`.
+- New `ProjectAiJudgeConfig` sub-struct on `ProjectConfig`; deserialized
+  with `deny_unknown_fields` for fail-closed typo handling.
+- New private prompt helpers: `generate_nonce` (time + atomic counter,
+  6-hex-char, non-cryptographic but defense-in-depth against delimiter
+  guessing), `sanitize_project_context` (hand-rolled UTF-8-safe scan for
+  `</project_context_[0-9a-f]{6}>` closing-tag patterns), and
+  `render_project_context_block` in `src/ai_judge/prompt.rs`.
+- `build_prompt` and `build_prompt_lenient` gained a 5th `project_context`
+  parameter. `evaluate` and `evaluate_lenient` gained a 6th
+  `project_context` parameter threaded straight through. Backward-compat is
+  byte-identical when project context is absent (verified by regression
+  test).
+
 ## [0.12.1] - 2026-04-22
 
 ### Fixed
