@@ -1573,9 +1573,10 @@ ai_judge:
   weird_field: true
 "#;
         let result: Result<ProjectConfig, _> = serde_norway::from_str(yaml);
+        let err = result.unwrap_err().to_string();
         assert!(
-            result.is_err(),
-            "deny_unknown_fields should reject weird_field"
+            err.contains("unknown field") && err.contains("weird_field"),
+            "expected error to name the unknown inner field, got: {err}"
         );
     }
 }
