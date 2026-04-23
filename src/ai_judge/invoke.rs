@@ -12,8 +12,9 @@ pub fn evaluate(
     code: &str,
     cwd: &str,
     context: Option<&str>,
+    project_context: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt(language, code, cwd, context, None);
+    let prompt = build_prompt(language, code, cwd, context, project_context);
     evaluate_with_prompt(config, prompt)
 }
 
@@ -25,8 +26,9 @@ pub fn evaluate_lenient(
     code: &str,
     cwd: &str,
     context: Option<&str>,
+    project_context: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt_lenient(language, code, cwd, context, None);
+    let prompt = build_prompt_lenient(language, code, cwd, context, project_context);
     evaluate_with_prompt(config, prompt)
 }
 
@@ -168,7 +170,7 @@ mod tests {
             timeout: 1,
             triggers: super::super::config::TriggersConfig::default(),
         };
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None);
+        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);
         assert_eq!(reason, "AI judge error: command is empty");
     }
@@ -180,7 +182,7 @@ mod tests {
             timeout: 1,
             triggers: super::super::config::TriggersConfig::default(),
         };
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None);
+        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);
         assert!(
             reason.starts_with("AI judge error:"),
@@ -235,11 +237,33 @@ echo "ALLOW: safe computation"
             triggers: super::super::config::TriggersConfig::default(),
         };
 
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None);
+        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Allow);
         assert_eq!(reason, "ALLOW: safe computation");
 
         let _ = std::fs::remove_file(&script);
+    }
+
+    /// Signature guard: any change to the 6-arg shape fails to compile.
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn test_evaluate_signature_has_project_context_param() {
+        let _: fn(
+            &AiJudgeConfig,
+            &str,
+            &str,
+            &str,
+            Option<&str>,
+            Option<&str>,
+        ) -> (Decision, String) = evaluate;
+        let _: fn(
+            &AiJudgeConfig,
+            &str,
+            &str,
+            &str,
+            Option<&str>,
+            Option<&str>,
+        ) -> (Decision, String) = evaluate_lenient;
     }
 
     #[cfg(unix)]
@@ -259,7 +283,7 @@ echo "ALLOW: safe computation"
             triggers: super::super::config::TriggersConfig::default(),
         };
 
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None);
+        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);
         assert_eq!(reason, "AI judge error: timed out after 1s");
 

@@ -557,6 +557,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
+                        None, // project_context — wired in Task 7
                     )
                 } else {
                     ai_judge::evaluate(
@@ -565,6 +566,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
+                        None, // project_context — wired in Task 7
                     )
                 };
                 if ask_ai_lenient {
