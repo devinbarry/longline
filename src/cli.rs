@@ -479,8 +479,7 @@ fn run_hook(
         }
     };
     let rules_config = final_config.rules;
-    let project_ai_context = final_config.project_ai_context; // wired into AI judge in Task 7
-    let _ = &project_ai_context; // suppress unused warning until Task 7 wires this in
+    let project_ai_context = final_config.project_ai_context;
 
     // Handle Read tool - path-based evaluation using file_path
     if hook_input.tool_name == "Read" {
@@ -579,7 +578,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
-                        None, // project_context — wired in Task 7
+                        project_ai_context.as_deref(),
                     )
                 } else {
                     ai_judge::evaluate(
@@ -588,7 +587,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
-                        None, // project_context — wired in Task 7
+                        project_ai_context.as_deref(),
                     )
                 };
                 if ask_ai_lenient {
