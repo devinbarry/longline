@@ -13,7 +13,7 @@ pub fn evaluate(
     cwd: &str,
     context: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt(language, code, cwd, context);
+    let prompt = build_prompt(language, code, cwd, context, None);
     evaluate_with_prompt(config, prompt)
 }
 
@@ -26,7 +26,7 @@ pub fn evaluate_lenient(
     cwd: &str,
     context: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt_lenient(language, code, cwd, context);
+    let prompt = build_prompt_lenient(language, code, cwd, context, None);
     evaluate_with_prompt(config, prompt)
 }
 
