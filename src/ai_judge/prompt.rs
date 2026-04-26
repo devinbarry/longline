@@ -1,7 +1,7 @@
 const PROMPT_TEMPLATE: &str = r#"Security evaluation of {language} code to be executed on a developer's machine.
 
 Working directory: {cwd}
-{context_block}
+{extractor_context}
 {project_context_block}
 ```{language}
 {code}
@@ -27,7 +27,7 @@ const LENIENT_PROMPT_TEMPLATE: &str = r#"Security evaluation of {language} code 
 Mode: lenient
 
 Working directory: {cwd}
-{context_block}
+{extractor_context}
 {project_context_block}
 ```{language}
 {code}
@@ -65,8 +65,6 @@ If uncertain, choose ALLOW."#;
 /// `vars` is a slice of (placeholder, value) pairs. Placeholders must include
 /// the surrounding `{}` braces. Unknown placeholders in the template are left
 /// untouched.
-// Task 4 will wire this into build_prompt_from_template; allow dead_code until then.
-#[allow(dead_code)]
 pub(crate) fn substitute(template: &str, vars: &[(&str, &str)]) -> String {
     let mut out = String::with_capacity(template.len());
     let mut i = 0;
@@ -224,7 +222,7 @@ fn build_prompt_from_template(
     context: Option<&str>,
     project_context: Option<&str>,
 ) -> String {
-    let context_block = match context {
+    let extractor_context = match context {
         Some(c) if !c.trim().is_empty() => format!("\n{c}\n"),
         _ => String::new(),
     };
@@ -232,12 +230,16 @@ fn build_prompt_from_template(
         Some(c) => render_project_context_block(c),
         None => String::new(),
     };
-    template
-        .replace("{language}", language)
-        .replace("{code}", code)
-        .replace("{cwd}", cwd)
-        .replace("{context_block}", &context_block)
-        .replace("{project_context_block}", &project_context_block)
+    substitute(
+        template,
+        &[
+            ("{language}", language),
+            ("{code}", code),
+            ("{cwd}", cwd),
+            ("{extractor_context}", &extractor_context),
+            ("{project_context_block}", &project_context_block),
+        ],
+    )
 }
 
 #[cfg(test)]
@@ -393,7 +395,7 @@ mod tests {
             .replace("{language}", "python3")
             .replace("{code}", "print(1)")
             .replace("{cwd}", "/tmp")
-            .replace("{context_block}", "\nExecution context: Django shell\n")
+            .replace("{extractor_context}", "\nExecution context: Django shell\n")
             .replace("{project_context_block}", "");
         assert_eq!(with, expected);
     }
