@@ -280,10 +280,10 @@ fn load_config(explicit_path: Option<&PathBuf>) -> Result<policy::RulesConfig, S
 }
 
 /// Output of `finalize_config` — the merged rules plus any side-channel values
-/// that don't live on `RulesConfig` (like per-repo AI-judge context).
+/// that don't live on `RulesConfig` (like per-repo AI-judge prompt).
 struct FinalConfig {
     rules: policy::RulesConfig,
-    project_ai_context: Option<String>,
+    project_ai_prompt: Option<String>,
 }
 
 /// Finalize config by merging all overlay layers in correct precedence order.
@@ -308,14 +308,15 @@ fn finalize_config(
         policy::merge_overlay_config(&mut config, global_config, policy::RuleSource::Global);
     }
 
-    // 2. Project overlay — also extract ai_judge.context for separate plumbing.
-    let mut project_ai_context: Option<String> = None;
+    // 2. Project overlay — also extract ai_judge.prompt for separate plumbing.
+    //    Whitespace-only is coerced to None here (per spec validation rule 1).
+    let mut project_ai_prompt: Option<String> = None;
     if let Some(dir) = project_dir {
         if let Some(project_config) = policy::load_project_config(dir)? {
-            project_ai_context = project_config
+            project_ai_prompt = project_config
                 .ai_judge
                 .as_ref()
-                .and_then(|a| a.context.as_ref())
+                .and_then(|a| a.prompt.as_ref())
                 .filter(|c| !c.trim().is_empty())
                 .cloned();
             policy::merge_project_config(&mut config, project_config);
@@ -332,7 +333,7 @@ fn finalize_config(
 
     Ok(FinalConfig {
         rules: config,
-        project_ai_context,
+        project_ai_prompt,
     })
 }
 
@@ -383,7 +384,7 @@ pub fn run() -> i32 {
             }
         };
         let rules_config = final_config.rules;
-        let _project_ai_context = final_config.project_ai_context;
+        let _project_ai_prompt = final_config.project_ai_prompt;
 
         // Track project config path for display banners
         let pcp = project_dir.and_then(|dir| {
@@ -479,7 +480,7 @@ fn run_hook(
         }
     };
     let rules_config = final_config.rules;
-    let project_ai_context = final_config.project_ai_context;
+    let project_ai_prompt = final_config.project_ai_prompt;
 
     // Handle Read tool - path-based evaluation using file_path
     if hook_input.tool_name == "Read" {
@@ -578,7 +579,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
-                        project_ai_context.as_deref(),
+                        project_ai_prompt.as_deref(),
                     )
                 } else {
                     ai_judge::evaluate(
@@ -587,7 +588,7 @@ fn run_hook(
                         &extracted.code,
                         cwd,
                         extracted.context.as_deref(),
-                        project_ai_context.as_deref(),
+                        project_ai_prompt.as_deref(),
                     )
                 };
                 if ask_ai_lenient {
@@ -1373,18 +1374,17 @@ mod tests {
     }
 
     #[test]
-    fn test_finalize_config_extracts_project_ai_context() {
-        use std::fs;
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let repo = tmp.path();
-        fs::create_dir(repo.join(".claude")).unwrap();
-        fs::write(
+    fn test_finalize_config_extracts_project_ai_prompt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_dir = tempfile::tempdir().unwrap();
+        let repo = project_dir.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+        std::fs::create_dir(repo.join(".claude")).unwrap();
+        std::fs::write(
             repo.join(".claude").join("longline.yaml"),
-            "ai_judge:\n  context: test-domain-hint\n",
+            "ai_judge:\n  prompt: |\n    {language} {code} {cwd}\n",
         )
         .unwrap();
-        fs::create_dir(repo.join(".git")).unwrap();
-
         let base = policy::RulesConfig {
             version: 1,
             default_decision: Decision::Ask,
@@ -1396,18 +1396,13 @@ mod tests {
             },
             rules: vec![],
         };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
-            .expect("finalize_config should succeed");
-
-        assert_eq!(
-            result.project_ai_context.as_deref(),
-            Some("test-domain-hint"),
-            "project_ai_context should be extracted from the project's YAML"
-        );
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None).unwrap();
+        let prompt = result.project_ai_prompt.expect("prompt should be Some");
+        assert!(prompt.contains("{code}"), "got: {prompt}");
     }
 
     #[test]
-    fn test_finalize_config_no_project_ai_context_when_absent() {
+    fn test_finalize_config_no_project_ai_prompt_when_absent() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
         std::fs::create_dir(repo.join(".git")).unwrap();
@@ -1425,18 +1420,18 @@ mod tests {
         };
         let result = finalize_config(base, tmp.path(), Some(repo), None, None)
             .expect("finalize_config should succeed");
-        assert!(result.project_ai_context.is_none());
+        assert!(result.project_ai_prompt.is_none());
     }
 
     #[test]
-    fn test_finalize_config_empty_project_ai_context_is_none() {
+    fn test_finalize_config_empty_project_ai_prompt_is_none() {
         use std::fs;
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
         fs::create_dir(repo.join(".claude")).unwrap();
         fs::write(
             repo.join(".claude").join("longline.yaml"),
-            "ai_judge:\n  context: \"   \"\n",
+            "ai_judge:\n  prompt: \"   \"\n",
         )
         .unwrap();
         fs::create_dir(repo.join(".git")).unwrap();
@@ -1455,8 +1450,8 @@ mod tests {
         let result = finalize_config(base, tmp.path(), Some(repo), None, None)
             .expect("finalize_config should succeed");
         assert!(
-            result.project_ai_context.is_none(),
-            "all-whitespace context must be filtered to None"
+            result.project_ai_prompt.is_none(),
+            "all-whitespace prompt must be filtered to None"
         );
     }
 }
