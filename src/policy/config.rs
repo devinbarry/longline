@@ -240,6 +240,10 @@ pub struct ProjectAiJudgeConfig {
     /// Free-text domain hints injected into the AI judge prompt.
     /// Wrapped with a safety-floor preamble at render time.
     pub context: Option<String>,
+    /// Full reasoning prompt that overrides the built-in template.
+    /// When set, must contain `{language}`, `{code}`, and `{cwd}` placeholders.
+    /// `{extractor_context}` is optional. Validation runs at config-load time.
+    pub prompt: Option<String>,
 }
 
 /// Per-project config loaded from `.claude/longline.yaml`.
@@ -270,6 +274,25 @@ pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
     }
 }
 
+/// Validates `ai_judge.prompt` contains all three required placeholders.
+/// Returns `Ok(())` if `s` is whitespace-only (coercion happens in cli::finalize_config).
+fn validate_ai_judge_prompt(s: &str, config_path: &Path) -> Result<(), String> {
+    if s.trim().is_empty() {
+        return Ok(());
+    }
+    const REQUIRED: &[&str] = &["{language}", "{code}", "{cwd}"];
+    for placeholder in REQUIRED {
+        if !s.contains(placeholder) {
+            return Err(format!(
+                "ai_judge.prompt at {} is missing required placeholder: {} (required placeholders: {{language}}, {{code}}, {{cwd}})",
+                config_path.display(),
+                placeholder
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Load project config from `.claude/longline.yaml` if it exists.
 /// Walks up from `cwd` to find the project root first.
 /// Returns Ok(None) if no project config file exists, Err on parse failure.
@@ -285,6 +308,9 @@ pub fn load_project_config(cwd: &Path) -> Result<Option<ProjectConfig>, String> 
     };
     let config: ProjectConfig = serde_norway::from_str(&content)
         .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
+    if let Some(prompt) = config.ai_judge.as_ref().and_then(|a| a.prompt.as_deref()) {
+        validate_ai_judge_prompt(prompt, &config_path)?;
+    }
     Ok(Some(config))
 }
 
@@ -1577,6 +1603,84 @@ ai_judge:
         assert!(
             err.contains("unknown field") && err.contains("weird_field"),
             "expected error to name the unknown inner field, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_project_config_parses_ai_judge_prompt_with_required_placeholders() {
+        let yaml = r#"
+ai_judge:
+  prompt: |
+    Code: {code}
+    Language: {language}
+    Cwd: {cwd}
+"#;
+        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
+        let aj = config.ai_judge.expect("ai_judge should be Some");
+        let prompt = aj.prompt.expect("prompt should be Some");
+        assert!(prompt.contains("{code}"));
+        assert!(prompt.contains("{language}"));
+        assert!(prompt.contains("{cwd}"));
+    }
+
+    #[test]
+    fn test_load_project_config_rejects_prompt_missing_placeholder_code() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+        std::fs::create_dir(repo.join(".claude")).unwrap();
+        let yaml = "ai_judge:\n  prompt: |\n    has {language} and {cwd} but missing\n";
+        std::fs::write(repo.join(".claude").join("longline.yaml"), yaml).unwrap();
+        let err = load_project_config(repo).unwrap_err();
+        assert!(
+            err.contains("missing required placeholder: {code}"),
+            "got: {err}"
+        );
+        assert!(err.contains("{language}, {code}, {cwd}"), "got: {err}");
+    }
+
+    #[test]
+    fn test_load_project_config_rejects_prompt_missing_placeholder_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+        std::fs::create_dir(repo.join(".claude")).unwrap();
+        let yaml = "ai_judge:\n  prompt: |\n    has {language} and {code} but missing\n";
+        std::fs::write(repo.join(".claude").join("longline.yaml"), yaml).unwrap();
+        let err = load_project_config(repo).unwrap_err();
+        assert!(
+            err.contains("missing required placeholder: {cwd}"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_load_project_config_accepts_prompt_with_all_required_placeholders() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+        std::fs::create_dir(repo.join(".claude")).unwrap();
+        let yaml = "ai_judge:\n  prompt: |\n    {language} {code} {cwd}\n";
+        std::fs::write(repo.join(".claude").join("longline.yaml"), yaml).unwrap();
+        let config = load_project_config(repo).unwrap().unwrap();
+        assert!(config.ai_judge.unwrap().prompt.unwrap().contains("{code}"));
+    }
+
+    #[test]
+    fn test_load_project_config_accepts_whitespace_only_prompt_without_validation() {
+        // Whitespace-only prompts are coerced to None in finalize_config, not the loader.
+        // The loader skips placeholder validation for whitespace-only input.
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        std::fs::create_dir(repo.join(".git")).unwrap();
+        std::fs::create_dir(repo.join(".claude")).unwrap();
+        let yaml = "ai_judge:\n  prompt: \"   \\n  \"\n";
+        std::fs::write(repo.join(".claude").join("longline.yaml"), yaml).unwrap();
+        let result = load_project_config(repo);
+        assert!(
+            result.is_ok(),
+            "whitespace-only prompt should not fail loader: {:?}",
+            result
         );
     }
 }
