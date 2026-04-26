@@ -129,6 +129,22 @@ pub fn build_prompt_lenient(
     )
 }
 
+/// Build the prompt sent to the AI judge.
+///
+/// Two paths:
+/// - **Path A** (`project_prompt` is `Some` and non-whitespace): the user's
+///   prompt is treated as the entire reasoning prompt. Placeholders are
+///   substituted single-pass, and `RESPONSE_FORMAT_SUFFIX` is appended (the
+///   user's prompt does not contain the response-format directive — longline
+///   appends it as the parser contract).
+/// - **Path B** (`project_prompt` is `None` or whitespace-only): the chosen
+///   built-in template is used. The built-in template already contains the
+///   response-format directive, so no suffix is appended here.
+///
+/// Extractor-context wrapping differs between paths: Path A passes it raw
+/// because the user's prompt template controls layout; Path B wraps with
+/// surrounding newlines to preserve byte-identical output for repos that
+/// have not customized `ai_judge.prompt`.
 fn build_prompt_from_template(
     template: &str,
     language: &str,
