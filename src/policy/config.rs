@@ -237,9 +237,6 @@ impl StringOrList {
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ProjectAiJudgeConfig {
-    /// Free-text domain hints injected into the AI judge prompt.
-    /// Wrapped with a safety-floor preamble at render time.
-    pub context: Option<String>,
     /// Full reasoning prompt that overrides the built-in template.
     /// When set, must contain `{language}`, `{code}`, and `{cwd}` placeholders.
     /// `{extractor_context}` is optional. Validation runs at config-load time.
@@ -1583,19 +1580,6 @@ rules:
     }
 
     #[test]
-    fn test_project_config_parses_ai_judge_context() {
-        let yaml = r#"
-ai_judge:
-  context: |
-    Domain: finance analysis. Expected httpx to polymarket.com.
-"#;
-        let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
-        let aj = config.ai_judge.expect("ai_judge should be Some");
-        let ctx = aj.context.expect("context should be Some");
-        assert!(ctx.contains("polymarket.com"));
-    }
-
-    #[test]
     fn test_project_config_parses_without_ai_judge() {
         let yaml = "allowlists: { commands: [] }";
         let config: ProjectConfig = serde_norway::from_str(yaml).unwrap();
@@ -1606,13 +1590,12 @@ ai_judge:
     fn test_project_config_rejects_unknown_ai_judge_fields() {
         let yaml = r#"
 ai_judge:
-  context: hi
-  weird_field: true
+  qux: bogus
 "#;
         let result: Result<ProjectConfig, _> = serde_norway::from_str(yaml);
         let err = result.unwrap_err().to_string();
         assert!(
-            err.contains("unknown field") && err.contains("weird_field"),
+            err.contains("unknown field") && err.contains("qux"),
             "expected error to name the unknown inner field, got: {err}"
         );
     }
@@ -1706,22 +1689,6 @@ ai_judge:
         assert!(
             err.contains("ai_judge.prompt is not allowed in global config"),
             "expected global-rejection error, got: {err}"
-        );
-    }
-
-    #[test]
-    fn test_load_global_config_accepts_other_ai_judge_fields() {
-        // ai_judge.context (still allowed in global until Task 9 removes it entirely)
-        let home = tempfile::tempdir().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        let yaml = "ai_judge:\n  context: domain hint\n";
-        std::fs::write(config_dir.join("longline.yaml"), yaml).unwrap();
-        let result = load_global_config(home.path());
-        assert!(
-            result.is_ok(),
-            "global with only ai_judge.context should load: {:?}",
-            result
         );
     }
 }
