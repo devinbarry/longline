@@ -324,6 +324,17 @@ pub fn load_global_config(home: &Path) -> Result<Option<ProjectConfig>, String> 
     };
     let config: ProjectConfig = serde_norway::from_str(&content)
         .map_err(|e| format!("Failed to parse {}: {e}", config_path.display()))?;
+    if config
+        .ai_judge
+        .as_ref()
+        .and_then(|a| a.prompt.as_ref())
+        .is_some()
+    {
+        return Err(format!(
+            "ai_judge.prompt is not allowed in global config ({}); set it in <repo>/.claude/longline.yaml instead",
+            config_path.display()
+        ));
+    }
     Ok(Some(config))
 }
 
@@ -1680,6 +1691,36 @@ ai_judge:
         assert!(
             result.is_ok(),
             "whitespace-only prompt should not fail loader: {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_load_global_config_rejects_ai_judge_prompt() {
+        let home = tempfile::tempdir().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let yaml = "ai_judge:\n  prompt: |\n    {language} {code} {cwd}\n";
+        std::fs::write(config_dir.join("longline.yaml"), yaml).unwrap();
+        let err = load_global_config(home.path()).unwrap_err();
+        assert!(
+            err.contains("ai_judge.prompt is not allowed in global config"),
+            "expected global-rejection error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_load_global_config_accepts_other_ai_judge_fields() {
+        // ai_judge.context (still allowed in global until Task 9 removes it entirely)
+        let home = tempfile::tempdir().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let yaml = "ai_judge:\n  context: domain hint\n";
+        std::fs::write(config_dir.join("longline.yaml"), yaml).unwrap();
+        let result = load_global_config(home.path());
+        assert!(
+            result.is_ok(),
+            "global with only ai_judge.context should load: {:?}",
             result
         );
     }
