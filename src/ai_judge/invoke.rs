@@ -12,9 +12,9 @@ pub fn evaluate(
     code: &str,
     cwd: &str,
     context: Option<&str>,
-    project_context: Option<&str>,
+    project_prompt: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt(language, code, cwd, context, project_context);
+    let prompt = build_prompt(language, code, cwd, context, project_prompt);
     evaluate_with_prompt(config, prompt)
 }
 
@@ -26,9 +26,9 @@ pub fn evaluate_lenient(
     code: &str,
     cwd: &str,
     context: Option<&str>,
-    project_context: Option<&str>,
+    project_prompt: Option<&str>,
 ) -> (Decision, String) {
-    let prompt = build_prompt_lenient(language, code, cwd, context, project_context);
+    let prompt = build_prompt_lenient(language, code, cwd, context, project_prompt);
     evaluate_with_prompt(config, prompt)
 }
 
@@ -264,7 +264,7 @@ echo "ALLOW: safe computation"
     /// Signature guard: any change to the 6-arg shape fails to compile.
     #[test]
     #[allow(clippy::type_complexity)]
-    fn test_evaluate_signature_has_project_context_param() {
+    fn test_evaluate_signature_has_project_prompt_param() {
         let _: fn(
             &AiJudgeConfig,
             &str,
