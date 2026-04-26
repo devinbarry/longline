@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-04-27
+
+### Changed
+
+- AI judge: project's `.claude/longline.yaml` may now supply the entire reasoning prompt under `ai_judge.prompt`. When set, longline substitutes four placeholders (`{language}`, `{code}`, `{cwd}`, `{extractor_context}`) and appends the response-format directive — built-in safety rules are not folded in. The built-in strict and lenient templates remain as fallbacks for repos that do not set `ai_judge.prompt`.
+- Placeholder substitution is now single-pass; replacement values are no longer re-scanned for placeholder tokens (e.g., `{code}` containing `{cwd}` is preserved verbatim).
+- AI judge breadcrumb on stderr now distinguishes "(project prompt)" from "(lenient)" and the strict default.
+
+### Added
+
+- Required placeholders `{language}`, `{code}`, `{cwd}` are validated at config-load time; missing any one fails with exit code 2 and a path-qualified error message.
+- `ai_judge.prompt` is rejected in global config (`~/.config/longline/longline.yaml`); it must be project-specific.
+
+### Removed
+
+- `ai_judge.context` field — replaced by `ai_judge.prompt`. Migration: rewrite the YAML to put the full prompt body under `prompt:` with the three required placeholders.
+- Floor / wrapper / nonce / sanitization machinery in the AI judge prompt assembly. The prior design folded a project-supplied snippet into a built-in template wrapped with non-overridable rules; that produced conflicting signals to the judge model and caused ASKs on legitimate domain work. The new design has the project own the entire prompt, so there are no conflicting voices to reconcile. See `docs/plans/2026-04-26-ai-judge-prompt-override-design.md` for the full reasoning.
+
 ## [0.14.0] - 2026-04-23
 
 ### Added
