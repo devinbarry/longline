@@ -57,6 +57,12 @@ ASK: <brief reason>
 
 If uncertain, choose ALLOW."#;
 
+/// Response-format directive longline always appends to a project-supplied
+/// prompt (Path A). The parser at `src/ai_judge/response.rs` looks for the
+/// first `ALLOW:` or `ASK:` line; this directive elicits that shape.
+const RESPONSE_FORMAT_SUFFIX: &str =
+    "\n\nRespond with EXACTLY one line, no other output:\nALLOW: <brief reason>\nASK: <brief reason>";
+
 /// Single-pass placeholder substitution. Walks the template once, emitting
 /// replacement values for placeholder tokens encountered. Replacement values
 /// are NOT re-scanned for placeholder tokens — this is the regression-safe
@@ -94,6 +100,7 @@ pub(crate) fn substitute(template: &str, vars: &[(&str, &str)]) -> String {
 /// Generate a 6-character hex nonce derived from wall-clock time and a process-local counter.
 /// Collision-resistant enough for defense-in-depth against delimiter injection;
 /// not cryptographic.
+#[allow(dead_code)] // Removed in Task 11 when render_project_context_block is deleted.
 fn generate_nonce() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -115,6 +122,7 @@ fn generate_nonce() -> String {
 /// Strip any substring matching `</project_context_[0-9a-f]{6}>` from user-provided text.
 /// Prevents an attacker-controlled YAML from prematurely closing our wrapper
 /// and smuggling top-level instructions into the prompt.
+#[allow(dead_code)] // Removed in Task 11 when render_project_context_block is deleted.
 fn sanitize_project_context(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let bytes = input.as_bytes();
@@ -151,6 +159,7 @@ fn sanitize_project_context(input: &str) -> String {
 /// Render the project-context block for insertion into the prompt template.
 /// Returns an empty string if the input is empty or whitespace-only —
 /// preserving byte-identical current behavior in repos without ai_judge.context.
+#[allow(dead_code)] // Removed in Task 11 along with generate_nonce/sanitize_project_context.
 fn render_project_context_block(context: &str) -> String {
     if context.trim().is_empty() {
         return String::new();
@@ -185,7 +194,7 @@ pub fn build_prompt(
     code: &str,
     cwd: &str,
     context: Option<&str>,
-    project_context: Option<&str>,
+    project_prompt: Option<&str>,
 ) -> String {
     build_prompt_from_template(
         PROMPT_TEMPLATE,
@@ -193,7 +202,7 @@ pub fn build_prompt(
         code,
         cwd,
         context,
-        project_context,
+        project_prompt,
     )
 }
 
@@ -202,7 +211,7 @@ pub fn build_prompt_lenient(
     code: &str,
     cwd: &str,
     context: Option<&str>,
-    project_context: Option<&str>,
+    project_prompt: Option<&str>,
 ) -> String {
     build_prompt_from_template(
         LENIENT_PROMPT_TEMPLATE,
@@ -210,7 +219,7 @@ pub fn build_prompt_lenient(
         code,
         cwd,
         context,
-        project_context,
+        project_prompt,
     )
 }
 
@@ -220,16 +229,32 @@ fn build_prompt_from_template(
     code: &str,
     cwd: &str,
     context: Option<&str>,
-    project_context: Option<&str>,
+    project_prompt: Option<&str>,
 ) -> String {
+    // Path A: project supplied a full prompt. Substitute the four placeholders
+    // single-pass and append the fixed response-format suffix. Built-in
+    // template is not used.
+    if let Some(user_prompt) = project_prompt.filter(|p| !p.trim().is_empty()) {
+        let extractor_context = context.unwrap_or("");
+        let body = substitute(
+            user_prompt,
+            &[
+                ("{language}", language),
+                ("{code}", code),
+                ("{cwd}", cwd),
+                ("{extractor_context}", extractor_context),
+            ],
+        );
+        return format!("{body}{RESPONSE_FORMAT_SUFFIX}");
+    }
+
+    // Path B: built-in template. Existing project_context_block plumbing kept
+    // intact until a later task removes it.
     let extractor_context = match context {
         Some(c) if !c.trim().is_empty() => format!("\n{c}\n"),
         _ => String::new(),
     };
-    let project_context_block = match project_context {
-        Some(c) => render_project_context_block(c),
-        None => String::new(),
-    };
+    let project_context_block = String::new(); // Path A took the early return; legacy slot is empty here.
     substitute(
         template,
         &[
@@ -401,42 +426,6 @@ mod tests {
     }
 
     #[test]
-    fn test_build_prompt_project_context_only() {
-        let prompt = build_prompt(
-            "python",
-            "print(1)",
-            "/tmp",
-            None,
-            Some("Domain: polymarket analysis."),
-        );
-        assert!(prompt.contains("<project_context_"));
-        assert!(prompt.contains("Domain: polymarket analysis."));
-        assert!(prompt.contains("secrets or credentials"));
-    }
-
-    #[test]
-    fn test_build_prompt_both_contexts_append_order() {
-        // Extractor first, project second (append semantics).
-        let prompt = build_prompt(
-            "python",
-            "print(1)",
-            "/tmp",
-            Some("Execution context: Django shell"),
-            Some("Domain: polymarket analysis."),
-        );
-        let ext_idx = prompt
-            .find("Execution context: Django shell")
-            .expect("extractor text should be present");
-        let proj_idx = prompt
-            .find("Domain: polymarket analysis.")
-            .expect("project text should be present");
-        assert!(
-            ext_idx < proj_idx,
-            "extractor should render before project (append semantics)"
-        );
-    }
-
-    #[test]
     fn test_substitute_replaces_known_placeholders() {
         let template = "Lang: {language}, Cwd: {cwd}";
         let out = substitute(template, &[("{language}", "python"), ("{cwd}", "/tmp")]);
@@ -487,25 +476,65 @@ mod tests {
     }
 
     #[test]
-    fn test_build_prompt_empty_project_context_same_as_none() {
-        let with_empty = build_prompt("python", "print(1)", "/tmp", None, Some(""));
-        let with_whitespace = build_prompt("python", "print(1)", "/tmp", None, Some("  \n\t "));
-        let with_none = build_prompt("python", "print(1)", "/tmp", None, None);
-        assert_eq!(with_empty, with_none);
-        assert_eq!(with_whitespace, with_none);
+    fn test_build_prompt_uses_project_prompt_when_set() {
+        let user_prompt = "Project says: evaluate {code} written in {language} at {cwd}";
+        let out = build_prompt("python", "print(1)", "/tmp", None, Some(user_prompt));
+        assert!(out.starts_with("Project says: evaluate print(1) written in python at /tmp"));
+        assert!(out.contains("Respond with EXACTLY one line"));
+        assert!(out.contains("ALLOW: <brief reason>"));
+        assert!(out.contains("ASK: <brief reason>"));
     }
 
     #[test]
-    fn test_build_prompt_lenient_threads_project_context() {
-        let prompt = build_prompt_lenient(
+    fn test_build_prompt_path_a_does_not_include_builtin_template_text() {
+        // Path A must NOT bring in built-in text like "Mode: lenient" or the
+        // built-in ALLOW/ASK rule lists.
+        let user_prompt = "{language} {code} {cwd}";
+        let strict = build_prompt("python", "x", "/tmp", None, Some(user_prompt));
+        let lenient = build_prompt_lenient("python", "x", "/tmp", None, Some(user_prompt));
+        assert!(!strict.contains("Mode: lenient"));
+        assert!(!strict.contains("Security evaluation"));
+        assert!(!lenient.contains("Security evaluation"));
+    }
+
+    #[test]
+    fn test_build_prompt_path_a_substitutes_extractor_context_unconditionally() {
+        // Even if the user prompt doesn't reference {extractor_context}, longline
+        // still substitutes; the unused slot is a harmless no-op.
+        let user_prompt = "{language} {code} {cwd}";
+        let out = build_prompt(
             "python",
-            "print(1)",
+            "x",
             "/tmp",
-            None,
-            Some("Domain: repo context."),
+            Some("Django shell"),
+            Some(user_prompt),
         );
-        assert!(prompt.contains("Mode: lenient"));
-        assert!(prompt.contains("Domain: repo context."));
-        assert!(prompt.contains("<project_context_"));
+        assert_eq!(
+            out.trim_end_matches(RESPONSE_FORMAT_SUFFIX),
+            "python x /tmp"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_path_a_single_pass_preserves_code_with_cwd_token() {
+        // Regression: {code} value contains "{cwd}". Must not be re-substituted.
+        let user_prompt = "Code:\n{code}\nCwd: {cwd}";
+        let out = build_prompt(
+            "python",
+            "print(\"{cwd}\")",
+            "/the/real/cwd",
+            None,
+            Some(user_prompt),
+        );
+        assert!(out.contains("print(\"{cwd}\")"));
+        assert!(out.contains("Cwd: /the/real/cwd"));
+    }
+
+    #[test]
+    fn test_build_prompt_lenient_uses_project_prompt_when_set() {
+        let user_prompt = "{language} / {code} / {cwd}";
+        let out = build_prompt_lenient("ruby", "puts 1", "/r", None, Some(user_prompt));
+        assert!(out.starts_with("ruby / puts 1 / /r"));
+        assert!(out.contains("ALLOW: <brief reason>"));
     }
 }
