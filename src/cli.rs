@@ -591,7 +591,12 @@ fn run_hook(
                         project_ai_prompt.as_deref(),
                     )
                 };
-                if ask_ai_lenient {
+                if project_ai_prompt.is_some() {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
+                        extracted.language
+                    );
+                } else if ask_ai_lenient {
                     eprintln!(
                         "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
                         extracted.language
