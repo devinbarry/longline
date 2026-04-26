@@ -57,6 +57,42 @@ ASK: <brief reason>
 
 If uncertain, choose ALLOW."#;
 
+/// Single-pass placeholder substitution. Walks the template once, emitting
+/// replacement values for placeholder tokens encountered. Replacement values
+/// are NOT re-scanned for placeholder tokens — this is the regression-safe
+/// alternative to chained `.replace()`.
+///
+/// `vars` is a slice of (placeholder, value) pairs. Placeholders must include
+/// the surrounding `{}` braces. Unknown placeholders in the template are left
+/// untouched.
+// Task 4 will wire this into build_prompt_from_template; allow dead_code until then.
+#[allow(dead_code)]
+pub(crate) fn substitute(template: &str, vars: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut i = 0;
+    let bytes = template.as_bytes();
+    'outer: while i < bytes.len() {
+        if bytes[i] == b'{' {
+            for (placeholder, value) in vars {
+                let p = placeholder.as_bytes();
+                if i + p.len() <= bytes.len() && &bytes[i..i + p.len()] == p {
+                    out.push_str(value);
+                    i += p.len();
+                    continue 'outer;
+                }
+            }
+        }
+        // UTF-8-safe advance to next char boundary.
+        let ch_start = i;
+        i += 1;
+        while i < bytes.len() && (bytes[i] & 0b1100_0000) == 0b1000_0000 {
+            i += 1;
+        }
+        out.push_str(&template[ch_start..i]);
+    }
+    out
+}
+
 /// Generate a 6-character hex nonce derived from wall-clock time and a process-local counter.
 /// Collision-resistant enough for defense-in-depth against delimiter injection;
 /// not cryptographic.
@@ -396,6 +432,56 @@ mod tests {
             ext_idx < proj_idx,
             "extractor should render before project (append semantics)"
         );
+    }
+
+    #[test]
+    fn test_substitute_replaces_known_placeholders() {
+        let template = "Lang: {language}, Cwd: {cwd}";
+        let out = substitute(template, &[("{language}", "python"), ("{cwd}", "/tmp")]);
+        assert_eq!(out, "Lang: python, Cwd: /tmp");
+    }
+
+    #[test]
+    fn test_substitute_leaves_unknown_placeholders_untouched() {
+        let template = "Lang: {language}, Mystery: {mystery}";
+        let out = substitute(template, &[("{language}", "python")]);
+        assert_eq!(out, "Lang: python, Mystery: {mystery}");
+    }
+
+    #[test]
+    fn test_substitute_is_single_pass_does_not_recurse_into_values() {
+        // Regression: chained `.replace()` would substitute {cwd} inside the {code} value.
+        // Single-pass must emit the replacement value verbatim.
+        let template = "Code: {code}\nCwd: {cwd}";
+        let out = substitute(
+            template,
+            &[("{code}", "print(\"{cwd}\")"), ("{cwd}", "/tmp")],
+        );
+        assert_eq!(out, "Code: print(\"{cwd}\")\nCwd: /tmp");
+    }
+
+    #[test]
+    fn test_substitute_handles_value_containing_other_placeholder_token() {
+        // {extractor_context} value happens to contain `{language}` — must NOT re-substitute.
+        let template = "{language} {extractor_context}";
+        let out = substitute(
+            template,
+            &[
+                ("{language}", "python"),
+                ("{extractor_context}", "Note about {language}"),
+            ],
+        );
+        assert_eq!(out, "python Note about {language}");
+    }
+
+    #[test]
+    fn test_substitute_empty_template_is_empty() {
+        assert_eq!(substitute("", &[("{x}", "y")]), "");
+    }
+
+    #[test]
+    fn test_substitute_no_placeholders_returns_template() {
+        assert_eq!(substitute("plain text", &[("{x}", "y")]), "plain text");
     }
 
     #[test]
