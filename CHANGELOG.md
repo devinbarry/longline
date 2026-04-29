@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Internal
+
+- Isolated Claude hook protocol parsing, mapping, and output rendering into a
+  dedicated adapter module without changing hook behavior.
+- Removed generic Claude-shaped hook wire types from shared modules as
+  preparation for future adapter work.
+
 ## [0.15.1] - 2026-04-29
 
 ### Changed
@@ -27,10 +36,6 @@ All notable changes to this project will be documented in this file.
 
 ### Internal
 
-- Isolated Claude hook protocol parsing, mapping, and output rendering into a
-  dedicated adapter module without changing hook behavior.
-- Removed generic Claude-shaped hook wire types from shared modules as
-  preparation for future adapter work.
 - Added evaluator-level regression coverage for shell allow/deny/ask outcomes,
   parser-error logging, path invocations, AI-judge flow, and hook protocol
   stdout/stderr boundaries.
