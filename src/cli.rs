@@ -3,6 +3,7 @@ use clap::Subcommand;
 use std::io::Read;
 use std::path::PathBuf;
 
+use crate::evaluator;
 use crate::logger;
 use longline::ai_judge;
 use longline::domain::{Decision, PolicyResult};
@@ -280,64 +281,6 @@ fn load_config(explicit_path: Option<&PathBuf>) -> Result<policy::RulesConfig, S
     policy::load_embedded_rules()
 }
 
-/// Output of `finalize_config` — the merged rules plus any side-channel values
-/// that don't live on `RulesConfig` (like per-repo AI-judge prompt).
-struct FinalConfig {
-    rules: policy::RulesConfig,
-    project_ai_prompt: Option<String>,
-}
-
-/// Finalize config by merging all overlay layers in correct precedence order.
-///
-/// Precedence (highest to lowest):
-/// 1. CLI flags (--trust-level, --safety-level) — always win
-/// 2. Project config (.claude/longline.yaml)
-/// 3. Global config (~/.config/longline/longline.yaml)
-/// 4. Base rules (the `config` parameter)
-///
-/// This is the ONLY place config merging happens. All callers should use
-/// this function instead of calling merge_overlay_config directly.
-fn finalize_config(
-    mut config: policy::RulesConfig,
-    home: &std::path::Path,
-    project_dir: Option<&std::path::Path>,
-    cli_trust_level: Option<&TrustLevelArg>,
-    cli_safety_level: Option<&SafetyLevelArg>,
-) -> Result<FinalConfig, String> {
-    // 1. Global overlay.
-    if let Some(global_config) = policy::load_global_config(home)? {
-        policy::merge_overlay_config(&mut config, global_config, policy::RuleSource::Global);
-    }
-
-    // 2. Project overlay — also extract ai_judge.prompt for separate plumbing.
-    //    Whitespace-only is coerced to None here (per spec validation rule 1).
-    let mut project_ai_prompt: Option<String> = None;
-    if let Some(dir) = project_dir {
-        if let Some(project_config) = policy::load_project_config(dir)? {
-            project_ai_prompt = project_config
-                .ai_judge
-                .as_ref()
-                .and_then(|a| a.prompt.as_ref())
-                .filter(|c| !c.trim().is_empty())
-                .cloned();
-            policy::merge_project_config(&mut config, project_config);
-        }
-    }
-
-    // 3. CLI overrides (always last = always wins).
-    if let Some(level) = cli_trust_level {
-        config.trust_level = level.to_trust_level();
-    }
-    if let Some(level) = cli_safety_level {
-        config.safety_level = level.to_safety_level();
-    }
-
-    Ok(FinalConfig {
-        rules: config,
-        project_ai_prompt,
-    })
-}
-
 /// Main entry point. Returns the process exit code.
 pub fn run() -> i32 {
     yansi::whenever(yansi::Condition::TTY_AND_COLOR);
@@ -367,16 +310,22 @@ pub fn run() -> i32 {
         }
     };
 
+    let cli_trust_level = cli.trust_level.as_ref().map(TrustLevelArg::to_trust_level);
+    let cli_safety_level = cli
+        .safety_level
+        .as_ref()
+        .map(SafetyLevelArg::to_safety_level);
+
     // For subcommands: resolve project directory and finalize config
     // For hook mode: pass base config to run_hook() which finalizes after reading cwd from stdin
     let (rules_config, project_config_path) = if cli.command.is_some() {
         let project_dir = resolve_dir(cli.dir.as_ref());
-        let final_config = match finalize_config(
+        let final_config = match evaluator::finalize_config(
             base_config,
             &home_dir(),
             project_dir.as_deref(),
-            cli.trust_level.as_ref(),
-            cli.safety_level.as_ref(),
+            cli_trust_level,
+            cli_safety_level,
         ) {
             Ok(c) => c,
             Err(e) => {
@@ -428,8 +377,8 @@ pub fn run() -> i32 {
             cli.ask_on_deny,
             cli.ask_ai || cli.ask_ai_lenient,
             cli.ask_ai_lenient,
-            cli.trust_level.as_ref(),
-            cli.safety_level.as_ref(),
+            cli_trust_level,
+            cli_safety_level,
         ),
     }
 }
@@ -440,8 +389,8 @@ fn run_hook(
     ask_on_deny: bool,
     ask_ai: bool,
     ask_ai_lenient: bool,
-    cli_trust_level: Option<&TrustLevelArg>,
-    cli_safety_level: Option<&SafetyLevelArg>,
+    cli_trust_level: Option<policy::TrustLevel>,
+    cli_safety_level: Option<policy::SafetyLevel>,
 ) -> i32 {
     // Read hook input from stdin
     let mut input_str = String::new();
@@ -467,7 +416,7 @@ fn run_hook(
         .cwd
         .as_ref()
         .map(|s| std::path::Path::new(s.as_str()));
-    let final_config = match finalize_config(
+    let final_config = match evaluator::finalize_config(
         rules_config,
         &home_dir(),
         cwd,
@@ -1204,260 +1153,5 @@ mod tests {
     fn test_cli_dir_flag_is_optional() {
         let cli = Cli::try_parse_from(["longline", "rules"]).unwrap();
         assert!(cli.dir.is_none());
-    }
-
-    // --- finalize_config unit tests ---
-
-    #[test]
-    fn test_finalize_config_no_overlays() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config = policy::load_embedded_rules().unwrap();
-        let original_trust = config.trust_level;
-        let original_safety = config.safety_level;
-
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
-
-        assert_eq!(result.rules.trust_level, original_trust);
-        assert_eq!(result.rules.safety_level, original_safety);
-    }
-
-    #[test]
-    fn test_finalize_config_global_overrides_base() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "override_trust_level: full\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
-
-        assert_eq!(result.rules.trust_level, policy::TrustLevel::Full);
-    }
-
-    #[test]
-    fn test_finalize_config_project_overrides_global() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "override_trust_level: full\n",
-        )
-        .unwrap();
-
-        let project_dir = tempfile::TempDir::new().unwrap();
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(project_dir.path())
-            .output()
-            .unwrap();
-        let claude_dir = project_dir.path().join(".claude");
-        std::fs::create_dir_all(&claude_dir).unwrap();
-        std::fs::write(
-            claude_dir.join("longline.yaml"),
-            "override_trust_level: minimal\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let result =
-            finalize_config(config, home.path(), Some(project_dir.path()), None, None).unwrap();
-
-        assert_eq!(
-            result.rules.trust_level,
-            policy::TrustLevel::Minimal,
-            "Project config should override global config"
-        );
-    }
-
-    #[test]
-    fn test_finalize_config_cli_overrides_project_and_global() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "override_trust_level: full\n",
-        )
-        .unwrap();
-
-        let project_dir = tempfile::TempDir::new().unwrap();
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(project_dir.path())
-            .output()
-            .unwrap();
-        let claude_dir = project_dir.path().join(".claude");
-        std::fs::create_dir_all(&claude_dir).unwrap();
-        std::fs::write(
-            claude_dir.join("longline.yaml"),
-            "override_trust_level: full\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let trust_arg = TrustLevelArg::Standard;
-        let result = finalize_config(
-            config,
-            home.path(),
-            Some(project_dir.path()),
-            Some(&trust_arg),
-            None,
-        )
-        .unwrap();
-
-        assert_eq!(
-            result.rules.trust_level,
-            policy::TrustLevel::Standard,
-            "CLI --trust-level should override both global and project config"
-        );
-    }
-
-    #[test]
-    fn test_finalize_config_cli_safety_overrides_all() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "override_safety_level: strict\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let safety_arg = SafetyLevelArg::Critical;
-        let result = finalize_config(config, home.path(), None, None, Some(&safety_arg)).unwrap();
-
-        assert_eq!(
-            result.rules.safety_level,
-            policy::SafetyLevel::Critical,
-            "CLI --safety-level should override global config"
-        );
-    }
-
-    #[test]
-    fn test_finalize_config_invalid_global_config_errors() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "not_a_valid_field: oops\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), None, None, None);
-        assert!(result.is_err(), "Invalid global config should return error");
-    }
-
-    #[test]
-    fn test_finalize_config_global_allowlist_not_duplicated() {
-        let home = tempfile::TempDir::new().unwrap();
-        let config_dir = home.path().join(".config").join("longline");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("longline.yaml"),
-            "allowlists:\n  commands:\n    - { command: my-custom-tool, trust: minimal }\n",
-        )
-        .unwrap();
-
-        let config = policy::load_embedded_rules().unwrap();
-        let base_count = config.allowlists.commands.len();
-
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
-
-        // Should have base + 1 global entry (not base + 2 from double load)
-        assert_eq!(
-            result.rules.allowlists.commands.len(),
-            base_count + 1,
-            "Global config allowlist should be merged exactly once"
-        );
-    }
-
-    #[test]
-    fn test_finalize_config_extracts_project_ai_prompt() {
-        let tmp = tempfile::tempdir().unwrap();
-        let project_dir = tempfile::tempdir().unwrap();
-        let repo = project_dir.path();
-        std::fs::create_dir(repo.join(".git")).unwrap();
-        std::fs::create_dir(repo.join(".claude")).unwrap();
-        std::fs::write(
-            repo.join(".claude").join("longline.yaml"),
-            "ai_judge:\n  prompt: |\n    {language} {code} {cwd}\n",
-        )
-        .unwrap();
-        let base = policy::RulesConfig {
-            version: 1,
-            default_decision: Decision::Ask,
-            safety_level: policy::SafetyLevel::High,
-            trust_level: policy::TrustLevel::Standard,
-            allowlists: policy::Allowlists {
-                commands: vec![],
-                paths: vec![],
-            },
-            rules: vec![],
-        };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None).unwrap();
-        let prompt = result.project_ai_prompt.expect("prompt should be Some");
-        assert!(prompt.contains("{code}"), "got: {prompt}");
-    }
-
-    #[test]
-    fn test_finalize_config_no_project_ai_prompt_when_absent() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let repo = tmp.path();
-        std::fs::create_dir(repo.join(".git")).unwrap();
-
-        let base = policy::RulesConfig {
-            version: 1,
-            default_decision: Decision::Ask,
-            safety_level: policy::SafetyLevel::High,
-            trust_level: policy::TrustLevel::Standard,
-            allowlists: policy::Allowlists {
-                commands: vec![],
-                paths: vec![],
-            },
-            rules: vec![],
-        };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
-            .expect("finalize_config should succeed");
-        assert!(result.project_ai_prompt.is_none());
-    }
-
-    #[test]
-    fn test_finalize_config_empty_project_ai_prompt_is_none() {
-        use std::fs;
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let repo = tmp.path();
-        fs::create_dir(repo.join(".claude")).unwrap();
-        fs::write(
-            repo.join(".claude").join("longline.yaml"),
-            "ai_judge:\n  prompt: \"   \"\n",
-        )
-        .unwrap();
-        fs::create_dir(repo.join(".git")).unwrap();
-
-        let base = policy::RulesConfig {
-            version: 1,
-            default_decision: Decision::Ask,
-            safety_level: policy::SafetyLevel::High,
-            trust_level: policy::TrustLevel::Standard,
-            allowlists: policy::Allowlists {
-                commands: vec![],
-                paths: vec![],
-            },
-            rules: vec![],
-        };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
-            .expect("finalize_config should succeed");
-        assert!(
-            result.project_ai_prompt.is_none(),
-            "all-whitespace prompt must be filtered to None"
-        );
     }
 }
