@@ -4,9 +4,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use crate::evaluator;
-use crate::logger;
-use longline::ai_judge;
-use longline::domain::{Decision, PolicyResult};
+use longline::domain::Decision;
 use longline::parser;
 use longline::policy;
 use longline::types::{HookInput, HookOutput};
@@ -411,241 +409,50 @@ fn run_hook(
         }
     };
 
-    // Finalize config with global + project overlays and CLI overrides
-    let cwd = hook_input
-        .cwd
-        .as_ref()
-        .map(|s| std::path::Path::new(s.as_str()));
-    let final_config = match evaluator::finalize_config(
-        rules_config,
-        &home_dir(),
-        cwd,
+    let invocation = match hook_input.tool_name.as_str() {
+        "Read" => evaluator::Invocation::ReadPath {
+            tool_name: hook_input.tool_name.clone(),
+            path: hook_input.tool_input.file_path.clone(),
+            cwd: hook_input.cwd.clone(),
+            session_id: hook_input.session_id.clone(),
+        },
+        "Grep" | "Glob" => evaluator::Invocation::SearchPath {
+            tool_name: hook_input.tool_name.clone(),
+            path: hook_input.tool_input.path.clone(),
+            cwd: hook_input.cwd.clone(),
+            session_id: hook_input.session_id.clone(),
+        },
+        "Bash" => evaluator::Invocation::Shell {
+            command: hook_input.tool_input.command.clone(),
+            cwd: hook_input.cwd.clone(),
+            session_id: hook_input.session_id.clone(),
+        },
+        _ => {
+            println!("{{}}");
+            return 0;
+        }
+    };
+
+    let options = evaluator::EvaluationOptions {
+        ask_on_deny,
+        ask_ai,
+        ask_ai_lenient,
         cli_trust_level,
         cli_safety_level,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("longline: {e}");
-            return 2;
-        }
-    };
-    let rules_config = final_config.rules;
-    let project_ai_prompt = final_config.project_ai_prompt;
-
-    // Handle Read tool - path-based evaluation using file_path
-    if hook_input.tool_name == "Read" {
-        let decision = match &hook_input.tool_input.file_path {
-            Some(path) => evaluate_sensitive_path(&hook_input.tool_name, path),
-            None => (Decision::Allow, "longline: Read tool (no path)".to_string()),
-        };
-        let output = HookOutput::decision(decision.0, &decision.1);
-        print_json(&output);
-        return 0;
-    }
-
-    // Handle Grep/Glob tools - path-based evaluation using path field
-    if hook_input.tool_name == "Grep" || hook_input.tool_name == "Glob" {
-        let decision = match &hook_input.tool_input.path {
-            Some(path) => evaluate_sensitive_path(&hook_input.tool_name, path),
-            None => (
-                Decision::Allow,
-                format!("longline: {} allowed (no path)", hook_input.tool_name),
-            ),
-        };
-        let output = HookOutput::decision(decision.0, &decision.1);
-        print_json(&output);
-        return 0;
-    }
-
-    // Passthrough for all other non-Bash tools
-    if hook_input.tool_name != "Bash" {
-        println!("{{}}");
-        return 0;
-    }
-
-    let command = match &hook_input.tool_input.command {
-        Some(cmd) => cmd.as_str(),
-        None => {
-            let output = HookOutput::decision(Decision::Allow, "longline: no command");
-            print_json(&output);
-            return 0;
-        }
     };
 
-    // Parse the bash command
-    let (stmt, parse_ok) = match parser::parse(command) {
-        Ok(s) => (s, true),
-        Err(e) => {
-            let output =
-                HookOutput::decision(Decision::Ask, &format!("Failed to parse bash command: {e}"));
-            print_json(&output);
-
-            let entry = logger::make_entry(
-                &hook_input.tool_name,
-                hook_input.cwd.as_deref().unwrap_or(""),
-                command,
-                Decision::Ask,
-                vec![],
-                Some(format!("Parse error: {e}")),
-                false,
-                hook_input.session_id.clone(),
-            );
-            logger::log_decision(&entry);
-            return 0;
-        }
-    };
-
-    // Evaluate against policy
-    let result = policy::evaluate(&rules_config, &stmt);
-
-    let (initial_decision, overridden) = if ask_on_deny && result.decision == Decision::Deny {
-        (Decision::Ask, true)
-    } else {
-        (result.decision, false)
-    };
-
-    // AI judge: evaluate inline interpreter code instead of asking user
-    let (final_decision, ai_reason) = if ask_ai && initial_decision == Decision::Ask {
-        let ai_config = ai_judge::load_config();
-        // Default to "." if cwd is empty or missing
-        let cwd = hook_input
-            .cwd
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .unwrap_or(".");
-        let extracted = ai_judge::extract_code(command, &stmt, cwd, &ai_config).or_else(|| {
-            // Change C: also check shell-c-unwrapped inner statements.
-            parser::wrappers::extract_inner_commands(&stmt)
-                .iter()
-                .find_map(|inner_stmt| ai_judge::extract_code(command, inner_stmt, cwd, &ai_config))
-        });
-
-        match extracted {
-            Some(extracted) => {
-                let (ai_decision, reason) = if ask_ai_lenient {
-                    ai_judge::evaluate_lenient(
-                        &ai_config,
-                        &extracted.language,
-                        &extracted.code,
-                        cwd,
-                        extracted.context.as_deref(),
-                        project_ai_prompt.as_deref(),
-                    )
-                } else {
-                    ai_judge::evaluate(
-                        &ai_config,
-                        &extracted.language,
-                        &extracted.code,
-                        cwd,
-                        extracted.context.as_deref(),
-                        project_ai_prompt.as_deref(),
-                    )
-                };
-                if project_ai_prompt.is_some() {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
-                        extracted.language
-                    );
-                } else if ask_ai_lenient {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
-                        extracted.language
-                    );
-                } else {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code: {ai_decision}",
-                        extracted.language
-                    );
-                }
-                (ai_decision, Some(reason))
+    let outcome =
+        match evaluator::evaluate_invocation(rules_config, &home_dir(), invocation, options) {
+            Ok(outcome) => outcome,
+            Err(evaluator::EvaluationError::Config(e)) => {
+                eprintln!("longline: {e}");
+                return 2;
             }
-            None => (initial_decision, None),
-        }
-    } else {
-        (initial_decision, None)
-    };
+        };
 
-    // Log the decision
-    // Use AI reason if available, otherwise policy reason
-    let log_reason = if let Some(ref ai_reason) = ai_reason {
-        Some(ai_reason.clone())
-    } else if result.reason.is_empty() {
-        None
-    } else {
-        Some(result.reason.clone())
-    };
-    let mut entry = logger::make_entry(
-        &hook_input.tool_name,
-        hook_input.cwd.as_deref().unwrap_or(""),
-        command,
-        final_decision,
-        result.rule_id.clone().into_iter().collect(),
-        log_reason,
-        parse_ok,
-        hook_input.session_id.clone(),
-    );
-    if overridden {
-        entry.original_decision = Some(result.decision);
-        entry.overridden = true;
-    }
-    logger::log_decision(&entry);
-
-    // Output the decision
-    match final_decision {
-        Decision::Allow => {
-            // Use AI reason if available, otherwise policy reason
-            let reason = if let Some(ref ai_reason) = ai_reason {
-                format!("longline: {}", ai_reason)
-            } else {
-                format!("longline: {}", result.reason)
-            };
-            let output = HookOutput::decision(Decision::Allow, &reason);
-            print_json(&output);
-        }
-        Decision::Ask | Decision::Deny => {
-            // Use AI reason if available, otherwise policy reason
-            let reason = if let Some(ref ai_reason) = ai_reason {
-                format!("longline: {}", ai_reason)
-            } else if overridden {
-                format!("[overridden] {}", format_reason(&result))
-            } else {
-                format_reason(&result)
-            };
-            let output = HookOutput::decision(final_decision, &reason);
-            print_json(&output);
-        }
-    }
-
+    let output = HookOutput::decision(outcome.decision, &outcome.reason);
+    print_json(&output);
     0
-}
-
-/// Sensitive path patterns for read-only tools (Read, Grep, Glob).
-/// Paths matching these are escalated to `ask` instead of auto-allowed.
-const SENSITIVE_PATH_PATTERNS: &[&str] = &["/.ssh/", "/.aws/", "/.gnupg/"];
-const SENSITIVE_EXACT_PATHS: &[&str] = &["/etc/shadow"];
-
-/// Evaluate a file path from a read-only tool and return (decision, reason).
-fn evaluate_sensitive_path(tool_name: &str, path: &str) -> (Decision, String) {
-    for pattern in SENSITIVE_PATH_PATTERNS {
-        if path.contains(pattern) {
-            return (
-                Decision::Ask,
-                format!("longline: {tool_name} sensitive path ({pattern}): {path}"),
-            );
-        }
-    }
-    for exact in SENSITIVE_EXACT_PATHS {
-        if path == *exact {
-            return (
-                Decision::Ask,
-                format!("longline: {tool_name} sensitive path: {path}"),
-            );
-        }
-    }
-    (
-        Decision::Allow,
-        format!("longline: {tool_name} allowed: {path}"),
-    )
 }
 
 fn run_check(
@@ -990,13 +797,6 @@ fn run_init(force: bool) -> i32 {
     println!("Edit {} to customize.", rules_yaml_path.display());
 
     0
-}
-
-fn format_reason(result: &PolicyResult) -> String {
-    match &result.rule_id {
-        Some(id) => format!("[{id}] {}", result.reason),
-        None => result.reason.clone(),
-    }
 }
 
 /// Print a JSON value to stdout.
