@@ -1,54 +1,70 @@
 use std::path::Path;
 
 use longline::domain::Decision;
+use longline::domain::PolicyResult;
+use longline::parser;
 use longline::policy;
 
+#[cfg_attr(not(test), allow(dead_code))]
+const SENSITIVE_PATH_PATTERNS: &[&str] = &["/.ssh/", "/.aws/", "/.gnupg/"];
+#[cfg_attr(not(test), allow(dead_code))]
+const SENSITIVE_EXACT_PATHS: &[&str] = &["/etc/shadow"];
+
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum Invocation {
     Shell {
         command: Option<String>,
         cwd: Option<String>,
+        #[allow(dead_code)]
         session_id: Option<String>,
     },
     ReadPath {
         tool_name: String,
         path: Option<String>,
         cwd: Option<String>,
+        #[allow(dead_code)]
         session_id: Option<String>,
     },
     SearchPath {
         tool_name: String,
         path: Option<String>,
         cwd: Option<String>,
+        #[allow(dead_code)]
         session_id: Option<String>,
     },
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct EvaluationOptions {
     pub ask_on_deny: bool,
+    #[allow(dead_code)]
     pub ask_ai: bool,
+    #[allow(dead_code)]
     pub ask_ai_lenient: bool,
     pub cli_trust_level: Option<policy::TrustLevel>,
     pub cli_safety_level: Option<policy::SafetyLevel>,
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct EvaluationOutcome {
     pub decision: Decision,
     pub reason: String,
     pub log_reason: Option<String>,
+    #[allow(dead_code)]
     pub matched_rules: Vec<String>,
+    #[allow(dead_code)]
     pub parse_ok: bool,
+    #[allow(dead_code)]
     pub original_decision: Option<Decision>,
+    #[allow(dead_code)]
     pub overridden: bool,
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum EvaluationError {
     Config(String),
 }
@@ -103,11 +119,293 @@ pub(crate) fn finalize_config(
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn evaluate_invocation(
+    config: policy::RulesConfig,
+    home: &Path,
+    invocation: Invocation,
+    options: EvaluationOptions,
+) -> Result<EvaluationOutcome, EvaluationError> {
+    let cwd = invocation.cwd().map(Path::new);
+    let final_config = finalize_config(
+        config,
+        home,
+        cwd,
+        options.cli_trust_level,
+        options.cli_safety_level,
+    )
+    .map_err(EvaluationError::Config)?;
+    let rules = final_config.rules;
+    let _project_ai_prompt = final_config.project_ai_prompt;
+
+    match invocation {
+        Invocation::Shell {
+            command: None,
+            cwd: _,
+            session_id: _,
+        } => Ok(EvaluationOutcome::simple(
+            Decision::Allow,
+            "longline: no command".to_string(),
+        )),
+        Invocation::Shell {
+            command: Some(command),
+            cwd: _,
+            session_id: _,
+        } => evaluate_shell_command(&rules, &command, options.ask_on_deny),
+        Invocation::ReadPath {
+            tool_name: _,
+            path: None,
+            cwd: _,
+            session_id: _,
+        } => Ok(EvaluationOutcome::simple(
+            Decision::Allow,
+            "longline: Read tool (no path)".to_string(),
+        )),
+        Invocation::ReadPath {
+            tool_name,
+            path: Some(path),
+            cwd: _,
+            session_id: _,
+        }
+        | Invocation::SearchPath {
+            tool_name,
+            path: Some(path),
+            cwd: _,
+            session_id: _,
+        } => Ok(evaluate_path(&tool_name, &path)),
+        Invocation::SearchPath {
+            tool_name,
+            path: None,
+            cwd: _,
+            session_id: _,
+        } => Ok(EvaluationOutcome::simple(
+            Decision::Allow,
+            format!("longline: {tool_name} allowed (no path)"),
+        )),
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+impl Invocation {
+    fn cwd(&self) -> Option<&str> {
+        match self {
+            Self::Shell { cwd, .. } | Self::ReadPath { cwd, .. } | Self::SearchPath { cwd, .. } => {
+                cwd.as_deref()
+            }
+        }
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+impl EvaluationOutcome {
+    fn simple(decision: Decision, reason: String) -> Self {
+        Self {
+            decision,
+            reason,
+            log_reason: None,
+            matched_rules: vec![],
+            parse_ok: true,
+            original_decision: None,
+            overridden: false,
+        }
+    }
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn evaluate_path(tool_name: &str, path: &str) -> EvaluationOutcome {
+    for pattern in SENSITIVE_PATH_PATTERNS {
+        if path.contains(pattern) {
+            return EvaluationOutcome::simple(
+                Decision::Ask,
+                format!("longline: {tool_name} sensitive path ({pattern}): {path}"),
+            );
+        }
+    }
+
+    for exact in SENSITIVE_EXACT_PATHS {
+        if path == *exact {
+            return EvaluationOutcome::simple(
+                Decision::Ask,
+                format!("longline: {tool_name} sensitive path: {path}"),
+            );
+        }
+    }
+
+    EvaluationOutcome::simple(
+        Decision::Allow,
+        format!("longline: {tool_name} allowed: {path}"),
+    )
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn evaluate_shell_command(
+    rules: &policy::RulesConfig,
+    command: &str,
+    ask_on_deny: bool,
+) -> Result<EvaluationOutcome, EvaluationError> {
+    let stmt = match parser::parse(command) {
+        Ok(stmt) => stmt,
+        Err(e) => {
+            return Ok(EvaluationOutcome {
+                decision: Decision::Ask,
+                reason: format!("Failed to parse bash command: {e}"),
+                log_reason: Some(format!("Parse error: {e}")),
+                matched_rules: vec![],
+                parse_ok: false,
+                original_decision: None,
+                overridden: false,
+            });
+        }
+    };
+
+    let result = policy::evaluate(rules, &stmt);
+    let overridden = ask_on_deny && result.decision == Decision::Deny;
+    let decision = if overridden {
+        Decision::Ask
+    } else {
+        result.decision
+    };
+    let reason = match decision {
+        Decision::Allow => format!("longline: {}", result.reason),
+        Decision::Ask | Decision::Deny if overridden => {
+            format!("[overridden] {}", format_reason(&result))
+        }
+        Decision::Ask | Decision::Deny => format_reason(&result),
+    };
+
+    Ok(EvaluationOutcome {
+        decision,
+        reason,
+        log_reason: if result.reason.is_empty() {
+            None
+        } else {
+            Some(result.reason.clone())
+        },
+        matched_rules: result.rule_id.clone().into_iter().collect(),
+        parse_ok: true,
+        original_decision: overridden.then_some(result.decision),
+        overridden,
+    })
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn format_reason(result: &PolicyResult) -> String {
+    match &result.rule_id {
+        Some(id) => format!("[{id}] {}", result.reason),
+        None => result.reason.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use policy::SafetyLevel::*;
     use policy::TrustLevel::*;
+
+    fn base_config() -> policy::RulesConfig {
+        policy::load_embedded_rules().expect("embedded rules should load")
+    }
+
+    fn eval(invocation: Invocation) -> EvaluationOutcome {
+        let home = tempfile::TempDir::new().unwrap();
+        evaluate_invocation(
+            base_config(),
+            home.path(),
+            invocation,
+            EvaluationOptions::default(),
+        )
+        .expect("evaluation should succeed")
+    }
+
+    #[test]
+    fn test_evaluate_missing_shell_command_allows_without_log() {
+        let home = tempfile::TempDir::new().unwrap();
+        let outcome = evaluate_invocation(
+            base_config(),
+            home.path(),
+            Invocation::Shell {
+                command: None,
+                cwd: Some("/tmp".to_string()),
+                session_id: Some("session-1".to_string()),
+            },
+            EvaluationOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Allow);
+        assert_eq!(outcome.reason, "longline: no command");
+        assert_eq!(outcome.log_reason, None);
+        assert!(!home
+            .path()
+            .join(".claude/hooks-logs/longline.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn test_evaluate_sensitive_read_path_asks_without_log() {
+        let home = tempfile::TempDir::new().unwrap();
+        let outcome = evaluate_invocation(
+            base_config(),
+            home.path(),
+            Invocation::ReadPath {
+                tool_name: "Read".to_string(),
+                path: Some("/home/user/.ssh/id_rsa".to_string()),
+                cwd: Some("/tmp".to_string()),
+                session_id: Some("session-1".to_string()),
+            },
+            EvaluationOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Ask);
+        assert_eq!(
+            outcome.reason,
+            "longline: Read sensitive path (/.ssh/): /home/user/.ssh/id_rsa"
+        );
+        assert!(!home
+            .path()
+            .join(".claude/hooks-logs/longline.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn test_evaluate_safe_read_path_allows_without_log() {
+        let outcome = eval(Invocation::ReadPath {
+            tool_name: "Read".to_string(),
+            path: Some("src/main.rs".to_string()),
+            cwd: Some("/tmp".to_string()),
+            session_id: Some("session-1".to_string()),
+        });
+
+        assert_eq!(outcome.decision, Decision::Allow);
+        assert_eq!(outcome.reason, "longline: Read allowed: src/main.rs");
+    }
+
+    #[test]
+    fn test_evaluate_read_no_path_allows_with_current_reason() {
+        let outcome = eval(Invocation::ReadPath {
+            tool_name: "Read".to_string(),
+            path: None,
+            cwd: Some("/tmp".to_string()),
+            session_id: Some("session-1".to_string()),
+        });
+
+        assert_eq!(outcome.decision, Decision::Allow);
+        assert_eq!(outcome.reason, "longline: Read tool (no path)");
+    }
+
+    #[test]
+    fn test_evaluate_grep_no_path_allows_with_current_reason() {
+        let outcome = eval(Invocation::SearchPath {
+            tool_name: "Grep".to_string(),
+            path: None,
+            cwd: Some("/tmp".to_string()),
+            session_id: Some("session-1".to_string()),
+        });
+
+        assert_eq!(outcome.decision, Decision::Allow);
+        assert_eq!(outcome.reason, "longline: Grep allowed (no path)");
+    }
 
     #[test]
     fn test_finalize_config_no_overlays() {
