@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use crate::logger;
 use longline::ai_judge;
+use longline::domain::{Decision, PolicyResult};
 use longline::parser;
 use longline::policy;
-use longline::types::{Decision, HookInput, HookOutput, PolicyResult};
+use longline::types::{HookInput, HookOutput};
 
 #[derive(ClapParser)]
 #[command(name = "longline", version, about = "Safety hook for Claude Code")]

@@ -478,7 +478,7 @@ mod tests {
     fn test_find_allowlist_match_git_c_status_matches_git_status() {
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::default(),
             allowlists: crate::policy::Allowlists {
@@ -501,7 +501,7 @@ mod tests {
     fn test_find_allowlist_match_respects_trust_level() {
         let config_minimal = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Minimal,
             allowlists: crate::policy::Allowlists {
@@ -591,7 +591,7 @@ mod tests {
     fn test_find_allowlist_reason_returns_reason_for_trust_filtered_entry() {
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -622,7 +622,7 @@ mod tests {
     fn test_find_allowlist_reason_returns_none_for_unrecognized_command() {
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -652,7 +652,7 @@ mod tests {
     fn test_find_allowlist_reason_returns_none_when_no_reason_field() {
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -675,7 +675,7 @@ mod tests {
     fn test_find_allowlist_match_git_c_clean_does_not_match_git_clean_allowlist() {
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::default(),
             allowlists: crate::policy::Allowlists {
@@ -779,7 +779,7 @@ mod tests {
 
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -836,7 +836,7 @@ mod tests {
 
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -895,7 +895,7 @@ mod tests {
 
         let config = RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {
@@ -958,7 +958,7 @@ mod tests {
     fn uv_run_ruff_config() -> RulesConfig {
         RulesConfig {
             version: 1,
-            default_decision: crate::types::Decision::Ask,
+            default_decision: crate::domain::Decision::Ask,
             safety_level: crate::policy::SafetyLevel::High,
             trust_level: crate::policy::TrustLevel::Standard,
             allowlists: crate::policy::Allowlists {

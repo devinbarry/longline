@@ -4,7 +4,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use longline::types::Decision;
+use longline::domain::Decision;
 
 const DEFAULT_MAX_LOG_FILE_BYTES: u64 = 25 * 1024 * 1024;
 const MAX_ROTATED_LOG_FILES: usize = 10;

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::types::Decision;
+use crate::domain::Decision;
 
 /// Tracks whether a rule/entry came from built-in defaults, global config, or project config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
