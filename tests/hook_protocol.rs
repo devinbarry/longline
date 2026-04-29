@@ -1,5 +1,7 @@
 mod common;
-use common::{longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags};
+use common::{
+    longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags, TestEnv,
+};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -26,6 +28,31 @@ fn test_e2e_non_bash_tool_passes_through() {
         result.stdout.trim(),
         "{}",
         "Non-Bash tools should passthrough with empty object"
+    );
+}
+
+#[test]
+fn test_e2e_unsupported_tool_passthrough_exact_json() {
+    let result = run_hook("Write", "");
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "{}\n");
+    assert_eq!(result.stderr, "");
+}
+
+#[test]
+fn test_e2e_unsupported_tool_config_finalization_error_exits_2_without_json() {
+    let env = TestEnv::new()
+        .with_global_config("override_trust_level: impossible\n")
+        .build();
+
+    let result = env.run_hook_tool("Write", "");
+
+    assert_eq!(result.exit_code, 2);
+    assert_eq!(result.stdout, "");
+    assert!(
+        result.stderr.contains("longline:"),
+        "stderr should contain longline error prefix, got: {}",
+        result.stderr
     );
 }
 

@@ -428,6 +428,20 @@ fn run_hook(
             session_id: hook_input.session_id.clone(),
         },
         _ => {
+            let cwd = hook_input
+                .cwd
+                .as_ref()
+                .map(|s| std::path::Path::new(s.as_str()));
+            if let Err(e) = evaluator::finalize_config(
+                rules_config,
+                &home_dir(),
+                cwd,
+                cli_trust_level,
+                cli_safety_level,
+            ) {
+                eprintln!("longline: {e}");
+                return 2;
+            }
             println!("{{}}");
             return 0;
         }
