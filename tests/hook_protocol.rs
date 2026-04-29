@@ -32,6 +32,26 @@ fn run_raw_hook(args: &[&str], home: &Path, stdin: &str) -> RunResult {
     }
 }
 
+fn run_raw_hook_allow_early_exit(args: &[&str], home: &Path, stdin: &str) -> RunResult {
+    let mut child = Command::new(longline_bin())
+        .args(args)
+        .env("HOME", home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    let _ = child.stdin.take().unwrap().write_all(stdin.as_bytes());
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
 fn temp_home() -> tempfile::TempDir {
     tempfile::TempDir::new().unwrap()
 }
@@ -141,7 +161,7 @@ fn test_e2e_malformed_hook_json_still_requires_base_config_to_load() {
     let home = temp_home();
     let missing = PathBuf::from("/nonexistent/rules.yaml");
 
-    let result = run_raw_hook(
+    let result = run_raw_hook_allow_early_exit(
         &["--config", missing.to_str().unwrap()],
         home.path(),
         "{not json",
