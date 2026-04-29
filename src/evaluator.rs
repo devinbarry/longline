@@ -283,7 +283,7 @@ fn evaluate_shell_command_with_parse_result(
                 false,
                 request.session_id,
             );
-            logger::log_decision_to_home(&entry, request.home);
+            log_decision_for_home(&entry, request.home);
 
             return Ok(EvaluationOutcome {
                 decision: Decision::Ask,
@@ -400,7 +400,7 @@ fn evaluate_shell_command_with_parse_result(
         entry.original_decision = Some(result.decision);
         entry.overridden = true;
     }
-    logger::log_decision_to_home(&entry, request.home);
+    log_decision_for_home(&entry, request.home);
 
     Ok(EvaluationOutcome {
         decision: final_decision,
@@ -418,6 +418,15 @@ fn format_reason(result: &PolicyResult) -> String {
     match &result.rule_id {
         Some(id) => format!("[{id}] {}", result.reason),
         None => result.reason.clone(),
+    }
+}
+
+fn log_decision_for_home(entry: &logger::LogEntry, home: &Path) {
+    let env_home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    if env_home.as_deref() == Some(home) {
+        logger::log_decision(entry);
+    } else {
+        logger::log_decision_to_home(entry, home);
     }
 }
 
