@@ -239,10 +239,7 @@ fn evaluate_shell_command(
     command: &str,
     ask_on_deny: bool,
 ) -> Result<EvaluationOutcome, EvaluationError> {
-    let stmt = match parser::parse(command).and_then(|stmt| match stmt {
-        parser::Statement::Opaque(_) => Err("Unrecognized command structure".to_string()),
-        stmt => Ok(stmt),
-    }) {
+    let stmt = match parser::parse(command) {
         Ok(stmt) => stmt,
         Err(e) => {
             return Ok(EvaluationOutcome {
@@ -410,8 +407,13 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_shell_parse_error_returns_ask_without_log() {
+    fn test_evaluate_shell_opaque_statement_uses_policy_ask_not_parse_error() {
         let home = tempfile::TempDir::new().unwrap();
+        assert!(matches!(
+            parser::parse("if then").unwrap(),
+            parser::Statement::Opaque(_)
+        ));
+
         let outcome = evaluate_invocation(
             base_config(),
             home.path(),
@@ -421,21 +423,13 @@ mod tests {
         .unwrap();
 
         assert_eq!(outcome.decision, Decision::Ask);
-        assert!(
-            outcome.reason.starts_with("Failed to parse bash command: "),
-            "{}",
-            outcome.reason
-        );
-        assert!(
-            outcome
-                .log_reason
-                .as_deref()
-                .is_some_and(|r| r.starts_with("Parse error: ")),
-            "{:?}",
-            outcome.log_reason
+        assert_eq!(outcome.reason, "Unrecognized command structure");
+        assert_eq!(
+            outcome.log_reason.as_deref(),
+            Some("Unrecognized command structure")
         );
         assert_eq!(outcome.matched_rules, Vec::<String>::new());
-        assert!(!outcome.parse_ok);
+        assert!(outcome.parse_ok);
         assert_eq!(outcome.original_decision, None);
         assert!(!outcome.overridden);
         assert!(!home
