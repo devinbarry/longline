@@ -154,7 +154,7 @@ pub(crate) fn evaluate_invocation(
             command: &command,
             session_id,
             ask_on_deny: options.ask_on_deny,
-            ask_ai: options.ask_ai,
+            ask_ai: options.ask_ai || options.ask_ai_lenient,
             ask_ai_lenient: options.ask_ai_lenient,
             project_ai_prompt: final_config.project_ai_prompt.as_deref(),
         }),
@@ -305,6 +305,7 @@ fn evaluate_shell_command_with_parse_result(
         result.decision
     };
 
+    // Mirrors the legacy CLI hook flow until Task 7 removes that path.
     let (final_decision, ai_reason) = if request.ask_ai && final_decision == Decision::Ask {
         let ai_config = ai_judge::load_config();
         let ai_cwd = if request.cwd.is_empty() {
@@ -423,6 +424,10 @@ fn format_reason(result: &PolicyResult) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+    use std::sync::{Mutex, OnceLock};
+
     use policy::SafetyLevel::*;
     use policy::TrustLevel::*;
     use serde_json::Value;
@@ -458,6 +463,85 @@ mod tests {
         let contents = std::fs::read_to_string(log_path(home)).unwrap();
         let line = contents.lines().last().unwrap();
         serde_json::from_str(line).unwrap()
+    }
+
+    struct HomeEnvGuard {
+        original_home: Option<OsString>,
+    }
+
+    impl HomeEnvGuard {
+        fn set(home: &Path) -> Self {
+            let original_home = std::env::var_os("HOME");
+            std::env::set_var("HOME", home);
+            Self { original_home }
+        }
+    }
+
+    impl Drop for HomeEnvGuard {
+        fn drop(&mut self) {
+            match &self.original_home {
+                Some(home) => std::env::set_var("HOME", home),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
+    struct FakeAiJudge {
+        home: tempfile::TempDir,
+        called_path: PathBuf,
+    }
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn with_fake_ai_judge<R>(response: &str, f: impl FnOnce(&FakeAiJudge) -> R) -> R {
+        let _lock = env_lock().lock().unwrap();
+        let home = tempfile::TempDir::new().unwrap();
+        let called_path = home.path().join("fake-judge-called.txt");
+        let capture_path = home.path().join("fake-judge-prompt.txt");
+        let script_path = home.path().join("fake-judge.sh");
+        let script = format!(
+            "#!/bin/sh\nprintf 'called\\n' >> \"{}\"\nprintf '%s' \"$@\" > \"{}\"\nprintf '%s\\n' '{}'\n",
+            called_path.display(),
+            capture_path.display(),
+            response
+        );
+        std::fs::write(&script_path, script).unwrap();
+        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script_path, perms).unwrap();
+
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("ai-judge.yaml"),
+            format!("command: {}\ntimeout: 10\n", script_path.display()),
+        )
+        .unwrap();
+
+        let _home = HomeEnvGuard::set(home.path());
+        f(&FakeAiJudge { home, called_path })
+    }
+
+    fn evaluate_shell_with_options(
+        home: &Path,
+        command: &str,
+        options: EvaluationOptions,
+    ) -> EvaluationOutcome {
+        evaluate_invocation(
+            base_config(),
+            home,
+            Invocation::Shell {
+                command: Some(command.to_string()),
+                cwd: Some(home.display().to_string()),
+                session_id: Some("session-ai".to_string()),
+            },
+            options,
+        )
+        .expect("evaluation should succeed")
     }
 
     #[test]
@@ -649,6 +733,131 @@ mod tests {
         assert_eq!(entry["decision"], "ask");
         assert_eq!(entry["original_decision"], "deny");
         assert_eq!(entry["overridden"], true);
+    }
+
+    #[test]
+    fn test_evaluate_shell_ask_ai_lenient_alone_invokes_ai_judge() {
+        with_fake_ai_judge("ALLOW: evaluator fake judge allowed", |fake| {
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                r#"python -c "print(1)""#,
+                EvaluationOptions {
+                    ask_ai: false,
+                    ask_ai_lenient: true,
+                    ..Default::default()
+                },
+            );
+
+            assert_eq!(outcome.decision, Decision::Allow);
+            assert_eq!(
+                outcome.reason,
+                "longline: ALLOW: evaluator fake judge allowed"
+            );
+            assert!(
+                fake.called_path.exists(),
+                "lenient-only option should invoke fake AI judge"
+            );
+        });
+    }
+
+    #[test]
+    fn test_evaluate_shell_ai_reason_sets_output_and_log_reason() {
+        with_fake_ai_judge("ASK: evaluator fake judge needs review", |fake| {
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                r#"python -c "print(1)""#,
+                EvaluationOptions {
+                    ask_ai: true,
+                    ..Default::default()
+                },
+            );
+
+            assert_eq!(outcome.decision, Decision::Ask);
+            assert_eq!(
+                outcome.reason,
+                "longline: ASK: evaluator fake judge needs review"
+            );
+            assert_eq!(
+                outcome.log_reason.as_deref(),
+                Some("ASK: evaluator fake judge needs review")
+            );
+
+            let entry = last_log_entry(&fake.home);
+            assert_eq!(entry["decision"], "ask");
+            assert_eq!(entry["reason"], "ASK: evaluator fake judge needs review");
+        });
+    }
+
+    #[test]
+    fn test_evaluate_shell_ai_no_extraction_keeps_policy_ask() {
+        with_fake_ai_judge("ALLOW: evaluator fake judge should not run", |fake| {
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                "chmod 777 /tmp/f",
+                EvaluationOptions {
+                    ask_ai: true,
+                    ..Default::default()
+                },
+            );
+
+            assert_eq!(outcome.decision, Decision::Ask);
+            assert_ne!(
+                outcome.reason,
+                "longline: ALLOW: evaluator fake judge should not run"
+            );
+            assert_ne!(
+                outcome.log_reason.as_deref(),
+                Some("ALLOW: evaluator fake judge should not run")
+            );
+            assert!(
+                !fake.called_path.exists(),
+                "AI judge command must not run when no code is extracted"
+            );
+        });
+    }
+
+    #[test]
+    fn test_evaluate_non_shell_flows_do_not_invoke_ai_judge() {
+        with_fake_ai_judge("ALLOW: evaluator fake judge should not run", |fake| {
+            let missing = evaluate_invocation(
+                base_config(),
+                fake.home.path(),
+                Invocation::Shell {
+                    command: None,
+                    cwd: Some(fake.home.path().display().to_string()),
+                    session_id: Some("session-ai".to_string()),
+                },
+                EvaluationOptions {
+                    ask_ai: true,
+                    ask_ai_lenient: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(missing.decision, Decision::Allow);
+
+            let path = evaluate_invocation(
+                base_config(),
+                fake.home.path(),
+                Invocation::ReadPath {
+                    tool_name: "Read".to_string(),
+                    path: Some("/home/user/.ssh/id_rsa".to_string()),
+                    cwd: Some(fake.home.path().display().to_string()),
+                    session_id: Some("session-ai".to_string()),
+                },
+                EvaluationOptions {
+                    ask_ai: true,
+                    ask_ai_lenient: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(path.decision, Decision::Ask);
+            assert!(
+                !fake.called_path.exists(),
+                "AI judge command must not run for missing command or path flows"
+            );
+        });
     }
 
     #[test]
