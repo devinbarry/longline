@@ -1,9 +1,11 @@
-#![allow(dead_code)]
+use std::io::Read;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::evaluator;
 use longline::domain::Decision;
+use longline::policy;
 
 /// Input JSON from Claude Code hook on stdin.
 #[derive(Debug, Deserialize)]
@@ -52,6 +54,94 @@ enum ClaudeHookAction {
     Passthrough { cwd: Option<String> },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HookOptions {
+    pub ask_on_deny: bool,
+    pub ask_ai: bool,
+    pub ask_ai_lenient: bool,
+    pub cli_trust_level: Option<policy::TrustLevel>,
+    pub cli_safety_level: Option<policy::SafetyLevel>,
+}
+
+pub(crate) fn run_hook(
+    rules_config: policy::RulesConfig,
+    home: &Path,
+    options: HookOptions,
+) -> i32 {
+    let mut input_str = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
+        let output = ClaudeHookOutput::decision(Decision::Ask, "Failed to read stdin");
+        print_json(&output);
+        eprintln!("longline: failed to read stdin: {e}");
+        return 0;
+    }
+
+    run_hook_input(rules_config, home, options, &input_str)
+}
+
+fn run_hook_input(
+    rules_config: policy::RulesConfig,
+    home: &Path,
+    options: HookOptions,
+    input_str: &str,
+) -> i32 {
+    let hook_input: ClaudeHookInput = match serde_json::from_str(input_str) {
+        Ok(h) => h,
+        Err(e) => {
+            let output = ClaudeHookOutput::decision(
+                Decision::Ask,
+                &format!("Failed to parse hook input: {e}"),
+            );
+            print_json(&output);
+            return 0;
+        }
+    };
+
+    match action_from_input(hook_input) {
+        ClaudeHookAction::Evaluate(invocation) => {
+            let eval_options = evaluator::EvaluationOptions {
+                ask_on_deny: options.ask_on_deny,
+                ask_ai: options.ask_ai,
+                ask_ai_lenient: options.ask_ai_lenient,
+                cli_trust_level: options.cli_trust_level,
+                cli_safety_level: options.cli_safety_level,
+            };
+
+            let outcome = match evaluator::evaluate_invocation(
+                rules_config,
+                home,
+                invocation,
+                eval_options,
+            ) {
+                Ok(outcome) => outcome,
+                Err(evaluator::EvaluationError::Config(e)) => {
+                    eprintln!("longline: {e}");
+                    return 2;
+                }
+            };
+
+            let output = ClaudeHookOutput::decision(outcome.decision, &outcome.reason);
+            print_json(&output);
+            0
+        }
+        ClaudeHookAction::Passthrough { cwd } => {
+            let cwd_path = cwd.as_deref().map(PathBuf::from);
+            if let Err(e) = evaluator::finalize_config(
+                rules_config,
+                home,
+                cwd_path.as_deref(),
+                options.cli_trust_level,
+                options.cli_safety_level,
+            ) {
+                eprintln!("longline: {e}");
+                return 2;
+            }
+            println!("{{}}");
+            0
+        }
+    }
+}
+
 fn action_from_input(input: ClaudeHookInput) -> ClaudeHookAction {
     match input.tool_name.as_str() {
         "Read" => ClaudeHookAction::Evaluate(evaluator::Invocation::ReadPath {
@@ -72,6 +162,16 @@ fn action_from_input(input: ClaudeHookInput) -> ClaudeHookAction {
             session_id: input.session_id,
         }),
         _ => ClaudeHookAction::Passthrough { cwd: input.cwd },
+    }
+}
+
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string(value) {
+        Ok(json) => println!("{json}"),
+        Err(e) => {
+            eprintln!("longline: failed to serialize output: {e}");
+            println!("{{}}");
+        }
     }
 }
 
