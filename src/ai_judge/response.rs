@@ -1,4 +1,4 @@
-use crate::types::Decision;
+use crate::domain::Decision;
 
 /// Parse the AI judge response, returning both the decision and the full reason line.
 pub fn parse_response_with_reason(output: &str) -> (Decision, String) {

@@ -3,8 +3,8 @@ use comfy_table::{
     Table,
 };
 
+use longline::domain::Decision;
 use longline::policy;
-use longline::types::Decision;
 
 /// Map a RuleSource to its display color.
 fn source_color(s: policy::RuleSource) -> Color {

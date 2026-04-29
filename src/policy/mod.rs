@@ -11,8 +11,8 @@ pub use config::{
     RulesConfig, SafetyLevel, StageMatcher, StringOrList, TrustLevel,
 };
 
+use crate::domain::{Decision, PolicyResult};
 use crate::parser::{self, Statement};
-use crate::types::{Decision, PolicyResult};
 
 use allowlist::{
     find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,

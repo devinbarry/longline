@@ -1,4 +1,4 @@
-use crate::types::Decision;
+use crate::domain::Decision;
 
 use super::config::AiJudgeConfig;
 use super::prompt::{build_prompt, build_prompt_lenient};

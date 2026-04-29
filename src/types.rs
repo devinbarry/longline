@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub use crate::domain::{Decision, PolicyResult};
+
 /// Input JSON from Claude Code hook on stdin.
 #[derive(Debug, Deserialize)]
 pub struct HookInput {
@@ -22,25 +24,6 @@ pub struct ToolInput {
     pub file_path: Option<String>,
     pub path: Option<String>,
     pub pattern: Option<String>,
-}
-
-/// Decision output for the hook protocol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Decision {
-    Allow,
-    Ask,
-    Deny,
-}
-
-impl std::fmt::Display for Decision {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.pad(match self {
-            Decision::Allow => "allow",
-            Decision::Ask => "ask",
-            Decision::Deny => "deny",
-        })
-    }
 }
 
 /// Hook-specific output wrapper.
@@ -67,32 +50,6 @@ impl HookOutput {
                 permission_decision: decision,
                 permission_decision_reason: reason.to_string(),
             },
-        }
-    }
-}
-
-/// The result of evaluating a command against the policy engine.
-#[derive(Debug, Clone)]
-pub struct PolicyResult {
-    pub decision: Decision,
-    pub rule_id: Option<String>,
-    pub reason: String,
-}
-
-impl PolicyResult {
-    pub fn allow() -> Self {
-        Self {
-            decision: Decision::Allow,
-            rule_id: None,
-            reason: String::new(),
-        }
-    }
-    #[allow(dead_code)]
-    pub fn ask(reason: &str) -> Self {
-        Self {
-            decision: Decision::Ask,
-            rule_id: None,
-            reason: reason.to_string(),
         }
     }
 }
@@ -153,11 +110,5 @@ mod tests {
             "longline: allowlisted"
         );
         assert_eq!(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse");
-    }
-
-    #[test]
-    fn test_decision_ordering() {
-        assert!(Decision::Deny > Decision::Ask);
-        assert!(Decision::Ask > Decision::Allow);
     }
 }
