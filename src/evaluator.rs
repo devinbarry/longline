@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::logger;
 use longline::domain::Decision;
 use longline::domain::PolicyResult;
 use longline::parser;
@@ -145,9 +146,16 @@ pub(crate) fn evaluate_invocation(
         )),
         Invocation::Shell {
             command: Some(command),
-            cwd: _,
-            session_id: _,
-        } => evaluate_shell_command(&rules, &command, options.ask_on_deny),
+            cwd,
+            session_id,
+        } => evaluate_shell_command(
+            &rules,
+            home,
+            cwd.as_deref().unwrap_or(""),
+            &command,
+            session_id,
+            options.ask_on_deny,
+        ),
         Invocation::ReadPath {
             tool_name: _,
             path: None,
@@ -236,16 +244,53 @@ fn evaluate_path(tool_name: &str, path: &str) -> EvaluationOutcome {
 #[cfg_attr(not(test), allow(dead_code))]
 fn evaluate_shell_command(
     rules: &policy::RulesConfig,
+    home: &Path,
+    cwd: &str,
     command: &str,
+    session_id: Option<String>,
     ask_on_deny: bool,
 ) -> Result<EvaluationOutcome, EvaluationError> {
-    let stmt = match parser::parse(command) {
+    evaluate_shell_command_with_parse_result(
+        rules,
+        home,
+        cwd,
+        command,
+        session_id,
+        ask_on_deny,
+        parser::parse(command),
+    )
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn evaluate_shell_command_with_parse_result(
+    rules: &policy::RulesConfig,
+    home: &Path,
+    cwd: &str,
+    command: &str,
+    session_id: Option<String>,
+    ask_on_deny: bool,
+    parse_result: Result<parser::Statement, String>,
+) -> Result<EvaluationOutcome, EvaluationError> {
+    let stmt = match parse_result {
         Ok(stmt) => stmt,
         Err(e) => {
+            let log_reason = Some(format!("Parse error: {e}"));
+            let entry = logger::make_entry(
+                "Bash",
+                cwd,
+                command,
+                Decision::Ask,
+                vec![],
+                log_reason.clone(),
+                false,
+                session_id,
+            );
+            logger::log_decision_to_home(&entry, home);
+
             return Ok(EvaluationOutcome {
                 decision: Decision::Ask,
                 reason: format!("Failed to parse bash command: {e}"),
-                log_reason: Some(format!("Parse error: {e}")),
+                log_reason,
                 matched_rules: vec![],
                 parse_ok: false,
                 original_decision: None,
@@ -256,28 +301,45 @@ fn evaluate_shell_command(
 
     let result = policy::evaluate(rules, &stmt);
     let overridden = ask_on_deny && result.decision == Decision::Deny;
-    let decision = if overridden {
+    let final_decision = if overridden {
         Decision::Ask
     } else {
         result.decision
     };
-    let reason = match decision {
+    let reason = match final_decision {
         Decision::Allow => format!("longline: {}", result.reason),
         Decision::Ask | Decision::Deny if overridden => {
             format!("[overridden] {}", format_reason(&result))
         }
         Decision::Ask | Decision::Deny => format_reason(&result),
     };
+    let log_reason = if result.reason.is_empty() {
+        None
+    } else {
+        Some(result.reason.clone())
+    };
+    let matched_rules: Vec<String> = result.rule_id.clone().into_iter().collect();
+    let mut entry = logger::make_entry(
+        "Bash",
+        cwd,
+        command,
+        final_decision,
+        matched_rules.clone(),
+        log_reason.clone(),
+        true,
+        session_id,
+    );
+    if overridden {
+        entry.original_decision = Some(result.decision);
+        entry.overridden = true;
+    }
+    logger::log_decision_to_home(&entry, home);
 
     Ok(EvaluationOutcome {
-        decision,
+        decision: final_decision,
         reason,
-        log_reason: if result.reason.is_empty() {
-            None
-        } else {
-            Some(result.reason.clone())
-        },
-        matched_rules: result.rule_id.clone().into_iter().collect(),
+        log_reason,
+        matched_rules,
         parse_ok: true,
         original_decision: overridden.then_some(result.decision),
         overridden,
@@ -297,6 +359,7 @@ mod tests {
     use super::*;
     use policy::SafetyLevel::*;
     use policy::TrustLevel::*;
+    use serde_json::Value;
 
     fn base_config() -> policy::RulesConfig {
         policy::load_embedded_rules().expect("embedded rules should load")
@@ -319,6 +382,16 @@ mod tests {
             cwd: Some("/tmp".to_string()),
             session_id: Some("session-1".to_string()),
         }
+    }
+
+    fn log_path(home: &tempfile::TempDir) -> std::path::PathBuf {
+        home.path().join(".claude/hooks-logs/longline.jsonl")
+    }
+
+    fn last_log_entry(home: &tempfile::TempDir) -> Value {
+        let contents = std::fs::read_to_string(log_path(home)).unwrap();
+        let line = contents.lines().last().unwrap();
+        serde_json::from_str(line).unwrap()
     }
 
     #[test]
@@ -350,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluate_shell_allow_returns_policy_reason_fields() {
+    fn test_evaluate_shell_allow_logs_current_fields() {
         let home = tempfile::TempDir::new().unwrap();
         let outcome = evaluate_invocation(
             base_config(),
@@ -373,10 +446,50 @@ mod tests {
         assert!(outcome.parse_ok);
         assert_eq!(outcome.original_decision, None);
         assert!(!outcome.overridden);
-        assert!(!home
-            .path()
-            .join(".claude/hooks-logs/longline.jsonl")
-            .exists());
+
+        let entry = last_log_entry(&home);
+        assert_eq!(entry["tool"], "Bash");
+        assert_eq!(entry["command"], "ls -la");
+        assert_eq!(entry["decision"], "allow");
+        assert_eq!(entry["parse_ok"], true);
+        assert_eq!(entry["session_id"], "session-1");
+    }
+
+    #[test]
+    fn test_evaluate_shell_parse_error_logs_current_fields() {
+        let home = tempfile::TempDir::new().unwrap();
+        let command = "parse-error-command";
+
+        let outcome = evaluate_shell_command_with_parse_result(
+            &base_config(),
+            home.path(),
+            "/tmp",
+            command,
+            Some("session-1".to_string()),
+            false,
+            Err("synthetic parser failure".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Ask);
+        assert!(
+            outcome.reason.starts_with("Failed to parse bash command: "),
+            "{}",
+            outcome.reason
+        );
+        assert!(!outcome.parse_ok);
+
+        let entry = last_log_entry(&home);
+        assert_eq!(entry["tool"], "Bash");
+        assert_eq!(entry["command"], command);
+        assert_eq!(entry["decision"], "ask");
+        assert_eq!(entry["parse_ok"], false);
+        assert!(
+            entry["reason"]
+                .as_str()
+                .is_some_and(|reason| reason.starts_with("Parse error: ")),
+            "{entry:?}"
+        );
     }
 
     #[test]
@@ -432,14 +545,10 @@ mod tests {
         assert!(outcome.parse_ok);
         assert_eq!(outcome.original_decision, None);
         assert!(!outcome.overridden);
-        assert!(!home
-            .path()
-            .join(".claude/hooks-logs/longline.jsonl")
-            .exists());
     }
 
     #[test]
-    fn test_evaluate_shell_ask_on_deny_sets_override_fields() {
+    fn test_evaluate_shell_ask_on_deny_logs_override_fields() {
         let home = tempfile::TempDir::new().unwrap();
         let outcome = evaluate_invocation(
             base_config(),
@@ -463,10 +572,11 @@ mod tests {
         assert!(!outcome.matched_rules.is_empty());
         assert!(outcome.log_reason.as_deref().is_some_and(|r| !r.is_empty()));
         assert!(outcome.parse_ok);
-        assert!(!home
-            .path()
-            .join(".claude/hooks-logs/longline.jsonl")
-            .exists());
+
+        let entry = last_log_entry(&home);
+        assert_eq!(entry["decision"], "ask");
+        assert_eq!(entry["original_decision"], "deny");
+        assert_eq!(entry["overridden"], true);
     }
 
     #[test]
