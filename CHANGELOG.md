@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.1] - 2026-04-29
+
+### Changed
+
+- Refactored hook evaluation behind a neutral evaluator API so Claude hook
+  decoding/encoding stays in the CLI while shared policy decisions, config
+  finalization, audit logging, and AI-judge orchestration live outside the
+  Claude wire layer.
+- Moved shared decision types into a domain module as preparation for future
+  adapter support.
+- Added home-scoped audit logging helpers so evaluator tests can verify logging
+  behavior without writing to the developer's real home directory.
+
+### Fixed
+
+- Preserved opaque shell-command behavior during the evaluator extraction:
+  unrecognized shell structure still returns `ask` with the existing
+  "Unrecognized command structure" reason instead of becoming a parse error.
+- Preserved unsupported non-Bash hook passthrough behavior, including config
+  validation failures before returning `{}`.
+- Ensured `--ask-ai-lenient` still activates the AI judge path when strict
+  `--ask-ai` is not set.
+
+### Internal
+
+- Added evaluator-level regression coverage for shell allow/deny/ask outcomes,
+  parser-error logging, path invocations, AI-judge flow, and hook protocol
+  stdout/stderr boundaries.
+- Added release-planning documentation for the staged adapter-prep cleanup.
+
 ## [0.15.0] - 2026-04-27
 
 ### Changed
