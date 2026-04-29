@@ -4,7 +4,37 @@ use common::{
     TestEnv,
 };
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+fn run_raw_hook(args: &[&str], home: &Path, stdin: &str) -> RunResult {
+    let mut child = Command::new(longline_bin())
+        .args(args)
+        .env("HOME", home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
+fn temp_home() -> tempfile::TempDir {
+    tempfile::TempDir::new().unwrap()
+}
 
 #[test]
 fn test_e2e_safe_command_allows() {
@@ -66,6 +96,59 @@ fn test_e2e_hook_config_finalization_error_exits_2_without_json() {
     let result = env.run_hook("ls -la");
     assert_eq!(result.exit_code, 2);
     assert!(result.stdout.is_empty(), "stdout: {}", result.stdout);
+    assert!(
+        result.stderr.contains("longline:"),
+        "stderr should contain longline error, got: {}",
+        result.stderr
+    );
+}
+
+#[test]
+fn test_e2e_malformed_hook_json_asks_without_stderr() {
+    let home = temp_home();
+    let config = rules_path();
+
+    let result = run_raw_hook(&["--config", &config], home.path(), "{not json");
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stderr, "");
+    result.assert_decision("ask");
+    result.assert_reason_contains("Failed to parse hook input:");
+}
+
+#[test]
+fn test_e2e_malformed_hook_json_does_not_finalize_global_config() {
+    let home = temp_home();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        "override_trust_level: impossible\n",
+    )
+    .unwrap();
+    let config = rules_path();
+
+    let result = run_raw_hook(&["--config", &config], home.path(), "{not json");
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stderr, "");
+    result.assert_decision("ask");
+    result.assert_reason_contains("Failed to parse hook input:");
+}
+
+#[test]
+fn test_e2e_malformed_hook_json_still_requires_base_config_to_load() {
+    let home = temp_home();
+    let missing = PathBuf::from("/nonexistent/rules.yaml");
+
+    let result = run_raw_hook(
+        &["--config", missing.to_str().unwrap()],
+        home.path(),
+        "{not json",
+    );
+
+    assert_eq!(result.exit_code, 2);
+    assert_eq!(result.stdout, "");
     assert!(
         result.stderr.contains("longline:"),
         "stderr should contain longline error, got: {}",
