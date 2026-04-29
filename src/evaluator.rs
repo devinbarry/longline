@@ -53,13 +53,9 @@ pub(crate) struct EvaluationOutcome {
     pub decision: Decision,
     pub reason: String,
     pub log_reason: Option<String>,
-    #[allow(dead_code)]
     pub matched_rules: Vec<String>,
-    #[allow(dead_code)]
     pub parse_ok: bool,
-    #[allow(dead_code)]
     pub original_decision: Option<Decision>,
-    #[allow(dead_code)]
     pub overridden: bool,
 }
 
@@ -243,7 +239,10 @@ fn evaluate_shell_command(
     command: &str,
     ask_on_deny: bool,
 ) -> Result<EvaluationOutcome, EvaluationError> {
-    let stmt = match parser::parse(command) {
+    let stmt = match parser::parse(command).and_then(|stmt| match stmt {
+        parser::Statement::Opaque(_) => Err("Unrecognized command structure".to_string()),
+        stmt => Ok(stmt),
+    }) {
         Ok(stmt) => stmt,
         Err(e) => {
             return Ok(EvaluationOutcome {
@@ -317,6 +316,14 @@ mod tests {
         .expect("evaluation should succeed")
     }
 
+    fn shell_invocation(command: &str) -> Invocation {
+        Invocation::Shell {
+            command: Some(command.to_string()),
+            cwd: Some("/tmp".to_string()),
+            session_id: Some("session-1".to_string()),
+        }
+    }
+
     #[test]
     fn test_evaluate_missing_shell_command_allows_without_log() {
         let home = tempfile::TempDir::new().unwrap();
@@ -335,6 +342,133 @@ mod tests {
         assert_eq!(outcome.decision, Decision::Allow);
         assert_eq!(outcome.reason, "longline: no command");
         assert_eq!(outcome.log_reason, None);
+        assert_eq!(outcome.matched_rules, Vec::<String>::new());
+        assert!(outcome.parse_ok);
+        assert_eq!(outcome.original_decision, None);
+        assert!(!outcome.overridden);
+        assert!(!home
+            .path()
+            .join(".claude/hooks-logs/longline.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn test_evaluate_shell_allow_returns_policy_reason_fields() {
+        let home = tempfile::TempDir::new().unwrap();
+        let outcome = evaluate_invocation(
+            base_config(),
+            home.path(),
+            shell_invocation("ls -la"),
+            EvaluationOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Allow);
+        assert!(outcome.reason.starts_with("longline: "));
+        assert_eq!(
+            outcome.log_reason,
+            outcome
+                .reason
+                .strip_prefix("longline: ")
+                .map(str::to_string)
+        );
+        assert_eq!(outcome.matched_rules, Vec::<String>::new());
+        assert!(outcome.parse_ok);
+        assert_eq!(outcome.original_decision, None);
+        assert!(!outcome.overridden);
+        assert!(!home
+            .path()
+            .join(".claude/hooks-logs/longline.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn test_evaluate_shell_deny_returns_rule_reason_and_matched_rule() {
+        let outcome = eval(shell_invocation("rm -rf /"));
+
+        assert_eq!(outcome.decision, Decision::Deny);
+        assert!(outcome.reason.starts_with('['), "{}", outcome.reason);
+        assert!(outcome.reason.contains(']'), "{}", outcome.reason);
+        assert!(!outcome.matched_rules.is_empty());
+        assert!(outcome.log_reason.as_deref().is_some_and(|r| !r.is_empty()));
+        assert!(outcome.parse_ok);
+        assert_eq!(outcome.original_decision, None);
+        assert!(!outcome.overridden);
+    }
+
+    #[test]
+    fn test_evaluate_shell_ask_returns_ask_reason() {
+        let outcome = eval(shell_invocation("chmod 777 /tmp/f"));
+
+        assert_eq!(outcome.decision, Decision::Ask);
+        assert!(!outcome.reason.is_empty());
+        assert!(outcome.log_reason.as_deref().is_some_and(|r| !r.is_empty()));
+        assert!(!outcome.matched_rules.is_empty());
+        assert!(outcome.parse_ok);
+        assert_eq!(outcome.original_decision, None);
+        assert!(!outcome.overridden);
+    }
+
+    #[test]
+    fn test_evaluate_shell_parse_error_returns_ask_without_log() {
+        let home = tempfile::TempDir::new().unwrap();
+        let outcome = evaluate_invocation(
+            base_config(),
+            home.path(),
+            shell_invocation("if then"),
+            EvaluationOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Ask);
+        assert!(
+            outcome.reason.starts_with("Failed to parse bash command: "),
+            "{}",
+            outcome.reason
+        );
+        assert!(
+            outcome
+                .log_reason
+                .as_deref()
+                .is_some_and(|r| r.starts_with("Parse error: ")),
+            "{:?}",
+            outcome.log_reason
+        );
+        assert_eq!(outcome.matched_rules, Vec::<String>::new());
+        assert!(!outcome.parse_ok);
+        assert_eq!(outcome.original_decision, None);
+        assert!(!outcome.overridden);
+        assert!(!home
+            .path()
+            .join(".claude/hooks-logs/longline.jsonl")
+            .exists());
+    }
+
+    #[test]
+    fn test_evaluate_shell_ask_on_deny_sets_override_fields() {
+        let home = tempfile::TempDir::new().unwrap();
+        let outcome = evaluate_invocation(
+            base_config(),
+            home.path(),
+            shell_invocation("rm -rf /"),
+            EvaluationOptions {
+                ask_on_deny: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(outcome.decision, Decision::Ask);
+        assert_eq!(outcome.original_decision, Some(Decision::Deny));
+        assert!(outcome.overridden);
+        assert!(
+            outcome.reason.starts_with("[overridden] "),
+            "{}",
+            outcome.reason
+        );
+        assert!(!outcome.matched_rules.is_empty());
+        assert!(outcome.log_reason.as_deref().is_some_and(|r| !r.is_empty()));
+        assert!(outcome.parse_ok);
         assert!(!home
             .path()
             .join(".claude/hooks-logs/longline.jsonl")
