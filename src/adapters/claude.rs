@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::evaluator;
 use longline::domain::Decision;
 
 /// Input JSON from Claude Code hook on stdin.
@@ -45,6 +46,35 @@ struct ClaudeHookOutput {
     hook_specific_output: ClaudePreToolUseDecisionOutput,
 }
 
+#[derive(Debug, Clone)]
+enum ClaudeHookAction {
+    Evaluate(evaluator::Invocation),
+    Passthrough { cwd: Option<String> },
+}
+
+fn action_from_input(input: ClaudeHookInput) -> ClaudeHookAction {
+    match input.tool_name.as_str() {
+        "Read" => ClaudeHookAction::Evaluate(evaluator::Invocation::ReadPath {
+            tool_name: input.tool_name.clone(),
+            path: input.tool_input.file_path,
+            cwd: input.cwd,
+            session_id: input.session_id,
+        }),
+        "Grep" | "Glob" => ClaudeHookAction::Evaluate(evaluator::Invocation::SearchPath {
+            tool_name: input.tool_name.clone(),
+            path: input.tool_input.path,
+            cwd: input.cwd,
+            session_id: input.session_id,
+        }),
+        "Bash" => ClaudeHookAction::Evaluate(evaluator::Invocation::Shell {
+            command: input.tool_input.command,
+            cwd: input.cwd,
+            session_id: input.session_id,
+        }),
+        _ => ClaudeHookAction::Passthrough { cwd: input.cwd },
+    }
+}
+
 impl ClaudeHookOutput {
     fn decision(decision: Decision, reason: &str) -> Self {
         Self {
@@ -60,6 +90,11 @@ impl ClaudeHookOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_action(json: serde_json::Value) -> ClaudeHookAction {
+        let input: ClaudeHookInput = serde_json::from_value(json).unwrap();
+        action_from_input(input)
+    }
 
     #[test]
     fn deserializes_full_claude_hook_input() {
@@ -123,5 +158,121 @@ mod tests {
             "longline: allowlisted"
         );
         assert_eq!(parsed["hookSpecificOutput"]["hookEventName"], "PreToolUse");
+    }
+
+    #[test]
+    fn maps_bash_to_shell_invocation_with_fields_preserved() {
+        let action = parse_action(serde_json::json!({
+            "session_id": "session-1",
+            "cwd": "/repo",
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": { "command": "ls -la" }
+        }));
+
+        match action {
+            ClaudeHookAction::Evaluate(evaluator::Invocation::Shell {
+                command,
+                cwd,
+                session_id,
+            }) => {
+                assert_eq!(command.as_deref(), Some("ls -la"));
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+                assert_eq!(session_id.as_deref(), Some("session-1"));
+            }
+            other => panic!("expected shell invocation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maps_read_to_read_path_invocation_with_fields_preserved() {
+        let action = parse_action(serde_json::json!({
+            "session_id": "session-2",
+            "cwd": "/repo",
+            "tool_name": "Read",
+            "tool_input": { "file_path": "/repo/src/main.rs" }
+        }));
+
+        match action {
+            ClaudeHookAction::Evaluate(evaluator::Invocation::ReadPath {
+                tool_name,
+                path,
+                cwd,
+                session_id,
+            }) => {
+                assert_eq!(tool_name, "Read");
+                assert_eq!(path.as_deref(), Some("/repo/src/main.rs"));
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+                assert_eq!(session_id.as_deref(), Some("session-2"));
+            }
+            other => panic!("expected read path invocation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maps_grep_to_search_path_invocation_with_fields_preserved() {
+        let action = parse_action(serde_json::json!({
+            "session_id": "session-3",
+            "cwd": "/repo",
+            "tool_name": "Grep",
+            "tool_input": { "pattern": "TODO", "path": "src/" }
+        }));
+
+        match action {
+            ClaudeHookAction::Evaluate(evaluator::Invocation::SearchPath {
+                tool_name,
+                path,
+                cwd,
+                session_id,
+            }) => {
+                assert_eq!(tool_name, "Grep");
+                assert_eq!(path.as_deref(), Some("src/"));
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+                assert_eq!(session_id.as_deref(), Some("session-3"));
+            }
+            other => panic!("expected search path invocation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maps_glob_to_search_path_invocation_with_fields_preserved() {
+        let action = parse_action(serde_json::json!({
+            "session_id": "session-4",
+            "cwd": "/repo",
+            "tool_name": "Glob",
+            "tool_input": { "pattern": "*.rs", "path": "src/" }
+        }));
+
+        match action {
+            ClaudeHookAction::Evaluate(evaluator::Invocation::SearchPath {
+                tool_name,
+                path,
+                cwd,
+                session_id,
+            }) => {
+                assert_eq!(tool_name, "Glob");
+                assert_eq!(path.as_deref(), Some("src/"));
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+                assert_eq!(session_id.as_deref(), Some("session-4"));
+            }
+            other => panic!("expected search path invocation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn classifies_unsupported_tool_as_passthrough_with_cwd_preserved() {
+        let action = parse_action(serde_json::json!({
+            "session_id": "session-5",
+            "cwd": "/repo",
+            "tool_name": "Write",
+            "tool_input": { "file_path": "/repo/out.txt" }
+        }));
+
+        match action {
+            ClaudeHookAction::Passthrough { cwd } => {
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+            }
+            other => panic!("expected passthrough, got {other:?}"),
+        }
     }
 }
