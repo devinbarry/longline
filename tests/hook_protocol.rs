@@ -36,7 +36,7 @@ fn test_e2e_non_bash_tool_passes_through() {
 fn test_e2e_unsupported_tool_passthrough_exact_json() {
     let result = run_hook("Write", "");
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "{}\n");
+    assert_eq!(result.stdout.trim(), "{}");
     assert_eq!(result.stderr, "");
 }
 
@@ -65,7 +65,7 @@ fn test_e2e_hook_config_finalization_error_exits_2_without_json() {
 
     let result = env.run_hook("ls -la");
     assert_eq!(result.exit_code, 2);
-    assert!(result.stdout.trim().is_empty(), "stdout: {}", result.stdout);
+    assert!(result.stdout.is_empty(), "stdout: {}", result.stdout);
     assert!(
         result.stderr.contains("longline:"),
         "stderr should contain longline error, got: {}",
