@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use longline::types::Decision;
+use longline::domain::{Decision, PolicyResult};
 use longline::{parser, policy};
 
 fn rules_path() -> PathBuf {
@@ -9,7 +9,7 @@ fn rules_path() -> PathBuf {
         .join("rules.yaml")
 }
 
-fn eval_cmd(command: &str) -> longline::types::PolicyResult {
+fn eval_cmd(command: &str) -> PolicyResult {
     let config = policy::load_rules(&rules_path()).expect("Failed to load default rules");
     let stmt = parser::parse(command).expect("Failed to parse command");
     policy::evaluate(&config, &stmt)
