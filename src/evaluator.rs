@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::logger;
+use longline::ai_judge;
 use longline::domain::Decision;
 use longline::domain::PolicyResult;
 use longline::parser;
@@ -132,8 +133,6 @@ pub(crate) fn evaluate_invocation(
         options.cli_safety_level,
     )
     .map_err(EvaluationError::Config)?;
-    let rules = final_config.rules;
-    let _project_ai_prompt = final_config.project_ai_prompt;
 
     match invocation {
         Invocation::Shell {
@@ -148,14 +147,17 @@ pub(crate) fn evaluate_invocation(
             command: Some(command),
             cwd,
             session_id,
-        } => evaluate_shell_command(
-            &rules,
+        } => evaluate_shell_command(ShellEvaluationRequest {
+            rules: &final_config.rules,
             home,
-            cwd.as_deref().unwrap_or(""),
-            &command,
+            cwd: cwd.as_deref().unwrap_or(""),
+            command: &command,
             session_id,
-            options.ask_on_deny,
-        ),
+            ask_on_deny: options.ask_on_deny,
+            ask_ai: options.ask_ai,
+            ask_ai_lenient: options.ask_ai_lenient,
+            project_ai_prompt: final_config.project_ai_prompt.as_deref(),
+        }),
         Invocation::ReadPath {
             tool_name: _,
             path: None,
@@ -242,33 +244,29 @@ fn evaluate_path(tool_name: &str, path: &str) -> EvaluationOutcome {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-fn evaluate_shell_command(
-    rules: &policy::RulesConfig,
-    home: &Path,
-    cwd: &str,
-    command: &str,
+struct ShellEvaluationRequest<'a> {
+    rules: &'a policy::RulesConfig,
+    home: &'a Path,
+    cwd: &'a str,
+    command: &'a str,
     session_id: Option<String>,
     ask_on_deny: bool,
+    ask_ai: bool,
+    ask_ai_lenient: bool,
+    project_ai_prompt: Option<&'a str>,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn evaluate_shell_command(
+    request: ShellEvaluationRequest<'_>,
 ) -> Result<EvaluationOutcome, EvaluationError> {
-    evaluate_shell_command_with_parse_result(
-        rules,
-        home,
-        cwd,
-        command,
-        session_id,
-        ask_on_deny,
-        parser::parse(command),
-    )
+    let parse_result = parser::parse(request.command);
+    evaluate_shell_command_with_parse_result(request, parse_result)
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
 fn evaluate_shell_command_with_parse_result(
-    rules: &policy::RulesConfig,
-    home: &Path,
-    cwd: &str,
-    command: &str,
-    session_id: Option<String>,
-    ask_on_deny: bool,
+    request: ShellEvaluationRequest<'_>,
     parse_result: Result<parser::Statement, String>,
 ) -> Result<EvaluationOutcome, EvaluationError> {
     let stmt = match parse_result {
@@ -277,15 +275,15 @@ fn evaluate_shell_command_with_parse_result(
             let log_reason = Some(format!("Parse error: {e}"));
             let entry = logger::make_entry(
                 "Bash",
-                cwd,
-                command,
+                request.cwd,
+                request.command,
                 Decision::Ask,
                 vec![],
                 log_reason.clone(),
                 false,
-                session_id,
+                request.session_id,
             );
-            logger::log_decision_to_home(&entry, home);
+            logger::log_decision_to_home(&entry, request.home);
 
             return Ok(EvaluationOutcome {
                 decision: Decision::Ask,
@@ -299,21 +297,89 @@ fn evaluate_shell_command_with_parse_result(
         }
     };
 
-    let result = policy::evaluate(rules, &stmt);
-    let overridden = ask_on_deny && result.decision == Decision::Deny;
+    let result = policy::evaluate(request.rules, &stmt);
+    let overridden = request.ask_on_deny && result.decision == Decision::Deny;
     let final_decision = if overridden {
         Decision::Ask
     } else {
         result.decision
     };
-    let reason = match final_decision {
-        Decision::Allow => format!("longline: {}", result.reason),
-        Decision::Ask | Decision::Deny if overridden => {
-            format!("[overridden] {}", format_reason(&result))
+
+    let (final_decision, ai_reason) = if request.ask_ai && final_decision == Decision::Ask {
+        let ai_config = ai_judge::load_config();
+        let ai_cwd = if request.cwd.is_empty() {
+            "."
+        } else {
+            request.cwd
+        };
+        let extracted =
+            ai_judge::extract_code(request.command, &stmt, ai_cwd, &ai_config).or_else(|| {
+                parser::wrappers::extract_inner_commands(&stmt)
+                    .iter()
+                    .find_map(|inner_stmt| {
+                        ai_judge::extract_code(request.command, inner_stmt, ai_cwd, &ai_config)
+                    })
+            });
+
+        match extracted {
+            Some(extracted) => {
+                let (ai_decision, reason) = if request.ask_ai_lenient {
+                    ai_judge::evaluate_lenient(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        ai_cwd,
+                        extracted.context.as_deref(),
+                        request.project_ai_prompt,
+                    )
+                } else {
+                    ai_judge::evaluate(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        ai_cwd,
+                        extracted.context.as_deref(),
+                        request.project_ai_prompt,
+                    )
+                };
+                if request.project_ai_prompt.is_some() {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
+                        extracted.language
+                    );
+                } else if request.ask_ai_lenient {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
+                        extracted.language
+                    );
+                } else {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code: {ai_decision}",
+                        extracted.language
+                    );
+                }
+                (ai_decision, Some(reason))
+            }
+            None => (final_decision, None),
         }
-        Decision::Ask | Decision::Deny => format_reason(&result),
+    } else {
+        (final_decision, None)
     };
-    let log_reason = if result.reason.is_empty() {
+
+    let reason = if let Some(ref ai_reason) = ai_reason {
+        format!("longline: {}", ai_reason)
+    } else {
+        match final_decision {
+            Decision::Allow => format!("longline: {}", result.reason),
+            Decision::Ask | Decision::Deny if overridden => {
+                format!("[overridden] {}", format_reason(&result))
+            }
+            Decision::Ask | Decision::Deny => format_reason(&result),
+        }
+    };
+    let log_reason = if let Some(ref ai_reason) = ai_reason {
+        Some(ai_reason.clone())
+    } else if result.reason.is_empty() {
         None
     } else {
         Some(result.reason.clone())
@@ -321,19 +387,19 @@ fn evaluate_shell_command_with_parse_result(
     let matched_rules: Vec<String> = result.rule_id.clone().into_iter().collect();
     let mut entry = logger::make_entry(
         "Bash",
-        cwd,
-        command,
+        request.cwd,
+        request.command,
         final_decision,
         matched_rules.clone(),
         log_reason.clone(),
         true,
-        session_id,
+        request.session_id,
     );
     if overridden {
         entry.original_decision = Some(result.decision);
         entry.overridden = true;
     }
-    logger::log_decision_to_home(&entry, home);
+    logger::log_decision_to_home(&entry, request.home);
 
     Ok(EvaluationOutcome {
         decision: final_decision,
@@ -459,14 +525,20 @@ mod tests {
     fn test_evaluate_shell_parse_error_logs_current_fields() {
         let home = tempfile::TempDir::new().unwrap();
         let command = "parse-error-command";
+        let config = base_config();
 
         let outcome = evaluate_shell_command_with_parse_result(
-            &base_config(),
-            home.path(),
-            "/tmp",
-            command,
-            Some("session-1".to_string()),
-            false,
+            ShellEvaluationRequest {
+                rules: &config,
+                home: home.path(),
+                cwd: "/tmp",
+                command,
+                session_id: Some("session-1".to_string()),
+                ask_on_deny: false,
+                ask_ai: false,
+                ask_ai_lenient: false,
+                project_ai_prompt: None,
+            },
             Err("synthetic parser failure".to_string()),
         )
         .unwrap();
