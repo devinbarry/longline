@@ -1,6 +1,7 @@
 mod common;
 use common::{
-    longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags, TestEnv,
+    longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags,
+    static_test_home, RunResult, TestEnv,
 };
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -54,6 +55,60 @@ fn test_e2e_unsupported_tool_config_finalization_error_exits_2_without_json() {
         "stderr should contain longline error prefix, got: {}",
         result.stderr
     );
+}
+
+#[test]
+fn test_e2e_hook_config_finalization_error_exits_2_without_json() {
+    let env = TestEnv::new()
+        .with_global_config("override_safety_level: not-a-real-level\n")
+        .build();
+
+    let result = env.run_hook("ls -la");
+    assert_eq!(result.exit_code, 2);
+    assert!(result.stdout.trim().is_empty(), "stdout: {}", result.stdout);
+    assert!(
+        result.stderr.contains("longline:"),
+        "stderr should contain longline error, got: {}",
+        result.stderr
+    );
+}
+
+#[test]
+fn test_e2e_bash_missing_command_reason_unchanged() {
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {},
+        "session_id": "test-session",
+        "cwd": "/tmp"
+    });
+
+    let home = static_test_home().to_string_lossy().to_string();
+    let mut child = Command::new(longline_bin())
+        .env("HOME", &home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.to_string().as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    let result = RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    };
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.decision(), "allow");
+    assert_eq!(result.reason(), "longline: no command");
 }
 
 #[test]
