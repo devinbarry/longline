@@ -1,13 +1,12 @@
 use clap::Parser as ClapParser;
 use clap::Subcommand;
-use std::io::Read;
 use std::path::PathBuf;
 
+use crate::adapters::claude;
 use crate::evaluator;
 use longline::domain::Decision;
 use longline::parser;
 use longline::policy;
-use longline::types::{HookInput, HookOutput};
 
 #[derive(ClapParser)]
 #[command(name = "longline", version, about = "Safety hook for Claude Code")]
@@ -370,103 +369,18 @@ pub fn run() -> i32 {
         ),
         Some(Commands::Files) => unreachable!(), // handled above
         Some(Commands::Init { .. }) => unreachable!(), // handled above
-        None => run_hook(
+        None => claude::run_hook(
             rules_config,
-            cli.ask_on_deny,
-            cli.ask_ai || cli.ask_ai_lenient,
-            cli.ask_ai_lenient,
-            cli_trust_level,
-            cli_safety_level,
-        ),
-    }
-}
-
-/// Run hook mode: read stdin, evaluate, output decision.
-fn run_hook(
-    rules_config: policy::RulesConfig,
-    ask_on_deny: bool,
-    ask_ai: bool,
-    ask_ai_lenient: bool,
-    cli_trust_level: Option<policy::TrustLevel>,
-    cli_safety_level: Option<policy::SafetyLevel>,
-) -> i32 {
-    // Read hook input from stdin
-    let mut input_str = String::new();
-    if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
-        let output = HookOutput::decision(Decision::Ask, "Failed to read stdin");
-        print_json(&output);
-        eprintln!("longline: failed to read stdin: {e}");
-        return 0;
-    }
-
-    let hook_input: HookInput = match serde_json::from_str(&input_str) {
-        Ok(h) => h,
-        Err(e) => {
-            let output =
-                HookOutput::decision(Decision::Ask, &format!("Failed to parse hook input: {e}"));
-            print_json(&output);
-            return 0;
-        }
-    };
-
-    let invocation = match hook_input.tool_name.as_str() {
-        "Read" => evaluator::Invocation::ReadPath {
-            tool_name: hook_input.tool_name.clone(),
-            path: hook_input.tool_input.file_path.clone(),
-            cwd: hook_input.cwd.clone(),
-            session_id: hook_input.session_id.clone(),
-        },
-        "Grep" | "Glob" => evaluator::Invocation::SearchPath {
-            tool_name: hook_input.tool_name.clone(),
-            path: hook_input.tool_input.path.clone(),
-            cwd: hook_input.cwd.clone(),
-            session_id: hook_input.session_id.clone(),
-        },
-        "Bash" => evaluator::Invocation::Shell {
-            command: hook_input.tool_input.command.clone(),
-            cwd: hook_input.cwd.clone(),
-            session_id: hook_input.session_id.clone(),
-        },
-        _ => {
-            let cwd = hook_input
-                .cwd
-                .as_ref()
-                .map(|s| std::path::Path::new(s.as_str()));
-            if let Err(e) = evaluator::finalize_config(
-                rules_config,
-                &home_dir(),
-                cwd,
+            &home_dir(),
+            claude::HookOptions {
+                ask_on_deny: cli.ask_on_deny,
+                ask_ai: cli.ask_ai || cli.ask_ai_lenient,
+                ask_ai_lenient: cli.ask_ai_lenient,
                 cli_trust_level,
                 cli_safety_level,
-            ) {
-                eprintln!("longline: {e}");
-                return 2;
-            }
-            println!("{{}}");
-            return 0;
-        }
-    };
-
-    let options = evaluator::EvaluationOptions {
-        ask_on_deny,
-        ask_ai,
-        ask_ai_lenient,
-        cli_trust_level,
-        cli_safety_level,
-    };
-
-    let outcome =
-        match evaluator::evaluate_invocation(rules_config, &home_dir(), invocation, options) {
-            Ok(outcome) => outcome,
-            Err(evaluator::EvaluationError::Config(e)) => {
-                eprintln!("longline: {e}");
-                return 2;
-            }
-        };
-
-    let output = HookOutput::decision(outcome.decision, &outcome.reason);
-    print_json(&output);
-    0
+            },
+        ),
+    }
 }
 
 fn run_check(
@@ -549,8 +463,8 @@ fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
                 );
             }
             let mut buf = String::new();
-            std::io::stdin()
-                .read_to_string(&mut buf)
+            let mut stdin = std::io::stdin();
+            std::io::Read::read_to_string(&mut stdin, &mut buf)
                 .map_err(|e| format!("Failed to read stdin: {e}"))?;
             Ok(buf)
         }
@@ -811,17 +725,6 @@ fn run_init(force: bool) -> i32 {
     println!("Edit {} to customize.", rules_yaml_path.display());
 
     0
-}
-
-/// Print a JSON value to stdout.
-fn print_json<T: serde::Serialize>(value: &T) {
-    match serde_json::to_string(value) {
-        Ok(json) => println!("{json}"),
-        Err(e) => {
-            eprintln!("longline: failed to serialize output: {e}");
-            println!("{{}}");
-        }
-    }
 }
 
 #[cfg(test)]
