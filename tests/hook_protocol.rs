@@ -1,7 +1,7 @@
 mod common;
 use common::{
-    longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags,
-    static_test_home, RunResult, TestEnv,
+    longline_bin, rules_path, run_hook, run_hook_with_config, run_hook_with_flags, RunResult,
+    TestEnv,
 };
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -36,7 +36,7 @@ fn test_e2e_non_bash_tool_passes_through() {
 fn test_e2e_unsupported_tool_passthrough_exact_json() {
     let result = run_hook("Write", "");
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout.trim(), "{}");
+    assert_eq!(result.stdout, "{}\n");
     assert_eq!(result.stderr, "");
 }
 
@@ -83,9 +83,17 @@ fn test_e2e_bash_missing_command_reason_unchanged() {
         "cwd": "/tmp"
     });
 
-    let home = static_test_home().to_string_lossy().to_string();
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("ai-judge.yaml"),
+        "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+    )
+    .unwrap();
+
     let mut child = Command::new(longline_bin())
-        .env("HOME", &home)
+        .env("HOME", home.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
