@@ -1,4 +1,5 @@
 mod cli;
+mod evaluator;
 mod logger;
 mod output;
 
