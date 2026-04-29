@@ -1,3 +1,4 @@
+mod adapters;
 mod cli;
 mod evaluator;
 mod logger;
