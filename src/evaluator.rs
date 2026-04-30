@@ -45,8 +45,6 @@ pub(crate) struct EvaluationOptions {
     pub ask_ai: bool,
     #[allow(dead_code)]
     pub ask_ai_lenient: bool,
-    pub cli_trust_level: Option<policy::TrustLevel>,
-    pub cli_safety_level: Option<policy::SafetyLevel>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,53 +59,26 @@ pub(crate) struct EvaluationOutcome {
     pub overridden: bool,
 }
 
-#[derive(Debug)]
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) enum EvaluationError {
-    Config(String),
-}
-
-impl std::fmt::Display for EvaluationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Config(message) => f.write_str(message),
-        }
-    }
-}
-
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn evaluate_invocation(
-    config: policy::RulesConfig,
-    home: &Path,
+    final_config: longline::config::FinalConfig,
+    audit_log_path: &Path,
     invocation: Invocation,
     options: EvaluationOptions,
-) -> Result<EvaluationOutcome, EvaluationError> {
-    let cwd = invocation.cwd().map(Path::new);
-    let final_config = longline::config::finalize_config(
-        config,
-        home,
-        cwd,
-        options.cli_trust_level,
-        options.cli_safety_level,
-    )
-    .map_err(EvaluationError::Config)?;
-
+) -> EvaluationOutcome {
     match invocation {
         Invocation::Shell {
             command: None,
             cwd: _,
             session_id: _,
-        } => Ok(EvaluationOutcome::simple(
-            Decision::Allow,
-            "longline: no command".to_string(),
-        )),
+        } => EvaluationOutcome::simple(Decision::Allow, "longline: no command".to_string()),
         Invocation::Shell {
             command: Some(command),
             cwd,
             session_id,
         } => evaluate_shell_command(ShellEvaluationRequest {
             rules: &final_config.rules,
-            home,
+            audit_log_path,
             cwd: cwd.as_deref().unwrap_or(""),
             command: &command,
             session_id,
@@ -121,10 +92,9 @@ pub(crate) fn evaluate_invocation(
             path: None,
             cwd: _,
             session_id: _,
-        } => Ok(EvaluationOutcome::simple(
-            Decision::Allow,
-            "longline: Read tool (no path)".to_string(),
-        )),
+        } => {
+            EvaluationOutcome::simple(Decision::Allow, "longline: Read tool (no path)".to_string())
+        }
         Invocation::ReadPath {
             tool_name,
             path: Some(path),
@@ -136,22 +106,22 @@ pub(crate) fn evaluate_invocation(
             path: Some(path),
             cwd: _,
             session_id: _,
-        } => Ok(evaluate_path(&tool_name, &path)),
+        } => evaluate_path(&tool_name, &path),
         Invocation::SearchPath {
             tool_name,
             path: None,
             cwd: _,
             session_id: _,
-        } => Ok(EvaluationOutcome::simple(
+        } => EvaluationOutcome::simple(
             Decision::Allow,
             format!("longline: {tool_name} allowed (no path)"),
-        )),
+        ),
     }
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl Invocation {
-    fn cwd(&self) -> Option<&str> {
+    pub(crate) fn cwd(&self) -> Option<&str> {
         match self {
             Self::Shell { cwd, .. } | Self::ReadPath { cwd, .. } | Self::SearchPath { cwd, .. } => {
                 cwd.as_deref()
@@ -204,7 +174,7 @@ fn evaluate_path(tool_name: &str, path: &str) -> EvaluationOutcome {
 #[cfg_attr(not(test), allow(dead_code))]
 struct ShellEvaluationRequest<'a> {
     rules: &'a policy::RulesConfig,
-    home: &'a Path,
+    audit_log_path: &'a Path,
     cwd: &'a str,
     command: &'a str,
     session_id: Option<String>,
@@ -215,9 +185,7 @@ struct ShellEvaluationRequest<'a> {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-fn evaluate_shell_command(
-    request: ShellEvaluationRequest<'_>,
-) -> Result<EvaluationOutcome, EvaluationError> {
+fn evaluate_shell_command(request: ShellEvaluationRequest<'_>) -> EvaluationOutcome {
     let parse_result = parser::parse(request.command);
     evaluate_shell_command_with_parse_result(request, parse_result)
 }
@@ -226,7 +194,7 @@ fn evaluate_shell_command(
 fn evaluate_shell_command_with_parse_result(
     request: ShellEvaluationRequest<'_>,
     parse_result: Result<parser::Statement, String>,
-) -> Result<EvaluationOutcome, EvaluationError> {
+) -> EvaluationOutcome {
     let stmt = match parse_result {
         Ok(stmt) => stmt,
         Err(e) => {
@@ -241,9 +209,9 @@ fn evaluate_shell_command_with_parse_result(
                 false,
                 request.session_id,
             );
-            log_decision_for_home(&entry, request.home);
+            logger::log_decision_to(&entry, request.audit_log_path);
 
-            return Ok(EvaluationOutcome {
+            return EvaluationOutcome {
                 decision: Decision::Ask,
                 reason: format!("Failed to parse bash command: {e}"),
                 log_reason,
@@ -251,7 +219,7 @@ fn evaluate_shell_command_with_parse_result(
                 parse_ok: false,
                 original_decision: None,
                 overridden: false,
-            });
+            };
         }
     };
 
@@ -358,9 +326,9 @@ fn evaluate_shell_command_with_parse_result(
         entry.original_decision = Some(result.decision);
         entry.overridden = true;
     }
-    log_decision_for_home(&entry, request.home);
+    logger::log_decision_to(&entry, request.audit_log_path);
 
-    Ok(EvaluationOutcome {
+    EvaluationOutcome {
         decision: final_decision,
         reason,
         log_reason,
@@ -368,7 +336,7 @@ fn evaluate_shell_command_with_parse_result(
         parse_ok: true,
         original_decision: overridden.then_some(result.decision),
         overridden,
-    })
+    }
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -376,15 +344,6 @@ fn format_reason(result: &PolicyResult) -> String {
     match &result.rule_id {
         Some(id) => format!("[{id}] {}", result.reason),
         None => result.reason.clone(),
-    }
-}
-
-fn log_decision_for_home(entry: &logger::LogEntry, home: &Path) {
-    let env_home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-    if env_home.as_deref() == Some(home) {
-        logger::log_decision(entry);
-    } else {
-        logger::log_decision_to_home(entry, home);
     }
 }
 
@@ -401,15 +360,22 @@ mod tests {
         policy::load_embedded_rules().expect("embedded rules should load")
     }
 
+    fn final_config(rules: policy::RulesConfig) -> longline::config::FinalConfig {
+        longline::config::FinalConfig {
+            rules,
+            project_ai_prompt: None,
+        }
+    }
+
     fn eval(invocation: Invocation) -> EvaluationOutcome {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             invocation,
             EvaluationOptions::default(),
         )
-        .expect("evaluation should succeed")
     }
 
     fn shell_invocation(command: &str) -> Invocation {
@@ -496,9 +462,10 @@ mod tests {
         command: &str,
         options: EvaluationOptions,
     ) -> EvaluationOutcome {
+        let log_path = home.join(".claude/hooks-logs/longline.jsonl");
         evaluate_invocation(
-            base_config(),
-            home,
+            final_config(base_config()),
+            &log_path,
             Invocation::Shell {
                 command: Some(command.to_string()),
                 cwd: Some(home.display().to_string()),
@@ -506,23 +473,22 @@ mod tests {
             },
             options,
         )
-        .expect("evaluation should succeed")
     }
 
     #[test]
     fn test_evaluate_missing_shell_command_allows_without_log() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         let outcome = evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             Invocation::Shell {
                 command: None,
                 cwd: Some("/tmp".to_string()),
                 session_id: Some("session-1".to_string()),
             },
             EvaluationOptions::default(),
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Allow);
         assert_eq!(outcome.reason, "longline: no command");
@@ -540,13 +506,13 @@ mod tests {
     #[test]
     fn test_evaluate_shell_allow_logs_current_fields() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         let outcome = evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             shell_invocation("ls -la"),
             EvaluationOptions::default(),
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Allow);
         assert!(outcome.reason.starts_with("longline: "));
@@ -573,13 +539,14 @@ mod tests {
     #[test]
     fn test_evaluate_shell_parse_error_logs_current_fields() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         let command = "parse-error-command";
         let config = base_config();
 
         let outcome = evaluate_shell_command_with_parse_result(
             ShellEvaluationRequest {
                 rules: &config,
-                home: home.path(),
+                audit_log_path: &log_path,
                 cwd: "/tmp",
                 command,
                 session_id: Some("session-1".to_string()),
@@ -589,8 +556,7 @@ mod tests {
                 project_ai_prompt: None,
             },
             Err("synthetic parser failure".to_string()),
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Ask);
         assert!(
@@ -643,18 +609,18 @@ mod tests {
     #[test]
     fn test_evaluate_shell_opaque_statement_uses_policy_ask_not_parse_error() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         assert!(matches!(
             parser::parse("if then").unwrap(),
             parser::Statement::Opaque(_)
         ));
 
         let outcome = evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             shell_invocation("if then"),
             EvaluationOptions::default(),
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Ask);
         assert_eq!(outcome.reason, "Unrecognized command structure");
@@ -671,16 +637,16 @@ mod tests {
     #[test]
     fn test_evaluate_shell_ask_on_deny_logs_override_fields() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         let outcome = evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             shell_invocation("rm -rf /"),
             EvaluationOptions {
                 ask_on_deny: true,
                 ..Default::default()
             },
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Ask);
         assert_eq!(outcome.original_decision, Some(Decision::Deny));
@@ -784,9 +750,10 @@ mod tests {
     #[test]
     fn test_evaluate_non_shell_flows_do_not_invoke_ai_judge() {
         with_fake_ai_judge("ALLOW: evaluator fake judge should not run", |fake| {
+            let log_path = log_path(&fake.home);
             let missing = evaluate_invocation(
-                base_config(),
-                fake.home.path(),
+                final_config(base_config()),
+                &log_path,
                 Invocation::Shell {
                     command: None,
                     cwd: Some(fake.home.path().display().to_string()),
@@ -797,13 +764,12 @@ mod tests {
                     ask_ai_lenient: true,
                     ..Default::default()
                 },
-            )
-            .unwrap();
+            );
             assert_eq!(missing.decision, Decision::Allow);
 
             let path = evaluate_invocation(
-                base_config(),
-                fake.home.path(),
+                final_config(base_config()),
+                &log_path,
                 Invocation::ReadPath {
                     tool_name: "Read".to_string(),
                     path: Some("/home/user/.ssh/id_rsa".to_string()),
@@ -815,8 +781,7 @@ mod tests {
                     ask_ai_lenient: true,
                     ..Default::default()
                 },
-            )
-            .unwrap();
+            );
             assert_eq!(path.decision, Decision::Ask);
             assert!(
                 !fake.called_path.exists(),
@@ -828,9 +793,10 @@ mod tests {
     #[test]
     fn test_evaluate_sensitive_read_path_asks_without_log() {
         let home = tempfile::TempDir::new().unwrap();
+        let log_path = log_path(&home);
         let outcome = evaluate_invocation(
-            base_config(),
-            home.path(),
+            final_config(base_config()),
+            &log_path,
             Invocation::ReadPath {
                 tool_name: "Read".to_string(),
                 path: Some("/home/user/.ssh/id_rsa".to_string()),
@@ -838,8 +804,7 @@ mod tests {
                 session_id: Some("session-1".to_string()),
             },
             EvaluationOptions::default(),
-        )
-        .unwrap();
+        );
 
         assert_eq!(outcome.decision, Decision::Ask);
         assert_eq!(

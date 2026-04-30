@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::evaluator;
+use crate::runtime;
 use longline::config;
 use longline::domain::Decision;
 use longline::policy;
@@ -100,26 +101,31 @@ fn run_hook_input(
 
     match action_from_input(hook_input) {
         ClaudeHookAction::Evaluate(invocation) => {
-            let eval_options = evaluator::EvaluationOptions {
-                ask_on_deny: options.ask_on_deny,
-                ask_ai: options.ask_ai,
-                ask_ai_lenient: options.ask_ai_lenient,
-                cli_trust_level: options.cli_trust_level,
-                cli_safety_level: options.cli_safety_level,
-            };
-
-            let outcome = match evaluator::evaluate_invocation(
+            let cwd_path = invocation.cwd().map(PathBuf::from);
+            let final_config = match config::finalize_config(
                 rules_config,
                 home,
-                invocation,
-                eval_options,
+                cwd_path.as_deref(),
+                options.cli_trust_level,
+                options.cli_safety_level,
             ) {
-                Ok(outcome) => outcome,
-                Err(evaluator::EvaluationError::Config(e)) => {
+                Ok(final_config) => final_config,
+                Err(e) => {
                     eprintln!("longline: {e}");
                     return 2;
                 }
             };
+            let audit_log_path = runtime::claude::audit_log_path(home);
+            let outcome = evaluator::evaluate_invocation(
+                final_config,
+                &audit_log_path,
+                invocation,
+                evaluator::EvaluationOptions {
+                    ask_on_deny: options.ask_on_deny,
+                    ask_ai: options.ask_ai,
+                    ask_ai_lenient: options.ask_ai_lenient,
+                },
+            );
 
             let output = ClaudeHookOutput::decision(outcome.decision, &outcome.reason);
             print_json(&output);
