@@ -28,38 +28,7 @@ pub struct LogEntry {
     pub session_id: Option<String>,
 }
 
-/// Default log directory.
-fn default_log_dir() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    log_dir_for_home(Path::new(&home))
-}
-
-fn log_dir_for_home(home: &Path) -> PathBuf {
-    home.join(".claude").join("hooks-logs")
-}
-
-/// Default log file path.
-fn log_file_path() -> PathBuf {
-    default_log_dir().join("longline.jsonl")
-}
-
-#[allow(dead_code)]
-fn log_file_path_for_home(home: &Path) -> PathBuf {
-    log_dir_for_home(home).join("longline.jsonl")
-}
-
-/// Write a log entry. Errors are printed to stderr but do not fail the process.
-pub fn log_decision(entry: &LogEntry) {
-    log_decision_to(entry, &log_file_path());
-}
-
-/// Write a log entry under a specific HOME directory.
-#[allow(dead_code)]
-pub fn log_decision_to_home(entry: &LogEntry, home: &Path) {
-    log_decision_to(entry, &log_file_path_for_home(home));
-}
-
-/// Write a log entry to a specific path (for testing).
+/// Write a log entry to a specific path.
 pub fn log_decision_to(entry: &LogEntry, path: &Path) {
     log_decision_to_with_rotation(
         entry,
@@ -284,30 +253,6 @@ mod tests {
 
         // Clean up
         let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_log_decision_to_home_uses_claude_hooks_log_path() {
-        let home = tempfile::TempDir::new().unwrap();
-        let entry = make_entry(
-            "Bash",
-            "/tmp/project",
-            "ls",
-            Decision::Allow,
-            vec![],
-            Some("safe".to_string()),
-            true,
-            Some("session-1".to_string()),
-        );
-
-        log_decision_to_home(&entry, home.path());
-
-        let path = home
-            .path()
-            .join(".claude")
-            .join("hooks-logs")
-            .join("longline.jsonl");
-        assert!(path.exists());
     }
 
     #[test]
