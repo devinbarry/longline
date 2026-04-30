@@ -7,8 +7,9 @@ pub use config::{
     find_project_root, load_embedded_rules, load_embedded_rules_with_info, load_global_config,
     load_project_config, load_rules, load_rules_with_info, merge_overlay_config,
     merge_project_config, AllowlistEntry, Allowlists, ArgsMatcher, FlagsMatcher, LoadedConfig,
-    LoadedFileInfo, Matcher, PipelineMatcher, ProjectConfig, RedirectMatcher, Rule, RuleSource,
-    RulesConfig, SafetyLevel, StageMatcher, StringOrList, TrustLevel,
+    LoadedFileInfo, Matcher, PartialRulesConfig, PipelineMatcher, ProjectAiJudgeConfig,
+    ProjectConfig, RedirectMatcher, Rule, RuleSource, RulesConfig, RulesManifestConfig,
+    SafetyLevel, StageMatcher, StringOrList, TrustLevel,
 };
 
 use crate::domain::{Decision, PolicyResult};
