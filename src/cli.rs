@@ -208,18 +208,12 @@ fn home_dir() -> PathBuf {
 
 /// Default config file path.
 fn default_config_path() -> PathBuf {
-    home_dir()
-        .join(".config")
-        .join("longline")
-        .join("rules.yaml")
+    config::default_rules_path(&home_dir())
 }
 
 /// Global config file path (~/.config/longline/longline.yaml).
 fn global_config_path() -> PathBuf {
-    home_dir()
-        .join(".config")
-        .join("longline")
-        .join("longline.yaml")
+    config::global_config_path(&home_dir())
 }
 
 /// Print global config summary if it exists.
@@ -334,16 +328,7 @@ pub fn run() -> i32 {
         let _project_ai_prompt = final_config.project_ai_prompt;
 
         // Track project config path for display banners
-        let pcp = project_dir.and_then(|dir| {
-            policy::find_project_root(&dir).and_then(|root| {
-                let path = root.join(".claude").join("longline.yaml");
-                if path.exists() {
-                    Some(path)
-                } else {
-                    None
-                }
-            })
-        });
+        let pcp = project_dir.and_then(|dir| config::existing_project_config_path(&dir));
 
         (rules_config, pcp)
     } else {
@@ -664,8 +649,7 @@ fn run_files(
     if let Some(dir) = resolve_dir(dir_override) {
         match policy::load_project_config(&dir) {
             Ok(Some(project_config)) => {
-                if let Some(root) = policy::find_project_root(&dir) {
-                    let config_path = root.join(".claude").join("longline.yaml");
+                if let Some(config_path) = config::existing_project_config_path(&dir) {
                     let display = config_path.display().to_string();
                     println!("\nProject config: {}", yansi::Paint::cyan(&display));
                     if let Some(level) = project_config.override_safety_level {
