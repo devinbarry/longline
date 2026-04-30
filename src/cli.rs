@@ -678,11 +678,11 @@ fn run_files(
 }
 
 fn run_init(force: bool) -> i32 {
-    let target_dir = default_config_path()
+    let rules_yaml_path = default_config_path();
+    let target_dir = rules_yaml_path
         .parent()
         .expect("default config path has parent")
         .to_path_buf();
-    let rules_yaml_path = target_dir.join("rules.yaml");
 
     if rules_yaml_path.exists() && !force {
         eprintln!(
