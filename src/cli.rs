@@ -3,7 +3,7 @@ use clap::Subcommand;
 use std::path::PathBuf;
 
 use crate::adapters::claude;
-use crate::evaluator;
+use longline::config;
 use longline::domain::Decision;
 use longline::parser;
 use longline::policy;
@@ -317,7 +317,7 @@ pub fn run() -> i32 {
     // For hook mode: pass base config to run_hook() which finalizes after reading cwd from stdin
     let (rules_config, project_config_path) = if cli.command.is_some() {
         let project_dir = resolve_dir(cli.dir.as_ref());
-        let final_config = match evaluator::finalize_config(
+        let final_config = match config::finalize_config(
             base_config,
             &home_dir(),
             project_dir.as_deref(),

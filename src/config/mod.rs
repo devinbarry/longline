@@ -1,4 +1,5 @@
 pub mod discovery;
+pub mod finalize;
 pub mod overlays;
 pub mod prompt;
 pub mod rules;
@@ -7,6 +8,7 @@ pub use discovery::{
     default_rules_path, existing_project_config_path, find_project_root, global_config_path,
     load_global_config, load_project_config, project_config_path,
 };
+pub use finalize::{finalize_config, FinalConfig};
 pub use overlays::{
     merge_overlay_config, merge_project_config, AllowlistEntry, Allowlists, ProjectAiJudgeConfig,
     ProjectConfig, RuleSource,

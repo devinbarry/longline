@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::evaluator;
+use longline::config;
 use longline::domain::Decision;
 use longline::policy;
 
@@ -126,7 +127,7 @@ fn run_hook_input(
         }
         ClaudeHookAction::Passthrough { cwd } => {
             let cwd_path = cwd.as_deref().map(PathBuf::from);
-            if let Err(e) = evaluator::finalize_config(
+            if let Err(e) = config::finalize_config(
                 rules_config,
                 home,
                 cwd_path.as_deref(),
