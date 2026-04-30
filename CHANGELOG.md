@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Internal
+
+- Split config schema/loading, overlay discovery, prompt validation, and
+  finalization into focused config modules.
+- Moved Claude audit log path ownership into a Claude runtime helper.
+- Evaluator now receives finalized config and an explicit audit log path
+  instead of discovering config or runtime filesystem paths.
+
 ## [0.15.2] - 2026-04-29
 
 ### Internal
