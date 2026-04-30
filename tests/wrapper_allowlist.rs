@@ -1,5 +1,6 @@
-mod common;
-use common::{run_hook, TestEnv};
+mod support;
+use support::claude::{run_claude_hook, ClaudeRunResultExt, ClaudeTestEnvExt};
+use support::config::TestEnv;
 
 #[test]
 fn test_e2e_wrapper_allowlist_specific_entry_allows() {
@@ -8,8 +9,8 @@ fn test_e2e_wrapper_allowlist_specific_entry_allows() {
             "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
         )
         .build();
-    let result = env.run_hook("uv run yamllint .gitlab-ci.yml");
-    result.assert_decision("allow");
+    let result = env.run_claude_hook("uv run yamllint .gitlab-ci.yml");
+    result.assert_claude_decision("allow");
 }
 
 #[test]
@@ -19,8 +20,8 @@ fn test_e2e_wrapper_allowlist_rejects_different_inner() {
             "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
         )
         .build();
-    let result = env.run_hook("uv run dangeroustool");
-    result.assert_decision("ask");
+    let result = env.run_claude_hook("uv run dangeroustool");
+    result.assert_claude_decision("ask");
 }
 
 #[test]
@@ -30,20 +31,20 @@ fn test_e2e_wrapper_allowlist_rules_still_deny() {
             "allowlists:\n  commands:\n    - { command: \"uv run yamllint\", trust: standard }\n",
         )
         .build();
-    let result = env.run_hook("uv run rm -rf /");
-    result.assert_decision("deny");
+    let result = env.run_claude_hook("uv run rm -rf /");
+    result.assert_claude_decision("deny");
 }
 
 #[test]
 fn test_e2e_wrapper_allowlist_timeout_unknown_still_asks() {
-    let result = run_hook("Bash", "timeout 10 some_unknown_command");
+    let result = run_claude_hook("Bash", "timeout 10 some_unknown_command");
     assert_eq!(result.exit_code, 0);
-    result.assert_decision("ask");
+    result.assert_claude_decision("ask");
 }
 
 #[test]
 fn test_e2e_wrapper_allowlist_timeout_safe_inner_allows() {
-    let result = run_hook("Bash", "timeout 30 ls");
+    let result = run_claude_hook("Bash", "timeout 30 ls");
     assert_eq!(result.exit_code, 0);
-    result.assert_decision("allow");
+    result.assert_claude_decision("allow");
 }
