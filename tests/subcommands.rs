@@ -1,7 +1,9 @@
-mod common;
-use common::{longline_bin, rules_path, run_subcommand, run_subcommand_with_home};
+mod support;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use support::bin::longline_bin;
+use support::cli::{run_subcommand, run_subcommand_with_home};
+use support::paths::rules_path;
 
 #[test]
 fn test_e2e_rules_shows_table() {
@@ -413,7 +415,9 @@ rules:
     )
     .unwrap();
 
-    let home = common::static_test_home().to_string_lossy().to_string();
+    let home = support::config::static_test_home()
+        .to_string_lossy()
+        .to_string();
     let child = Command::new(longline_bin())
         .args(["rules", "--config", &rules_path()])
         .env("HOME", &home)
