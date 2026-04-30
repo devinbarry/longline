@@ -387,7 +387,11 @@ mod tests {
     }
 
     fn log_path(home: &tempfile::TempDir) -> std::path::PathBuf {
-        home.path().join(".claude/hooks-logs/longline.jsonl")
+        log_path_for_home(home.path())
+    }
+
+    fn log_path_for_home(home: &Path) -> std::path::PathBuf {
+        home.join("longline-test.jsonl")
     }
 
     fn last_log_entry(home: &tempfile::TempDir) -> Value {
@@ -462,7 +466,7 @@ mod tests {
         command: &str,
         options: EvaluationOptions,
     ) -> EvaluationOutcome {
-        let log_path = home.join(".claude/hooks-logs/longline.jsonl");
+        let log_path = log_path_for_home(home);
         evaluate_invocation(
             final_config(base_config()),
             &log_path,
@@ -497,10 +501,7 @@ mod tests {
         assert!(outcome.parse_ok);
         assert_eq!(outcome.original_decision, None);
         assert!(!outcome.overridden);
-        assert!(!home
-            .path()
-            .join(".claude/hooks-logs/longline.jsonl")
-            .exists());
+        assert!(!log_path.exists());
     }
 
     #[test]
@@ -811,10 +812,7 @@ mod tests {
             outcome.reason,
             "longline: Read sensitive path (/.ssh/): /home/user/.ssh/id_rsa"
         );
-        assert!(!home
-            .path()
-            .join(".claude/hooks-logs/longline.jsonl")
-            .exists());
+        assert!(!log_path.exists());
     }
 
     #[test]
