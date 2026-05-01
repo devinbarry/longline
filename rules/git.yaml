@@ -17,6 +17,7 @@ allowlists:
     - { command: "git shortlog", trust: minimal }
     - { command: "git reflog", trust: minimal }
     - { command: "git ls-files", trust: minimal }
+    - { command: "git ls-remote", trust: minimal }
     - { command: "git ls-tree", trust: minimal }
     - { command: "git cat-file", trust: minimal }
     - { command: "git grep", trust: minimal }

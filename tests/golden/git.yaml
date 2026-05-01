@@ -79,6 +79,18 @@ tests:
     command: "git ls-files"
     expected:
       decision: allow
+  - id: git-ls-remote-safe
+    command: "git ls-remote"
+    expected:
+      decision: allow
+  - id: git-ls-remote-tags-origin
+    command: "git ls-remote --tags origin"
+    expected:
+      decision: allow
+  - id: git-ls-remote-piped-grep
+    command: "git ls-remote --tags origin | grep v0.4.1"
+    expected:
+      decision: allow
   - id: git-ls-tree-safe
     command: "git ls-tree HEAD"
     expected:
