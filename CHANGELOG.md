@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.6] - 2026-05-01
+
+### Added
+
+- Project-level longline overlay at `.claude/longline.yaml` that denies any
+  direct `git push` from inside the longline repo itself. All releases now
+  flow through `just release-prep <level>` → edit `CHANGELOG.md` →
+  `just release-finish`, shipping the version bump, tag, and push atomically.
+  `just release-finish` is unaffected because longline only sees the command
+  Claude submits to the Bash tool; the inner `git push` lives inside the
+  justfile recipe and is invisible to the hook.
+
 ## [0.15.5] - 2026-05-01
 
 ### Added
