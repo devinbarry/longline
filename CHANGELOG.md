@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.5] - 2026-05-01
+
+### Added
+
+- Allowlisted `git ls-remote` as a read-only ref query at minimal trust,
+  alongside `git ls-files` and `git ls-tree`. Surfaced from a JSONL-log audit
+  that found `git ls-remote --tags origin` (often piped to `grep`/`tail`)
+  repeatedly hitting "no matching rule" and asking for confirmation.
+
 ## [0.15.4] - 2026-05-01
 
 ### Internal
