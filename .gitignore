@@ -3,8 +3,9 @@
 # Rustrover files
 .idea/
 
-# Claude settings (user-specific)
-.claude/
+# Claude settings (user-specific) — but track the project longline overlay
+.claude/*
+!.claude/longline.yaml
 
 # Git worktrees
 .worktrees/
