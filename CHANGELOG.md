@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Internal
+
+- Reorganized the integration test harness and test files so Claude-specific
+  helpers are explicit ahead of future adapter work.
+
 ## [0.15.3] - 2026-04-30
 
 ### Internal
