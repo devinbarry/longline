@@ -391,6 +391,29 @@ fn extract_code_with_cwd_following(
 /// cat shadow.py` style construction can't widen the existing
 /// `read_safe_code_file` sandbox. Variables, command substitutions,
 /// subshells, and `cd` after the first `&&` are all rejected.
+///
+/// **Documented exclusions — narrower than real shell.** The following
+/// shapes also fall back to the original cwd, even though a real shell
+/// would honour them. Each is rare enough in agent-generated commands
+/// that broadening support has not been justified by real misses; the
+/// list is recorded here so future contributors can extend deliberately
+/// rather than treat the gaps as bugs:
+///   - **Backslash-escaped paths**: `cd My\ Repo && …` — the parser
+///     classifies escape sequences as `ArgMeta::UnsafeString`, which
+///     `resolve_cd_target` rejects together with `$expansions` and
+///     `$(substitutions)`. Quoted paths without escapes (`cd "My Repo"`,
+///     `cd 'My Repo'`) ARE honored.
+///   - **`cd` with redirects**: `cd repo >/dev/null && …` — rejected by
+///     the `!cmd.redirects.is_empty()` guard.
+///
+/// **Non-adversarial sandbox assumption.** The `is_under_safe_root`
+/// check canonicalises the cd target before accepting it, but
+/// `read_safe_code_file` re-canonicalises later when it actually opens
+/// a file. A concurrent rename or symlink swap between the two checks
+/// could in principle let the second canonicalize land somewhere the
+/// first would have rejected. The project's threat model is dev speed,
+/// not adversarial AI containment, so this race is not patched. Move to
+/// descriptor-based validation only if that threat model changes.
 #[cfg_attr(not(test), allow(dead_code))]
 fn effective_cwd_for_extract(stmt: &Statement, cwd: &str) -> String {
     let Statement::List(list) = stmt else {
@@ -1196,6 +1219,59 @@ mod tests {
             assert_eq!(ec.language, "python");
             assert!(
                 ec.code.contains("integration body marker"),
+                "extracted body must be the fixture, got: {}",
+                ec.code
+            );
+
+            let _ = fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn integration_cd_then_bash_c_module_extract_via_wrapper_unwrap() {
+            // Variant of the integration test above that forces extraction
+            // through the helper's `or_else` wrapper-unwrap fallback path:
+            // `bash -c '<inner>'` is not a python invocation itself, so
+            // the direct `extract_code(stmt, ...)` call returns None and
+            // the fallback walks `extract_inner_commands` to find the
+            // synthesized inner `python -m tests.foo` Statement. If a
+            // future regression passed `raw_cwd` instead of the post-cd
+            // `effective_cwd` to the inner-command extract_code call, the
+            // inner extraction would look under `/tmp` rather than the
+            // staged fixture dir and this test would fail.
+            use super::super::extract_code_with_cwd_following;
+            use longline::ai_judge;
+
+            let dir = PathBuf::from("/tmp").join("longline-cd-bashc-int-test");
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(dir.join("tests")).unwrap();
+            fs::write(
+                dir.join("tests").join("foo.py"),
+                "print('wrapper unwrap body marker')\n",
+            )
+            .unwrap();
+            let canonical_dir = fs::canonicalize(&dir).unwrap();
+
+            let cmd = format!(
+                "cd {} && bash -c 'python -m tests.foo'",
+                canonical_dir.display()
+            );
+            let stmt = parsed(&cmd);
+
+            let ai_config = ai_judge::load_config();
+            let result = extract_code_with_cwd_following(&cmd, &stmt, "/tmp", &ai_config);
+
+            let (ec, returned_cwd) = result.expect(
+                "wire-in's or_else wrapper-unwrap path must resolve tests.foo through bash -c",
+            );
+            assert_eq!(
+                returned_cwd,
+                canonical_dir.to_string_lossy(),
+                "wire-in must return the canonicalised cd target even when extraction \
+                 succeeds via the wrapper-unwrap fallback"
+            );
+            assert_eq!(ec.language, "python");
+            assert!(
+                ec.code.contains("wrapper unwrap body marker"),
                 "extracted body must be the fixture, got: {}",
                 ec.code
             );
