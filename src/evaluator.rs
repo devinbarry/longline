@@ -240,23 +240,12 @@ fn evaluate_shell_command_with_parse_result(
         } else {
             request.cwd
         };
-        // For `cd <literal> && <next>` shapes, point the script extractor
-        // at the post-cd directory so relative paths resolve. Falls back
-        // to raw_cwd for every other shape, including subshells, semis,
-        // variables, and any cd not at the top of an && list.
-        let effective_cwd = effective_cwd_for_extract(&stmt, raw_cwd);
-        let ai_cwd = effective_cwd.as_str();
-        let extracted =
-            ai_judge::extract_code(request.command, &stmt, ai_cwd, &ai_config).or_else(|| {
-                parser::wrappers::extract_inner_commands(&stmt)
-                    .iter()
-                    .find_map(|inner_stmt| {
-                        ai_judge::extract_code(request.command, inner_stmt, ai_cwd, &ai_config)
-                    })
-            });
+        let extracted_with_cwd =
+            extract_code_with_cwd_following(request.command, &stmt, raw_cwd, &ai_config);
 
-        match extracted {
-            Some(extracted) => {
+        match extracted_with_cwd {
+            Some((extracted, effective_cwd)) => {
+                let ai_cwd = effective_cwd.as_str();
                 let (ai_decision, reason) = if request.ask_ai_lenient {
                     ai_judge::evaluate_lenient(
                         &ai_config,
@@ -352,6 +341,36 @@ fn format_reason(result: &PolicyResult) -> String {
         Some(id) => format!("[{id}] {}", result.reason),
         None => result.reason.clone(),
     }
+}
+
+/// Wire-in helper: composes `effective_cwd_for_extract` with
+/// `ai_judge::extract_code` (and the wrapper-unwrap fallback) so the
+/// `--ask-ai` branch in `evaluate_shell_command` is a single function
+/// call. Centralising the plumbing means the integration test exercises
+/// the exact production path rather than re-composing it by hand — a
+/// hand-mirror would let a `raw_cwd` vs `effective_cwd` typo regress
+/// silently.
+///
+/// Returns `Some((extracted_code, effective_cwd))` so callers can reuse
+/// the same effective cwd when handing the extracted code to the AI
+/// evaluator. Returns `None` when no script can be extracted.
+#[cfg_attr(not(test), allow(dead_code))]
+fn extract_code_with_cwd_following(
+    raw_command: &str,
+    stmt: &Statement,
+    raw_cwd: &str,
+    config: &ai_judge::AiJudgeConfig,
+) -> Option<(ai_judge::ExtractedCode, String)> {
+    let effective_cwd = effective_cwd_for_extract(stmt, raw_cwd);
+    let extracted =
+        ai_judge::extract_code(raw_command, stmt, &effective_cwd, config).or_else(|| {
+            parser::wrappers::extract_inner_commands(stmt)
+                .iter()
+                .find_map(|inner| {
+                    ai_judge::extract_code(raw_command, inner, &effective_cwd, config)
+                })
+        });
+    extracted.map(|ec| (ec, effective_cwd))
 }
 
 /// For `cd <literal-path> && <next>` shapes, return the canonicalised
@@ -1133,19 +1152,22 @@ mod tests {
 
         #[test]
         fn integration_cd_then_module_extract_returns_fixture_body() {
-            // Stages a real fixture under /tmp, then mirrors the wire-in
-            // pattern from evaluator.rs:235-247:
+            // Stages a real fixture under /tmp, then drives the production
+            // wire-in helper `extract_code_with_cwd_following` directly —
+            // the same helper `evaluate_shell_command` calls in its
+            // `--ask-ai` branch. Calling the helper (rather than
+            // re-composing the steps by hand) means a `raw_cwd` vs
+            // `effective_cwd` typo regression in the wire-in is caught
+            // here.
             //
-            //     let effective_cwd = effective_cwd_for_extract(&stmt, raw_cwd);
-            //     let ai_cwd = effective_cwd.as_str();
-            //     let extracted = ai_judge::extract_code(cmd, &stmt, ai_cwd, &cfg);
-            //
-            // Asserts that the extracted code body is the fixture file —
-            // proving Change A (module resolution) and Change B
-            // (cwd-following) compose correctly. We do NOT call
+            // Asserts (a) the returned effective cwd is the canonicalised
+            // cd target and (b) the returned `ExtractedCode.code` body is
+            // the fixture file — proving Change A (module resolution) and
+            // Change B (cwd-following) compose end-to-end. We do NOT call
             // evaluate_shell_command directly because the --ask-ai branch
             // would invoke the real AI evaluator (codex exec), which we
             // cannot and should not run from a unit test.
+            use super::super::extract_code_with_cwd_following;
             use longline::ai_judge;
 
             let dir = PathBuf::from("/tmp").join("longline-cd-int-test");
@@ -1161,20 +1183,15 @@ mod tests {
             let cmd = format!("cd {} && python -m tests.foo", canonical_dir.display());
             let stmt = parsed(&cmd);
 
-            // Step one of the wire-in: compute the post-cd cwd.
-            let effective = effective_cwd_for_extract(&stmt, "/tmp");
-            assert_eq!(
-                effective,
-                canonical_dir.to_string_lossy(),
-                "effective_cwd must be the canonicalised cd target"
-            );
-
-            // Step two of the wire-in: extract code with the new cwd.
             let ai_config = ai_judge::load_config();
-            let extracted = ai_judge::extract_code(&cmd, &stmt, effective.as_str(), &ai_config);
+            let result = extract_code_with_cwd_following(&cmd, &stmt, "/tmp", &ai_config);
 
-            let ec = extracted.expect(
-                "extract_code must resolve tests.foo via cwd-following + module resolution",
+            let (ec, returned_cwd) = result
+                .expect("extract_code_with_cwd_following must resolve tests.foo via the wire-in");
+            assert_eq!(
+                returned_cwd,
+                canonical_dir.to_string_lossy(),
+                "wire-in must return the canonicalised cd target as the effective cwd"
             );
             assert_eq!(ec.language, "python");
             assert!(
