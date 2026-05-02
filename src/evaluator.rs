@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::logger;
 use longline::ai_judge;
 use longline::domain::Decision;
 use longline::domain::PolicyResult;
 use longline::parser;
+use longline::parser::{ArgMeta, ListOp, Statement};
 use longline::policy;
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -234,11 +235,17 @@ fn evaluate_shell_command_with_parse_result(
     // Mirrors the legacy CLI hook flow until Task 7 removes that path.
     let (final_decision, ai_reason) = if request.ask_ai && final_decision == Decision::Ask {
         let ai_config = ai_judge::load_config();
-        let ai_cwd = if request.cwd.is_empty() {
+        let raw_cwd = if request.cwd.is_empty() {
             "."
         } else {
             request.cwd
         };
+        // For `cd <literal> && <next>` shapes, point the script extractor
+        // at the post-cd directory so relative paths resolve. Falls back
+        // to raw_cwd for every other shape, including subshells, semis,
+        // variables, and any cd not at the top of an && list.
+        let effective_cwd = effective_cwd_for_extract(&stmt, raw_cwd);
+        let ai_cwd = effective_cwd.as_str();
         let extracted =
             ai_judge::extract_code(request.command, &stmt, ai_cwd, &ai_config).or_else(|| {
                 parser::wrappers::extract_inner_commands(&stmt)
@@ -345,6 +352,119 @@ fn format_reason(result: &PolicyResult) -> String {
         Some(id) => format!("[{id}] {}", result.reason),
         None => result.reason.clone(),
     }
+}
+
+/// For `cd <literal-path> && <next>` shapes, return the canonicalised
+/// post-cd directory so the AI judge's script extractor can resolve
+/// relative paths in `<next>`. For every other shape returns
+/// `cwd.to_string()` unchanged.
+///
+/// **Documented limitation — first `cd` only.** Only the `cd` at the
+/// head of the List is honored. `cd X && cd Y && cmd` updates the cwd
+/// to `X`, not `Y`; subsequent `cd`s within the same List are ignored.
+/// This diverges from real shell semantics but matches the design's
+/// "first && only" scope (see
+/// `docs/plans/2026-05-02-ai-judge-module-and-cd-following-design.md`).
+/// If real cases for chained-cd composition show up later, extend the
+/// helper to walk `list.rest` and accumulate cwd updates.
+///
+/// Confines the new cwd to `$HOME` or `/tmp`/`$TMPDIR` so a `cd /etc &&
+/// cat shadow.py` style construction can't widen the existing
+/// `read_safe_code_file` sandbox. Variables, command substitutions,
+/// subshells, and `cd` after the first `&&` are all rejected.
+#[cfg_attr(not(test), allow(dead_code))]
+fn effective_cwd_for_extract(stmt: &Statement, cwd: &str) -> String {
+    let Statement::List(list) = stmt else {
+        return cwd.to_string();
+    };
+    let Statement::SimpleCommand(cmd) = list.first.as_ref() else {
+        return cwd.to_string();
+    };
+    if cmd.name.as_deref() != Some("cd") {
+        return cwd.to_string();
+    }
+    if !cmd.redirects.is_empty() {
+        return cwd.to_string();
+    }
+    if cmd.argv.len() != 1 {
+        return cwd.to_string();
+    }
+    let Some((ListOp::And, _)) = list.rest.first() else {
+        return cwd.to_string();
+    };
+
+    let Some(resolved) = resolve_cd_target(&cmd.argv[0], cwd) else {
+        return cwd.to_string();
+    };
+    if !is_under_safe_root(&resolved) {
+        return cwd.to_string();
+    }
+    resolved.to_string_lossy().to_string()
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn resolve_cd_target(arg: &parser::Arg, cwd: &str) -> Option<PathBuf> {
+    // Only literal forms — PlainWord (cd subdir), RawString ('cd subdir'),
+    // SafeString ("cd subdir" with no escapes/expansions). UnsafeString
+    // covers $expansions, $(substitutions), concatenations, and
+    // brace/arithmetic forms; all rejected so `cd $REPO && cmd` and
+    // `cd $(pwd) && cmd` fall back to the original cwd.
+    if !matches!(
+        arg.meta,
+        ArgMeta::PlainWord | ArgMeta::RawString | ArgMeta::SafeString
+    ) {
+        return None;
+    }
+    let expanded = expand_tilde(&arg.text)?;
+    let candidate = if Path::new(&expanded).is_absolute() {
+        PathBuf::from(expanded)
+    } else {
+        Path::new(cwd).join(expanded)
+    };
+    std::fs::canonicalize(candidate).ok()
+}
+
+/// Local copy of `expand_tilde` from `ai_judge::extract::fs` — that
+/// helper is `pub(super)` and exposing it through the lib's public
+/// surface for one consumer in the binary crate is more churn than
+/// duplicating six lines.
+#[cfg_attr(not(test), allow(dead_code))]
+fn expand_tilde(path: &str) -> Option<String> {
+    if path == "~" {
+        return std::env::var("HOME").ok();
+    }
+    if let Some(rest) = path.strip_prefix("~/") {
+        let home = std::env::var("HOME").ok()?;
+        return Some(Path::new(&home).join(rest).to_string_lossy().to_string());
+    }
+    Some(path.to_string())
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn is_under_safe_root(path: &Path) -> bool {
+    if let Ok(home) = std::env::var("HOME") {
+        if let Ok(home) = std::fs::canonicalize(home) {
+            if path.starts_with(&home) {
+                return true;
+            }
+        }
+    }
+    if path.starts_with("/tmp") {
+        return true;
+    }
+    if let Ok(tmp) = std::fs::canonicalize("/tmp") {
+        if path.starts_with(&tmp) {
+            return true;
+        }
+    }
+    if let Ok(tmpdir) = std::env::var("TMPDIR") {
+        if let Ok(tmpdir) = std::fs::canonicalize(tmpdir) {
+            if path.starts_with(&tmpdir) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -852,5 +972,218 @@ mod tests {
 
         assert_eq!(outcome.decision, Decision::Allow);
         assert_eq!(outcome.reason, "longline: Grep allowed (no path)");
+    }
+
+    // ============================================================
+    // effective_cwd_for_extract — `cd <literal> && cmd` cwd-following
+    // (spec 2026-05-02)
+    // ============================================================
+
+    mod cd_following {
+        use super::super::effective_cwd_for_extract;
+        use longline::parser;
+        use std::fs;
+        use std::path::PathBuf;
+
+        fn unique_root(name: &str) -> PathBuf {
+            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("target")
+                .join("test-tmp")
+                .join("evaluator-cd")
+                .join(name);
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            // canonicalize so comparisons match what effective_cwd_for_extract
+            // returns (which canonicalises via std::fs::canonicalize).
+            fs::canonicalize(dir).unwrap()
+        }
+
+        fn parsed(cmd: &str) -> parser::Statement {
+            parser::parse(cmd).unwrap()
+        }
+
+        // ── Positive: cwd updated ──
+
+        #[test]
+        fn absolute_cd_under_tmp_updates_cwd() {
+            let target = unique_root("abs-tmp");
+            let cmd = format!("cd {} && python script.py", target.display());
+            let stmt = parsed(&cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(result, target.to_string_lossy());
+        }
+
+        #[test]
+        fn cd_under_repo_combines_with_module_extraction() {
+            // Smoke check — just confirm cwd changes; the actual
+            // extraction integration is exercised by Change A's tests.
+            let target = unique_root("repo-combined");
+            let cmd = format!("cd {} && uv run python -m tests.foo", target.display());
+            let stmt = parsed(&cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(result, target.to_string_lossy());
+        }
+
+        #[test]
+        fn tilde_cd_expands_to_home() {
+            // We can't pre-create a deterministic dir under $HOME without
+            // racing, so use $HOME itself which always exists and
+            // canonicalises cleanly.
+            let cmd = "cd ~ && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            let home = std::fs::canonicalize(std::env::var("HOME").unwrap())
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            assert_eq!(result, home);
+        }
+
+        #[test]
+        fn relative_cd_resolves_against_cwd() {
+            let parent = unique_root("rel-parent");
+            let sub = parent.join("sub");
+            fs::create_dir_all(&sub).unwrap();
+            let canonical_sub = fs::canonicalize(&sub).unwrap();
+            let cmd = "cd sub && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, parent.to_str().unwrap());
+            assert_eq!(result, canonical_sub.to_string_lossy());
+        }
+
+        #[test]
+        fn trailing_slash_normalised_via_canonicalize() {
+            let parent = unique_root("trailing-slash");
+            let sub = parent.join("sub");
+            fs::create_dir_all(&sub).unwrap();
+            let canonical_sub = fs::canonicalize(&sub).unwrap();
+            let cmd = "cd sub/ && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, parent.to_str().unwrap());
+            assert_eq!(result, canonical_sub.to_string_lossy());
+        }
+
+        // ── Negative: cwd unchanged ──
+
+        #[test]
+        fn variable_cd_target_falls_back() {
+            let cmd = "cd $REPO && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(result, "/tmp");
+        }
+
+        #[test]
+        fn semicolon_separator_falls_back() {
+            // `cd /tmp; cmd` — not &&, so no cwd update.
+            let cmd = "cd /tmp; python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/var/tmp");
+            assert_eq!(result, "/var/tmp");
+        }
+
+        #[test]
+        fn subshell_cd_does_not_propagate() {
+            // `(cd /tmp && cmd)` — outer is a Subshell, not a List
+            // starting with cd. Falls back.
+            let cmd = "(cd /tmp && python script.py)";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/var/tmp");
+            assert_eq!(result, "/var/tmp");
+        }
+
+        #[test]
+        fn cd_not_first_in_list_falls_back() {
+            // `cmd1 && cd /tmp && cmd2` — first stmt isn't cd, so we
+            // don't crawl forward.
+            let cmd = "echo go && cd /tmp && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/var/tmp");
+            assert_eq!(result, "/var/tmp");
+        }
+
+        #[test]
+        fn cd_outside_safe_root_falls_back() {
+            // `/etc` exists and canonicalises, but is outside $HOME and
+            // /tmp confinement → treated as suspicious → fall back.
+            let cmd = "cd /etc && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(result, "/tmp");
+        }
+
+        #[test]
+        fn nonexistent_cd_target_falls_back() {
+            let cmd = "cd /tmp/this-path-does-not-exist-xyzzy && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(result, "/tmp");
+        }
+
+        #[test]
+        fn multi_arg_cd_falls_back() {
+            // Malformed: `cd /tmp/foo /tmp/bar && cmd` — argv.len() != 1.
+            let cmd = "cd /tmp /var && python script.py";
+            let stmt = parsed(cmd);
+            let result = effective_cwd_for_extract(&stmt, "/var/tmp");
+            assert_eq!(result, "/var/tmp");
+        }
+
+        // ── Integration: A+B composition through the wire-in pattern ──
+
+        #[test]
+        fn integration_cd_then_module_extract_returns_fixture_body() {
+            // Stages a real fixture under /tmp, then mirrors the wire-in
+            // pattern from evaluator.rs:235-247:
+            //
+            //     let effective_cwd = effective_cwd_for_extract(&stmt, raw_cwd);
+            //     let ai_cwd = effective_cwd.as_str();
+            //     let extracted = ai_judge::extract_code(cmd, &stmt, ai_cwd, &cfg);
+            //
+            // Asserts that the extracted code body is the fixture file —
+            // proving Change A (module resolution) and Change B
+            // (cwd-following) compose correctly. We do NOT call
+            // evaluate_shell_command directly because the --ask-ai branch
+            // would invoke the real AI evaluator (codex exec), which we
+            // cannot and should not run from a unit test.
+            use longline::ai_judge;
+
+            let dir = PathBuf::from("/tmp").join("longline-cd-int-test");
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(dir.join("tests")).unwrap();
+            fs::write(
+                dir.join("tests").join("foo.py"),
+                "print('integration body marker')\n",
+            )
+            .unwrap();
+            let canonical_dir = fs::canonicalize(&dir).unwrap();
+
+            let cmd = format!("cd {} && python -m tests.foo", canonical_dir.display());
+            let stmt = parsed(&cmd);
+
+            // Step one of the wire-in: compute the post-cd cwd.
+            let effective = effective_cwd_for_extract(&stmt, "/tmp");
+            assert_eq!(
+                effective,
+                canonical_dir.to_string_lossy(),
+                "effective_cwd must be the canonicalised cd target"
+            );
+
+            // Step two of the wire-in: extract code with the new cwd.
+            let ai_config = ai_judge::load_config();
+            let extracted = ai_judge::extract_code(&cmd, &stmt, effective.as_str(), &ai_config);
+
+            let ec = extracted.expect(
+                "extract_code must resolve tests.foo via cwd-following + module resolution",
+            );
+            assert_eq!(ec.language, "python");
+            assert!(
+                ec.code.contains("integration body marker"),
+                "extracted body must be the fixture, got: {}",
+                ec.code
+            );
+
+            let _ = fs::remove_dir_all(&dir);
+        }
     }
 }
