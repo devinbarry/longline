@@ -129,6 +129,29 @@ allowlists:
     - { command: "git-cliff --unreleased", trust: standard, reason: "Generates changelog for unreleased changes" }
     - { command: "git-cliff --latest", trust: standard, reason: "Generates changelog for the latest release" }
     - { command: "git-cliff --current", trust: standard, reason: "Generates changelog for the current version" }
+    # ── chezmoi (dotfile manager): read-only subcommands ─────────
+    # Mutating subcommands (apply, init, add, edit, update, forget,
+    # re-add, merge, import, archive, secret, chattr, edit-config,
+    # upgrade, purge, state) are deliberately NOT allowlisted and
+    # fall through to the default (ask).
+    - { command: "chezmoi --version", trust: minimal }
+    - { command: "chezmoi --help", trust: minimal }
+    - { command: "chezmoi -h", trust: minimal }
+    - { command: "chezmoi managed", trust: minimal }
+    - { command: "chezmoi unmanaged", trust: minimal }
+    - { command: "chezmoi list", trust: minimal }
+    - { command: "chezmoi status", trust: minimal }
+    - { command: "chezmoi diff", trust: minimal }
+    - { command: "chezmoi cat", trust: minimal }
+    - { command: "chezmoi cat-config", trust: minimal }
+    - { command: "chezmoi data", trust: minimal }
+    - { command: "chezmoi doctor", trust: minimal }
+    - { command: "chezmoi dump", trust: minimal }
+    - { command: "chezmoi dump-config", trust: minimal }
+    - { command: "chezmoi source-path", trust: minimal }
+    - { command: "chezmoi target-path", trust: minimal }
+    - { command: "chezmoi verify", trust: minimal }
+    - { command: "chezmoi execute-template", trust: minimal }
 
 rules:
   # ============================================================

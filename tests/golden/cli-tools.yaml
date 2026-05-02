@@ -123,3 +123,160 @@ tests:
     command: "pfp unknown-command"
     expected:
       decision: ask
+
+  # ════════════════════════════════════════════════════════════════
+  # chezmoi: read-only subcommands allowed
+  # (allowlisted in rules/cli-tools.yaml)
+  # ════════════════════════════════════════════════════════════════
+  # Positive tests (read-only inspection — should allow)
+  - id: chezmoi-version-safe
+    command: "chezmoi --version"
+    expected:
+      decision: allow
+  - id: chezmoi-help-safe
+    command: "chezmoi --help"
+    expected:
+      decision: allow
+  - id: chezmoi-managed-safe
+    command: "chezmoi managed"
+    expected:
+      decision: allow
+  - id: chezmoi-managed-with-args-safe
+    command: "chezmoi managed ~/.claude/skills/babysit/"
+    expected:
+      decision: allow
+  - id: chezmoi-unmanaged-safe
+    command: "chezmoi unmanaged"
+    expected:
+      decision: allow
+  - id: chezmoi-list-safe
+    command: "chezmoi list"
+    expected:
+      decision: allow
+  - id: chezmoi-status-safe
+    command: "chezmoi status"
+    expected:
+      decision: allow
+  - id: chezmoi-diff-safe
+    command: "chezmoi diff"
+    expected:
+      decision: allow
+  - id: chezmoi-diff-path-safe
+    command: "chezmoi diff ~/.zshrc"
+    expected:
+      decision: allow
+  - id: chezmoi-cat-safe
+    command: "chezmoi cat ~/.zshrc"
+    expected:
+      decision: allow
+  - id: chezmoi-cat-config-safe
+    command: "chezmoi cat-config"
+    expected:
+      decision: allow
+  - id: chezmoi-data-safe
+    command: "chezmoi data"
+    expected:
+      decision: allow
+  - id: chezmoi-doctor-safe
+    command: "chezmoi doctor"
+    expected:
+      decision: allow
+  - id: chezmoi-dump-safe
+    command: "chezmoi dump"
+    expected:
+      decision: allow
+  - id: chezmoi-dump-config-safe
+    command: "chezmoi dump-config"
+    expected:
+      decision: allow
+  - id: chezmoi-source-path-safe
+    command: "chezmoi source-path"
+    expected:
+      decision: allow
+  - id: chezmoi-target-path-safe
+    command: "chezmoi target-path"
+    expected:
+      decision: allow
+  - id: chezmoi-verify-safe
+    command: "chezmoi verify"
+    expected:
+      decision: allow
+  - id: chezmoi-execute-template-safe
+    command: "chezmoi execute-template '{{ .chezmoi.os }}'"
+    expected:
+      decision: allow
+  # Common pipeline use (read-only stage piped to allowlisted filters)
+  - id: chezmoi-managed-grep-pipe-safe
+    command: "chezmoi managed | grep -i claude"
+    expected:
+      decision: allow
+  - id: chezmoi-diff-head-pipe-safe
+    command: "chezmoi diff | head -50"
+    expected:
+      decision: allow
+
+  # Negative tests (mutating subcommands — should ask)
+  - id: chezmoi-bare-ask
+    command: "chezmoi"
+    expected:
+      decision: ask
+  - id: chezmoi-apply-ask
+    command: "chezmoi apply"
+    expected:
+      decision: ask
+  - id: chezmoi-init-ask
+    command: "chezmoi init"
+    expected:
+      decision: ask
+  - id: chezmoi-add-ask
+    command: "chezmoi add ~/.zshrc"
+    expected:
+      decision: ask
+  - id: chezmoi-edit-ask
+    command: "chezmoi edit ~/.zshrc"
+    expected:
+      decision: ask
+  - id: chezmoi-update-ask
+    command: "chezmoi update"
+    expected:
+      decision: ask
+  - id: chezmoi-forget-ask
+    command: "chezmoi forget ~/.zshrc"
+    expected:
+      decision: ask
+  - id: chezmoi-re-add-ask
+    command: "chezmoi re-add"
+    expected:
+      decision: ask
+  - id: chezmoi-merge-ask
+    command: "chezmoi merge ~/.zshrc"
+    expected:
+      decision: ask
+  - id: chezmoi-import-ask
+    command: "chezmoi import dotfiles.tar.gz"
+    expected:
+      decision: ask
+  - id: chezmoi-purge-ask
+    command: "chezmoi purge"
+    expected:
+      decision: ask
+  - id: chezmoi-upgrade-ask
+    command: "chezmoi upgrade"
+    expected:
+      decision: ask
+  - id: chezmoi-state-ask
+    command: "chezmoi state delete-bucket --bucket=entryState"
+    expected:
+      decision: ask
+  - id: chezmoi-secret-ask
+    command: "chezmoi secret keyring set --service test --user me"
+    expected:
+      decision: ask
+  - id: chezmoi-edit-config-ask
+    command: "chezmoi edit-config"
+    expected:
+      decision: ask
+  - id: chezmoi-unknown-ask
+    command: "chezmoi some-future-subcommand"
+    expected:
+      decision: ask
