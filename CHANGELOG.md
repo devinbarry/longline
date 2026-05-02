@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.7] - 2026-05-02
+
+### Added
+
+- Allowlisted chezmoi's read-only subcommands (`managed`, `diff`, `status`,
+  `cat`, `doctor`, `dump`, `data`, etc.). Mutating subcommands (`apply`,
+  `init`, `add`, `edit`, `update`, `forget`, `merge`) keep asking.
+- AI judge resolves `python -m foo.bar` to in-repo source via the flat-layout
+  and `src/`-layout candidate chains, so module-form invocations of repo code
+  (`uv run python -m tests.fixtures.foo`, `python -m afterhours hook`, etc.)
+  reach the LLM with the actual file body instead of asking the user.
+  Installed-package modules (`pip`, `pytest`, `http.server`) intentionally
+  keep asking.
+- AI judge follows `cd <literal-path> && <next>` so commands prefixed by a
+  literal `cd` see the post-cd directory when the script extractor looks for
+  relative paths. Confined to `$HOME` / `/tmp` / `$TMPDIR`. Variables,
+  command substitutions, subshells, `cd` after the first `&&`, backslash-
+  escaped paths (`cd My\ Repo`), and `cd` with redirects all fall back to
+  the original cwd by design — these gaps are documented in the source
+  comment on `effective_cwd_for_extract`.
+
+### Internal
+
+- GitLab CI gains a reusable `.freezedeployment` template and wires it into
+  `sync_to_github` (the de-facto deploy step). Setting the `CI_DEPLOY_FREEZE`
+  CI/CD variable to any non-empty value flips the job to manual and fails
+  it on run, even if someone clicks the manual button. Test and build jobs
+  are intentionally not gated.
+- Refactored the `--ask-ai` extraction wire-in into a single helper
+  `extract_code_with_cwd_following` so integration tests exercise the
+  production code path (a `raw_cwd` vs `effective_cwd` typo regression now
+  fails a test). Two new integration tests cover both the direct extraction
+  path and the `or_else` wrapper-unwrap fallback.
+
 ## [0.15.6] - 2026-05-01
 
 ### Added
