@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 use crate::parser::Statement;
 
 use super::super::config::AiJudgeConfig;
@@ -179,12 +181,27 @@ fn extract_python_script_from_simple_command(
     if !command_name_matches("python", cmd_name) {
         return None;
     }
-    if argv.iter().any(|a| a == "-c" || a == "-m") {
+    if argv.iter().any(|a| a == "-c") {
         return None;
     }
 
     if is_django_shell_consumer(&unwrapped) {
         return None;
+    }
+
+    // `python -m foo.bar` — resolve the module to an in-repo file and
+    // feed the file body to the judge the same way `python script.py` is
+    // handled. Falls through to None if resolution fails.
+    if let Some(module) = extract_python_module_arg(argv) {
+        let cwd_path = Path::new(cwd);
+        let resolved = resolve_module_to_path(module, cwd_path)?;
+        let resolved_str = resolved.to_str()?;
+        let code = read_safe_code_file(resolved_str, cwd)?;
+        return Some(ExtractedCode {
+            language: cmd_name.to_string(),
+            code,
+            context: None,
+        });
     }
 
     if let Some(script_path) = extract_python_script_path(argv) {
@@ -226,6 +243,78 @@ fn extract_python_script_from_simple_command(
         language: cmd_name.to_string(),
         code,
         context: None,
+    })
+}
+
+/// Find the value of `-m <module>` in argv, walking flag conventions
+/// the same way `extract_python_script_path` does.
+fn extract_python_module_arg(argv: &[String]) -> Option<&str> {
+    let mut i = 0;
+    while i < argv.len() {
+        let arg = argv.get(i)?.as_str();
+        if arg == "--" {
+            return None;
+        }
+        if arg == "-m" {
+            return argv.get(i + 1).map(|s| s.as_str());
+        }
+        if arg == "-c" {
+            return None;
+        }
+        if arg == "-W" || arg == "-X" {
+            i += 2;
+            continue;
+        }
+        if arg.starts_with('-') {
+            i += 1;
+            continue;
+        }
+        return None;
+    }
+    None
+}
+
+/// Resolve a dotted module name to an in-repo source file. Returns the
+/// first existing path from this ordered list:
+///
+/// 1. `<cwd>/foo/bar.py`
+/// 2. `<cwd>/foo/bar/__main__.py`
+/// 3. `<cwd>/src/foo/bar.py`
+/// 4. `<cwd>/src/foo/bar/__main__.py`
+///
+/// Returns `None` if the module name is invalid or no candidate exists.
+pub(super) fn resolve_module_to_path(module: &str, cwd: &Path) -> Option<PathBuf> {
+    if !is_valid_module_name(module) {
+        return None;
+    }
+    let mut rel = PathBuf::new();
+    for segment in module.split('.') {
+        rel.push(segment);
+    }
+    let candidates = [
+        cwd.join(&rel).with_extension("py"),
+        cwd.join(&rel).join("__main__.py"),
+        cwd.join("src").join(&rel).with_extension("py"),
+        cwd.join("src").join(&rel).join("__main__.py"),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Match Python's grammar for a dotted module reference: each segment
+/// must start with an ASCII letter or underscore and consist of
+/// letters, digits, and underscores. Empty segments (e.g. `foo..bar`)
+/// and leading/trailing dots are rejected.
+fn is_valid_module_name(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+    s.split('.').all(|seg| {
+        let mut chars = seg.chars();
+        match chars.next() {
+            Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+            _ => return false,
+        }
+        chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
 }
 

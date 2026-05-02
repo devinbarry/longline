@@ -129,3 +129,31 @@ tests:
     expected:
       decision: ask
     note: "Here-string fed python triggers AI judge extraction"
+
+  # ── `python -m foo.bar` policy decision is unchanged ──
+  # The judge handles extraction in --ask-ai mode; without --ask-ai the
+  # policy default still asks. Goldens lock in that we did not widen
+  # any allowlist for module-form invocations.
+  - id: python-m-bare-policy-still-asks
+    command: "python -m tests.foo"
+    expected:
+      decision: ask
+    note: "python -m at policy level is still ask"
+
+  - id: python-m-uv-run-policy-still-asks
+    command: "uv run python -m tests.foo"
+    expected:
+      decision: ask
+    note: "uv run python -m at policy level is still ask"
+
+  - id: python-m-pip-install-policy-still-asks
+    command: "python -m pip install evil-pkg"
+    expected:
+      decision: ask
+    note: "python -m pip install must keep asking; never widened"
+
+  - id: python-m-http-server-policy-still-asks
+    command: "python3 -m http.server 8000"
+    expected:
+      decision: ask
+    note: "python -m http.server must keep asking; never widened"
