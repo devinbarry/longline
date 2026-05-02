@@ -398,13 +398,25 @@ fn extract_code_with_cwd_following(
 /// that broadening support has not been justified by real misses; the
 /// list is recorded here so future contributors can extend deliberately
 /// rather than treat the gaps as bugs:
-///   - **Backslash-escaped paths**: `cd My\ Repo && …` — the parser
-///     classifies escape sequences as `ArgMeta::UnsafeString`, which
-///     `resolve_cd_target` rejects together with `$expansions` and
-///     `$(substitutions)`. Quoted paths without escapes (`cd "My Repo"`,
-///     `cd 'My Repo'`) ARE honored.
+///   - **Backslash-escaped paths**: `cd My\ Repo && …` — `tree-sitter-
+///     bash` keeps backslash-escapes inside a bareword, so the arg
+///     reaches `resolve_cd_target` as `ArgMeta::PlainWord` with text
+///     `"My\ Repo"` (backslash literal). The arg passes the meta check;
+///     the fall-back happens one step later when `std::fs::canonicalize`
+///     is asked to resolve a path containing a literal backslash and
+///     fails. Implication for future contributors: broadening support
+///     for escape-shell-quoted paths means an unescape pass before
+///     `canonicalize`, NOT changing the meta-allowlist. Quoted paths
+///     without escapes (`cd "My Repo"`, `cd 'My Repo'`) ARE honored —
+///     they reach the helper as `SafeString` / `RawString` with the
+///     space already literal.
 ///   - **`cd` with redirects**: `cd repo >/dev/null && …` — rejected by
 ///     the `!cmd.redirects.is_empty()` guard.
+///   - **`$expansions` / `$(substitutions)`**: `cd $REPO && …`,
+///     `cd $(pwd) && …` reach the helper as `ArgMeta::UnsafeString` and
+///     are rejected by the meta-allowlist. (This is the case that
+///     `UnsafeString` was actually built for; backslash-escapes are a
+///     separate case as noted above.)
 ///
 /// **Non-adversarial sandbox assumption.** The `is_under_safe_root`
 /// check canonicalises the cd target before accepting it, but
