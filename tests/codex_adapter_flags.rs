@@ -261,3 +261,42 @@ fn ask_ai_permission_request_judge_asks_preserves_no_decision() {
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["decision"], "ask");
 }
+
+// ---------- --ask-ai-lenient × judge × event ----------
+// Spec §Test Plan Layer 4 line 423: "at minimum one allow and one deny case
+// to confirm flag plumbing matches `--ask-ai`." Per the AI-judge contract
+// pushback documented above, the deny-half is replaced with judge-asks.
+
+#[test]
+fn ask_ai_lenient_pre_tool_use_judge_allows_emits_no_decision() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ALLOW: codex fake lenient allowed")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PreToolUse", "python3 -c 'print(1)'"),
+        &["--ask-ai-lenient"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    result.assert_codex_no_decision();
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "allow");
+}
+
+#[test]
+fn ask_ai_lenient_permission_request_judge_asks_preserves_no_decision() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ASK: codex fake lenient needs review")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PermissionRequest", "python3 -c 'print(1)'"),
+        &["--ask-ai-lenient"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    result.assert_codex_no_decision();
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "ask");
+}

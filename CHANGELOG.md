@@ -44,6 +44,15 @@ All notable changes to this project will be documented in this file.
   recommend the explicit `longline hook claude` / `longline hook codex`
   form. The bare form will be deprecated in a later release and
   eventually require an explicit `hook` subcommand.
+- `Invocation::cwd()` now treats an empty string as "no cwd" so a
+  `cwd: ""` payload from any runtime cannot be silently resolved against
+  the longline process's own cwd by project-config discovery. Claude in
+  practice always sends an absolute cwd, so this is a latent-bug fix
+  rather than an observable behavior change for existing installs;
+  mentioned for completeness. The `--ask-ai` code-extraction path was
+  also hardened: an empty cwd now skips AI extraction entirely (was
+  previously substituted to `"."`, which canonicalized against the
+  launcher's cwd).
 
 ## [0.15.9] - 2026-05-04
 

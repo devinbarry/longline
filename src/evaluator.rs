@@ -151,6 +151,15 @@ impl Invocation {
             _ => "",
         }
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn session_id(&self) -> Option<&str> {
+        match self {
+            Self::Shell { session_id, .. }
+            | Self::ReadPath { session_id, .. }
+            | Self::SearchPath { session_id, .. } => session_id.as_deref(),
+        }
+    }
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -257,61 +266,63 @@ fn evaluate_shell_command_with_parse_result(
     };
 
     // Mirrors the legacy CLI hook flow until Task 7 removes that path.
-    let (final_decision, ai_reason) = if request.ask_ai && final_decision == Decision::Ask {
-        let ai_config = ai_judge::load_config();
-        let raw_cwd = if request.cwd.is_empty() {
-            "."
-        } else {
-            request.cwd
-        };
-        let extracted_with_cwd =
-            extract_code_with_cwd_following(request.command, &stmt, raw_cwd, &ai_config);
+    let (final_decision, ai_reason) =
+        if request.ask_ai && final_decision == Decision::Ask && !request.cwd.is_empty() {
+            // Empty cwd skips AI extraction entirely. Earlier versions
+            // substituted "." here, but that caused read_safe_code_file and
+            // effective_cwd_for_extract to canonicalize against the longline
+            // process's own cwd — a real leak when a runtime sends `cwd: ""`
+            // (Codex). Falling through preserves the original policy ask
+            // without consulting any path the runtime didn't authorize.
+            let ai_config = ai_judge::load_config();
+            let extracted_with_cwd =
+                extract_code_with_cwd_following(request.command, &stmt, request.cwd, &ai_config);
 
-        match extracted_with_cwd {
-            Some((extracted, effective_cwd)) => {
-                let ai_cwd = effective_cwd.as_str();
-                let (ai_decision, reason) = if request.ask_ai_lenient {
-                    ai_judge::evaluate_lenient(
-                        &ai_config,
-                        &extracted.language,
-                        &extracted.code,
-                        ai_cwd,
-                        extracted.context.as_deref(),
-                        request.project_ai_prompt,
-                    )
-                } else {
-                    ai_judge::evaluate(
-                        &ai_config,
-                        &extracted.language,
-                        &extracted.code,
-                        ai_cwd,
-                        extracted.context.as_deref(),
-                        request.project_ai_prompt,
-                    )
-                };
-                if request.project_ai_prompt.is_some() {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
-                        extracted.language
-                    );
-                } else if request.ask_ai_lenient {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
-                        extracted.language
-                    );
-                } else {
-                    eprintln!(
-                        "longline: ai-judge evaluated {} code: {ai_decision}",
-                        extracted.language
-                    );
+            match extracted_with_cwd {
+                Some((extracted, effective_cwd)) => {
+                    let ai_cwd = effective_cwd.as_str();
+                    let (ai_decision, reason) = if request.ask_ai_lenient {
+                        ai_judge::evaluate_lenient(
+                            &ai_config,
+                            &extracted.language,
+                            &extracted.code,
+                            ai_cwd,
+                            extracted.context.as_deref(),
+                            request.project_ai_prompt,
+                        )
+                    } else {
+                        ai_judge::evaluate(
+                            &ai_config,
+                            &extracted.language,
+                            &extracted.code,
+                            ai_cwd,
+                            extracted.context.as_deref(),
+                            request.project_ai_prompt,
+                        )
+                    };
+                    if request.project_ai_prompt.is_some() {
+                        eprintln!(
+                            "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
+                            extracted.language
+                        );
+                    } else if request.ask_ai_lenient {
+                        eprintln!(
+                            "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
+                            extracted.language
+                        );
+                    } else {
+                        eprintln!(
+                            "longline: ai-judge evaluated {} code: {ai_decision}",
+                            extracted.language
+                        );
+                    }
+                    (ai_decision, Some(reason))
                 }
-                (ai_decision, Some(reason))
+                None => (final_decision, None),
             }
-            None => (final_decision, None),
-        }
-    } else {
-        (final_decision, None)
-    };
+        } else {
+            (final_decision, None)
+        };
 
     let reason = if let Some(ref ai_reason) = ai_reason {
         format!("longline: {}", ai_reason)

@@ -238,6 +238,7 @@ fn run_hook_input(
             let panic_tool = invocation.tool_name().to_string();
             let panic_cwd = invocation.cwd().unwrap_or("").to_string();
             let panic_command = invocation.command_or_empty().to_string();
+            let panic_session_id = invocation.session_id().map(String::from);
 
             let opts = evaluator::EvaluationOptions {
                 ask_on_deny: options.ask_on_deny,
@@ -264,14 +265,15 @@ fn run_hook_input(
                     0
                 }
                 Err(panic) => {
-                    let reason = describe_panic(&panic);
+                    let reason = describe_panic(panic.as_ref());
                     eprintln!("longline: evaluator panic: {reason}");
-                    write_fail_open_entry(
+                    write_fail_open_entry_with_session(
                         home,
                         &panic_tool,
                         &panic_cwd,
                         &panic_command,
                         &format!("evaluator panic: {reason}"),
+                        panic_session_id,
                     );
                     0
                 }
@@ -291,7 +293,7 @@ fn run_hook_input(
     }
 }
 
-fn describe_panic(panic: &Box<dyn std::any::Any + Send>) -> String {
+fn describe_panic(panic: &(dyn std::any::Any + Send)) -> String {
     if let Some(s) = panic.downcast_ref::<&'static str>() {
         (*s).to_string()
     } else if let Some(s) = panic.downcast_ref::<String>() {
@@ -351,6 +353,17 @@ fn print_json<T: serde::Serialize>(value: &T) {
 }
 
 fn write_fail_open_entry(home: &Path, tool: &str, cwd: &str, command: &str, reason: &str) {
+    write_fail_open_entry_with_session(home, tool, cwd, command, reason, None);
+}
+
+fn write_fail_open_entry_with_session(
+    home: &Path,
+    tool: &str,
+    cwd: &str,
+    command: &str,
+    reason: &str,
+    session_id: Option<String>,
+) {
     let entry = crate::logger::make_entry_with_runtime(
         RUNTIME_LITERAL,
         tool,
@@ -360,7 +373,7 @@ fn write_fail_open_entry(home: &Path, tool: &str, cwd: &str, command: &str, reas
         Vec::new(),
         Some(reason.to_string()),
         false,
-        None,
+        session_id,
     );
     let path = runtime::codex::audit_log_path(home);
     crate::logger::log_decision_to(&entry, &path);

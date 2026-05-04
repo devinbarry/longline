@@ -220,6 +220,83 @@ fn pre_tool_use_empty_cwd_ignores_poisoned_launcher_config() {
 }
 
 #[test]
+fn pre_tool_use_empty_cwd_with_ask_ai_does_not_extract_from_launcher() {
+    // Regression test for the secondary cwd leak the round-2 review
+    // caught: even after Invocation::cwd() filtered Some("") to None,
+    // evaluate_shell_command still substituted "." for empty cwd in the
+    // --ask-ai branch, causing read_safe_code_file to canonicalize
+    // against the launcher's process cwd. The fix at evaluator.rs (skip
+    // AI extraction when cwd is empty) prevents this. With empty cwd
+    // and --ask-ai, longline must NOT consult the launcher's filesystem
+    // for code extraction — the policy ask is preserved as-is.
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ALLOW: should not be reached")
+        .build();
+    let launcher_dir = tempfile::TempDir::new().unwrap();
+    // Place a tempting "tests/foo.py" under launcher cwd so a leaky
+    // extractor would find and read it as the script body for
+    // `python -m tests.foo`.
+    std::fs::create_dir_all(launcher_dir.path().join("tests")).unwrap();
+    std::fs::write(
+        launcher_dir.path().join("tests/foo.py"),
+        "print('launcher leak marker')\n",
+    )
+    .unwrap();
+
+    let input = json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "python -m tests.foo"},
+        "cwd": ""
+    })
+    .to_string();
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new(support::bin::longline_bin())
+        .args(["--ask-ai", "hook", "codex"])
+        .env("HOME", env.home_path())
+        .current_dir(launcher_dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn longline");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(input.as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let result = RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    };
+
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    // Policy ask preserved → empty stdout. The fake judge response is
+    // ALLOW; if extraction had reached the judge, the decision would
+    // have been allow + no observable difference on PreToolUse — but
+    // the JSONL audit trail would show decision=allow with parse_ok=
+    // true. We assert the OPPOSITE: extraction was skipped, so no
+    // judge invocation, so the JSONL row records ask.
+    result.assert_codex_no_decision();
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("log file exists");
+    let entry: serde_json::Value =
+        serde_json::from_str(content.lines().rfind(|l| !l.is_empty()).unwrap()).unwrap();
+    assert_eq!(entry["decision"], "ask");
+    // The reason should NOT mention the launcher-leak marker — proves
+    // the launcher's tests/foo.py was never read.
+    let reason = entry["reason"].as_str().unwrap_or("");
+    assert!(
+        !reason.contains("launcher leak marker"),
+        "extraction must not have read launcher's tests/foo.py; reason: {reason:?}"
+    );
+}
+
+#[test]
 fn pre_tool_use_missing_cwd_ignores_poisoned_launcher_config() {
     let env = TestEnv::new().build();
     let launcher_dir = tempfile::TempDir::new().unwrap();
