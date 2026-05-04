@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.9] - 2026-05-04
+
+### Internal
+
+- GitLab CI's `sync_to_github` job now runs only on tag pipelines.
+  `release-finish` does `git push && git push --tags`, which used to
+  trigger two near-identical sync runs in parallel; the second one would
+  always finish with `Everything up-to-date` because the first had
+  already pushed the same filtered HEAD. `test_longline` and
+  `build_longline` still run on both master and tag refs (so master
+  commits keep getting green-on-master coverage); only the GitHub push
+  is gated. Cuts ~7 minutes of redundant CI per release and removes the
+  ambiguity of having two pipelines to watch for one release.
+
 ## [0.15.8] - 2026-05-04
 
 ### Fixed
