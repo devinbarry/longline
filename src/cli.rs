@@ -304,10 +304,40 @@ pub fn run() -> i32 {
         return run_init(*force);
     }
 
-    // Load base rules config
+    // Codex hook mode takes a fail-open posture on rules-manifest load
+    // failures (empty stdout + stderr + exit 0 + best-effort fail-open
+    // JSONL audit). Every other dispatch (Claude hook, bare longline,
+    // subcommands) keeps today's exit-2 behavior unchanged.
+    let is_codex_hook = matches!(
+        cli.command,
+        Some(Commands::Hook {
+            adapter: HookAdapter::Codex,
+        })
+    );
+
     let base_config = match load_config(cli.config.as_ref()) {
         Ok(c) => c,
         Err(e) => {
+            if is_codex_hook {
+                // Drain stdin so Codex doesn't perceive a hung subprocess.
+                let mut buf = String::new();
+                let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf);
+                eprintln!("longline: {e}");
+                let entry = crate::logger::make_entry_with_runtime(
+                    "codex",
+                    "",
+                    "",
+                    "",
+                    longline::domain::Decision::Allow,
+                    Vec::new(),
+                    Some(format!("rules manifest load failed: {e}")),
+                    false,
+                    None,
+                );
+                let path = crate::runtime::codex::audit_log_path(&home_dir());
+                crate::logger::log_decision_to(&entry, &path);
+                return 0;
+            }
             eprintln!("longline: {e}");
             return 2;
         }
