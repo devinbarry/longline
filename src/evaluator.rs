@@ -1040,10 +1040,14 @@ mod tests {
         use std::path::PathBuf;
 
         fn unique_root(name: &str) -> PathBuf {
-            let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("target")
-                .join("test-tmp")
-                .join("evaluator-cd")
+            // Use the OS temp dir (`/tmp` on Linux, `$TMPDIR` /var/folders/…
+            // on macOS) so fixtures land somewhere `is_under_safe_root`
+            // accepts on every host. The previous CARGO_MANIFEST_DIR-based
+            // location worked on developer machines (the repo is under
+            // `$HOME`) but failed on the GitLab runner where checkouts live
+            // under `/builds/...`, outside both `$HOME` and `$TMPDIR`.
+            let dir = std::env::temp_dir()
+                .join("longline-evaluator-cd")
                 .join(name);
             let _ = fs::remove_dir_all(&dir);
             fs::create_dir_all(&dir).unwrap();
