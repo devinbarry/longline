@@ -19,7 +19,10 @@ pub fn project_config_path(project_root: &Path) -> PathBuf {
 pub fn find_project_root(cwd: &Path) -> Option<PathBuf> {
     let mut current = cwd.to_path_buf();
     loop {
-        if current.join(".git").exists() || current.join(".claude").is_dir() {
+        if current.join(".git").exists()
+            || current.join(".claude").is_dir()
+            || current.join(".codex").is_dir()
+        {
             return Some(current);
         }
         if !current.pop() {
@@ -167,6 +170,75 @@ mod tests {
         fs::create_dir_all(&cwd).expect("create cwd");
 
         assert_eq!(find_project_root(&cwd), None);
+    }
+
+    #[test]
+    fn find_project_root_with_codex_directory() {
+        let root = temp_dir("codex-dir");
+        fs::create_dir(root.join(".codex")).expect("create .codex dir");
+        let cwd = root.join("src").join("nested");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(root));
+    }
+
+    #[test]
+    fn closest_marker_wins_outer_git_inner_codex() {
+        let root = temp_dir("outer-git-inner-codex");
+        fs::create_dir(root.join(".git")).expect("create outer .git");
+        let inner = root.join("packages").join("tool");
+        fs::create_dir_all(inner.join(".codex")).expect("create inner .codex");
+        let cwd = inner.join("src");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(inner));
+    }
+
+    #[test]
+    fn closest_marker_wins_outer_claude_inner_codex() {
+        let root = temp_dir("outer-claude-inner-codex");
+        fs::create_dir(root.join(".claude")).expect("create outer .claude");
+        let inner = root.join("packages").join("tool");
+        fs::create_dir_all(inner.join(".codex")).expect("create inner .codex");
+        let cwd = inner.join("src");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(inner));
+    }
+
+    #[test]
+    fn closest_marker_wins_outer_codex_inner_git() {
+        let root = temp_dir("outer-codex-inner-git");
+        fs::create_dir(root.join(".codex")).expect("create outer .codex");
+        let inner = root.join("packages").join("tool");
+        fs::create_dir_all(inner.join(".git")).expect("create inner .git");
+        let cwd = inner.join("src");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(inner));
+    }
+
+    #[test]
+    fn closest_marker_wins_outer_codex_inner_claude() {
+        let root = temp_dir("outer-codex-inner-claude");
+        fs::create_dir(root.join(".codex")).expect("create outer .codex");
+        let inner = root.join("packages").join("tool");
+        fs::create_dir_all(inner.join(".claude")).expect("create inner .claude");
+        let cwd = inner.join("src");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(inner));
+    }
+
+    #[test]
+    fn find_project_root_with_both_claude_and_codex_at_same_root() {
+        let root = temp_dir("claude-and-codex");
+        fs::create_dir(root.join(".claude")).expect("create .claude");
+        fs::create_dir(root.join(".codex")).expect("create .codex");
+        let cwd = root.join("src");
+        fs::create_dir_all(&cwd).expect("create cwd");
+
+        assert_eq!(find_project_root(&cwd), Some(root));
     }
 
     #[test]
