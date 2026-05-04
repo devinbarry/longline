@@ -335,3 +335,56 @@ fn codex_log_entry_includes_runtime_field() {
     assert_eq!(entry["tool"], "Bash");
     assert_eq!(entry["decision"], "deny");
 }
+
+// Spec §Audit Log Layout commits to standard `session_id` on fail-open
+// rows whenever the input contained a parseable session_id. Round-3
+// review caught that non-panic fail-open paths (config-finalize fail,
+// malformed-input) were dropping it. These tests lock in that the
+// session_id survives both paths.
+
+#[test]
+fn fail_open_global_config_preserves_session_id() {
+    let env = TestEnv::new()
+        .with_global_config("override_safety_level: not-a-real-level\n")
+        .build();
+    let input = json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "ls"},
+        "session_id": "session-fail-open-global",
+        "cwd": "/tmp"
+    })
+    .to_string();
+    let result = run_codex(&env, &input);
+    assert_eq!(result.exit_code, 0);
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["parse_ok"], false);
+    assert_eq!(entry["session_id"], "session-fail-open-global");
+}
+
+#[test]
+fn fail_open_malformed_input_preserves_session_id() {
+    let env = TestEnv::new().build();
+    // Missing hook_event_name → Malformed action → fail-open with
+    // best-effort session_id extraction from the parseable JSON.
+    let input = json!({
+        "tool_name": "Bash",
+        "tool_input": {"command": "ls"},
+        "session_id": "session-malformed-input",
+        "cwd": "/tmp"
+    })
+    .to_string();
+    let result = run_codex(&env, &input);
+    assert_eq!(result.exit_code, 0);
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["parse_ok"], false);
+    assert_eq!(entry["session_id"], "session-malformed-input");
+}

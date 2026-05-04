@@ -220,12 +220,13 @@ fn run_hook_input(
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("longline: {e}");
-                    write_fail_open_entry(
+                    write_fail_open_entry_with_session(
                         home,
                         invocation.tool_name(),
                         invocation.cwd().unwrap_or(""),
                         invocation.command_or_empty(),
                         &format!("config finalization failed: {e}"),
+                        invocation.session_id().map(String::from),
                     );
                     return 0;
                 }
@@ -284,10 +285,10 @@ fn run_hook_input(
             eprintln!("longline: {reason}");
             // Best-effort: even when the input is "malformed" (missing
             // hook_event_name etc.), we may still be able to extract the
-            // tool/cwd/command for the fail-open audit entry so operators
-            // can debug. JSON parse failures yield empty strings.
-            let (tool, cwd, command) = best_effort_audit_fields(input_str);
-            write_fail_open_entry(home, &tool, &cwd, &command, &reason);
+            // tool/cwd/command/session_id for the fail-open audit entry so
+            // operators can debug. JSON parse failures yield empty strings.
+            let (tool, cwd, command, session_id) = best_effort_audit_fields(input_str);
+            write_fail_open_entry_with_session(home, &tool, &cwd, &command, &reason, session_id);
             0
         }
     }
@@ -303,10 +304,10 @@ fn describe_panic(panic: &(dyn std::any::Any + Send)) -> String {
     }
 }
 
-fn best_effort_audit_fields(input_str: &str) -> (String, String, String) {
+fn best_effort_audit_fields(input_str: &str) -> (String, String, String, Option<String>) {
     let v: serde_json::Value = match serde_json::from_str(input_str) {
         Ok(v) => v,
-        Err(_) => return (String::new(), String::new(), String::new()),
+        Err(_) => return (String::new(), String::new(), String::new(), None),
     };
     let tool = v
         .get("tool_name")
@@ -324,7 +325,11 @@ fn best_effort_audit_fields(input_str: &str) -> (String, String, String) {
         .and_then(|c| c.as_str())
         .unwrap_or("")
         .to_string();
-    (tool, cwd, command)
+    let session_id = v
+        .get("session_id")
+        .and_then(|s| s.as_str())
+        .map(String::from);
+    (tool, cwd, command, session_id)
 }
 
 fn emit_decision(event: CodexEvent, decision: Decision, reason: &str) {
