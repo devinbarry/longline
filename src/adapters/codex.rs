@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Codex `PreToolUse` hook input. Snake_case JSON, no `deny_unknown_fields`
 /// so Codex-specific extensions (`turn_id`, `permission_mode`, etc.) and
@@ -54,6 +54,103 @@ struct CodexPermissionRequestInput {
 #[allow(dead_code)]
 struct CodexToolInput {
     command: Option<String>,
+}
+
+/// Typed enum prevents emitting forbidden literals like "allow" or "ask"
+/// on PreToolUse, which would fail open per Codex's
+/// `unsupported_permission_decision_fails_open` regression test.
+#[derive(Serialize)]
+#[allow(dead_code)]
+enum PreToolUsePermissionDecision {
+    #[serde(rename = "deny")]
+    Deny,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+#[allow(dead_code)]
+enum PermissionRequestBehavior {
+    Allow,
+    Deny,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct CodexPreToolUseDecisionOutput {
+    hook_specific_output: CodexPreToolUseHookSpecificOutput,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct CodexPreToolUseHookSpecificOutput {
+    hook_event_name: &'static str,
+    permission_decision: PreToolUsePermissionDecision,
+    permission_decision_reason: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct CodexPermissionRequestDecisionOutput {
+    hook_specific_output: CodexPermissionRequestHookSpecificOutput,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
+struct CodexPermissionRequestHookSpecificOutput {
+    hook_event_name: &'static str,
+    decision: CodexPermissionBehavior,
+}
+
+#[derive(Serialize)]
+#[allow(dead_code)]
+struct CodexPermissionBehavior {
+    behavior: PermissionRequestBehavior,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+}
+
+#[allow(dead_code)]
+impl CodexPreToolUseDecisionOutput {
+    fn deny(reason: String) -> Self {
+        Self {
+            hook_specific_output: CodexPreToolUseHookSpecificOutput {
+                hook_event_name: "PreToolUse",
+                permission_decision: PreToolUsePermissionDecision::Deny,
+                permission_decision_reason: reason,
+            },
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl CodexPermissionRequestDecisionOutput {
+    fn allow() -> Self {
+        Self {
+            hook_specific_output: CodexPermissionRequestHookSpecificOutput {
+                hook_event_name: "PermissionRequest",
+                decision: CodexPermissionBehavior {
+                    behavior: PermissionRequestBehavior::Allow,
+                    message: None,
+                },
+            },
+        }
+    }
+
+    fn deny(message: String) -> Self {
+        Self {
+            hook_specific_output: CodexPermissionRequestHookSpecificOutput {
+                hook_event_name: "PermissionRequest",
+                decision: CodexPermissionBehavior {
+                    behavior: PermissionRequestBehavior::Deny,
+                    message: Some(message),
+                },
+            },
+        }
+    }
 }
 
 #[cfg(test)]
@@ -137,5 +234,36 @@ mod tests {
         }"#;
         let input: CodexPreToolUseInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.cwd.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn serialize_pre_tool_use_deny_byte_exact() {
+        let out = CodexPreToolUseDecisionOutput::deny("rule [rm-root] blocked".to_string());
+        let json = serde_json::to_string(&out).unwrap();
+        assert_eq!(
+            json,
+            r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"rule [rm-root] blocked"}}"#
+        );
+    }
+
+    #[test]
+    fn serialize_permission_request_allow_byte_exact() {
+        let out = CodexPermissionRequestDecisionOutput::allow();
+        let json = serde_json::to_string(&out).unwrap();
+        assert_eq!(
+            json,
+            r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}"#
+        );
+    }
+
+    #[test]
+    fn serialize_permission_request_deny_with_message_byte_exact() {
+        let out =
+            CodexPermissionRequestDecisionOutput::deny("rule [curl-pipe-sh] blocked".to_string());
+        let json = serde_json::to_string(&out).unwrap();
+        assert_eq!(
+            json,
+            r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"rule [curl-pipe-sh] blocked"}}}"#
+        );
     }
 }
