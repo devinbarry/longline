@@ -32,6 +32,8 @@ cargo install longline
 
 ## Configuration
 
+### Claude Code
+
 Add to your Claude Code settings (`~/.claude/settings.json`):
 
 ```json
@@ -83,6 +85,43 @@ No `--config` flag is needed. longline loads rules in this order:
 1. `--config <path>` (explicit override, if provided)
 2. `~/.config/longline/rules.yaml` (user customization, if it exists)
 3. Embedded defaults (compiled in)
+
+### Codex CLI
+
+Add to `~/.codex/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "longline hook codex", "timeout": 30 }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "longline hook codex", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Wire **both** `PreToolUse` and `PermissionRequest`. If you wire only `PreToolUse`, longline's `allow` decisions degrade to "Codex asks the user" instead of auto-approving. If you wire only `PermissionRequest`, longline's `deny` decisions are bypassed when Codex runs in a `permission_mode` that auto-executes (`acceptEdits`, `bypassPermissions`).
+
+Field names are case-sensitive — `PreToolUse`, `PermissionRequest`, `Bash` — typos are silently ignored by Codex.
+
+Project rule overlays live at `<repo>/.claude/longline.yaml` regardless of runtime — Claude and Codex share the same project config. v0.16 also adds `<repo>/.codex/` as a project-root marker so Codex-only repos are discoverable.
+
+The same hooks can be expressed inline in `~/.codex/config.toml` under `[[hooks.PreToolUse]]` / `[[hooks.PermissionRequest]]` blocks; pick whichever you already maintain.
+
+This release covers Codex `Bash` only. `apply_patch` and MCP tool calls pass through to Codex's normal flow without longline policy evaluation; both will be policy-evaluated in a later release.
 
 ## Usage
 
