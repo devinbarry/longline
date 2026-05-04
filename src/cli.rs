@@ -77,7 +77,7 @@ impl SafetyLevelArg {
     }
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Test commands against rules
     Check {
@@ -114,6 +114,18 @@ enum Commands {
         #[arg(short, long)]
         force: bool,
     },
+    /// Run a hook for a specific runtime (Codex or explicit Claude)
+    Hook {
+        /// Adapter to dispatch to
+        #[arg(value_enum)]
+        adapter: HookAdapter,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, clap::ValueEnum)]
+enum HookAdapter {
+    Claude,
+    Codex,
 }
 
 #[derive(Clone, Debug)]
@@ -188,14 +200,14 @@ enum DecisionFilter {
     Deny,
 }
 
-#[derive(Clone, clap::ValueEnum)]
+#[derive(Clone, Debug, clap::ValueEnum)]
 enum LevelFilter {
     Critical,
     High,
     Strict,
 }
 
-#[derive(Clone, clap::ValueEnum)]
+#[derive(Clone, Debug, clap::ValueEnum)]
 enum GroupBy {
     Decision,
     Level,
@@ -307,9 +319,13 @@ pub fn run() -> i32 {
         .as_ref()
         .map(SafetyLevelArg::to_safety_level);
 
-    // For subcommands: resolve project directory and finalize config
-    // For hook mode: pass base config to run_hook() which finalizes after reading cwd from stdin
-    let (rules_config, project_config_path) = if cli.command.is_some() {
+    // Hook mode (explicit or bare): pass base config to the adapter which
+    // finalizes after reading cwd from stdin. Other subcommands resolve
+    // project dir and finalize config eagerly.
+    let is_hook_mode = matches!(cli.command, Some(Commands::Hook { .. }) | None);
+    let (rules_config, project_config_path) = if is_hook_mode {
+        (base_config, None)
+    } else {
         let project_dir = resolve_dir(cli.dir.as_ref());
         let final_config = match config::finalize_config(
             base_config,
@@ -327,12 +343,8 @@ pub fn run() -> i32 {
         let rules_config = final_config.rules;
         let _project_ai_prompt = final_config.project_ai_prompt;
 
-        // Track project config path for display banners
         let pcp = project_dir.and_then(|dir| config::existing_project_config_path(&dir));
-
         (rules_config, pcp)
-    } else {
-        (base_config, None)
     };
 
     match cli.command {
@@ -354,7 +366,23 @@ pub fn run() -> i32 {
         ),
         Some(Commands::Files) => unreachable!(), // handled above
         Some(Commands::Init { .. }) => unreachable!(), // handled above
-        None => claude::run_hook(
+        Some(Commands::Hook {
+            adapter: HookAdapter::Codex,
+        }) => crate::adapters::codex::run_hook(
+            rules_config,
+            &home_dir(),
+            crate::adapters::codex::HookOptions {
+                ask_on_deny: cli.ask_on_deny,
+                ask_ai: cli.ask_ai || cli.ask_ai_lenient,
+                ask_ai_lenient: cli.ask_ai_lenient,
+                cli_trust_level,
+                cli_safety_level,
+            },
+        ),
+        Some(Commands::Hook {
+            adapter: HookAdapter::Claude,
+        })
+        | None => claude::run_hook(
             rules_config,
             &home_dir(),
             claude::HookOptions {
@@ -854,5 +882,45 @@ mod tests {
     fn test_cli_dir_flag_is_optional() {
         let cli = Cli::try_parse_from(["longline", "rules"]).unwrap();
         assert!(cli.dir.is_none());
+    }
+
+    #[test]
+    fn test_cli_parses_hook_codex() {
+        let cli = Cli::try_parse_from(["longline", "hook", "codex"]).unwrap();
+        match cli.command {
+            Some(Commands::Hook {
+                adapter: HookAdapter::Codex,
+            }) => {}
+            other => panic!("expected Hook(Codex), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_hook_claude() {
+        let cli = Cli::try_parse_from(["longline", "hook", "claude"]).unwrap();
+        match cli.command {
+            Some(Commands::Hook {
+                adapter: HookAdapter::Claude,
+            }) => {}
+            other => panic!("expected Hook(Claude), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_bare_form_has_no_command() {
+        let cli = Cli::try_parse_from(["longline"]).unwrap();
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn test_cli_hook_codex_with_flags() {
+        let cli = Cli::try_parse_from(["longline", "--ask-on-deny", "hook", "codex"]).unwrap();
+        match cli.command {
+            Some(Commands::Hook {
+                adapter: HookAdapter::Codex,
+            }) => {}
+            other => panic!("expected Hook(Codex), got {other:?}"),
+        }
+        assert!(cli.ask_on_deny);
     }
 }

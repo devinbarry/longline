@@ -1,8 +1,3 @@
-// Until Task 11 wires the codex adapter into cli.rs, run_hook and its helpers
-// have no production callers. Tests exercise the full surface, so we allow
-// dead_code at module scope to avoid sprinkling annotations on every item.
-#![allow(dead_code)]
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
