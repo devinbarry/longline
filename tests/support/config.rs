@@ -8,6 +8,12 @@ use super::result::RunResult;
 pub struct TestEnvBuilder {
     project_config: Option<String>,
     global_config: Option<String>,
+    /// Optional fake AI-judge response. When set, a real shell stub is
+    /// written into the test HOME and `ai-judge.yaml` points at it. The
+    /// stub prints exactly this response to stdout. The string should be
+    /// in the format the longline AI judge parser expects, e.g.
+    /// "ALLOW: reason" or "DENY: reason" or "ASK: reason".
+    fake_ai_judge_response: Option<String>,
 }
 
 /// An isolated test environment with its own HOME (and optionally a project dir).
@@ -24,6 +30,7 @@ impl TestEnv {
         TestEnvBuilder {
             project_config: None,
             global_config: None,
+            fake_ai_judge_response: None,
         }
     }
 
@@ -77,17 +84,45 @@ impl TestEnvBuilder {
         self
     }
 
+    /// Set a fake AI-judge response. A real shell stub will be staged in
+    /// the test HOME and the `ai-judge.yaml` pointer will reference it.
+    pub fn with_fake_ai_judge_response(mut self, response: &str) -> Self {
+        self.fake_ai_judge_response = Some(response.to_string());
+        self
+    }
+
     /// Build the test environment, creating temp dirs and writing config files.
     pub fn build(self) -> TestEnv {
         let home_dir = tempfile::TempDir::new().expect("Failed to create temp HOME dir");
 
         let config_dir = home_dir.path().join(".config").join("longline");
         std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("ai-judge.yaml"),
-            "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
-        )
-        .unwrap();
+        if let Some(ref response) = self.fake_ai_judge_response {
+            // Stage a real shell stub that prints the configured response
+            // and exits 0. The longline AI judge parser then reads it as
+            // the model's verdict.
+            let script_path = home_dir.path().join("fake-ai-judge.sh");
+            let script = format!(
+                "#!/bin/sh\nprintf '%s\\n' '{}'\n",
+                response.replace('\'', "'\\''")
+            );
+            std::fs::write(&script_path, script).unwrap();
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&script_path, perms).unwrap();
+            std::fs::write(
+                config_dir.join("ai-judge.yaml"),
+                format!("command: {}\ntimeout: 10\n", script_path.display()),
+            )
+            .unwrap();
+        } else {
+            std::fs::write(
+                config_dir.join("ai-judge.yaml"),
+                "command: /definitely-not-a-real-ai-judge-command-12345\ntimeout: 1\n",
+            )
+            .unwrap();
+        }
 
         if let Some(ref yaml) = self.global_config {
             std::fs::write(config_dir.join("longline.yaml"), yaml).unwrap();

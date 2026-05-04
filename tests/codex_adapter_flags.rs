@@ -180,3 +180,84 @@ fn ask_ai_falls_back_on_missing_codex_cli_permission_request() {
     assert_eq!(result.exit_code, 0);
     result.assert_codex_no_decision();
 }
+
+// ---------- AI-judge matrix: policy ask × judge {allow, deny} × event ----------
+// Spec §Test Plan Layer 4: 4 cases.
+
+#[test]
+fn ask_ai_pre_tool_use_judge_allows_emits_no_decision() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ALLOW: codex fake judge allowed")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PreToolUse", "python3 -c 'print(1)'"),
+        &["--ask-ai"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    // PreToolUse allow → empty stdout. JSONL row should record decision="allow".
+    result.assert_codex_no_decision();
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "allow");
+}
+
+// NOTE on spec deviation: spec §Test Plan Layer 4 names "judge denies"
+// rows, but the AI judge contract (src/ai_judge/response.rs:7-13) only
+// supports ALLOW and ASK — there is no DENY verdict. The judge can lift
+// a policy-ask to allow, or leave it at ask. Tests below exercise the
+// preservable end of the contract instead of the impossible deny case.
+
+#[test]
+fn ask_ai_pre_tool_use_judge_asks_preserves_no_decision() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ASK: codex fake judge needs review")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PreToolUse", "python3 -c 'print(1)'"),
+        &["--ask-ai"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    // Policy ask preserved → empty stdout on PreToolUse.
+    result.assert_codex_no_decision();
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "ask");
+}
+
+#[test]
+fn ask_ai_permission_request_judge_allows_emits_allow_behavior() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ALLOW: codex fake judge allowed")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PermissionRequest", "python3 -c 'print(1)'"),
+        &["--ask-ai"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    result.assert_codex_permission_request_behavior("allow");
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "allow");
+}
+
+#[test]
+fn ask_ai_permission_request_judge_asks_preserves_no_decision() {
+    let env = TestEnv::new()
+        .with_fake_ai_judge_response("ASK: codex fake judge needs review")
+        .build();
+    let result = run_codex_with_flags(
+        &env,
+        &codex_input("PermissionRequest", "python3 -c 'print(1)'"),
+        &["--ask-ai"],
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    // PermissionRequest ask preserved → empty stdout (lets Codex's
+    // normal approval flow continue).
+    result.assert_codex_no_decision();
+    let entry = read_last_jsonl(env.home_path());
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["decision"], "ask");
+}
