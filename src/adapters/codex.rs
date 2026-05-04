@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::evaluator;
+
 /// Codex `PreToolUse` hook input. Snake_case JSON, no `deny_unknown_fields`
 /// so Codex-specific extensions (`turn_id`, `permission_mode`, etc.) and
 /// future fields are tolerated.
@@ -153,6 +155,98 @@ impl CodexPermissionRequestDecisionOutput {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
+enum CodexEvent {
+    PreToolUse,
+    PermissionRequest,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+enum CodexHookAction {
+    /// Bash on a recognized event: evaluate the command.
+    Evaluate {
+        event: CodexEvent,
+        invocation: evaluator::Invocation,
+    },
+    /// Recognized event with non-Bash tool, or recognized-but-unhandled event.
+    /// Empty stdout, no stderr, no JSONL.
+    SilentPassthrough,
+    /// Malformed input (parse failed, missing/empty hook_event_name, etc.).
+    /// Empty stdout + stderr message + JSONL fail-open entry.
+    Malformed { reason: String },
+}
+
+#[allow(dead_code)]
+fn action_from_pre_tool_use(input: CodexPreToolUseInput) -> CodexHookAction {
+    match input.tool_name.as_deref() {
+        Some("Bash") => CodexHookAction::Evaluate {
+            event: CodexEvent::PreToolUse,
+            invocation: evaluator::Invocation::Shell {
+                command: input.tool_input.and_then(|t| t.command),
+                cwd: input.cwd,
+                session_id: input.session_id,
+            },
+        },
+        _ => CodexHookAction::SilentPassthrough,
+    }
+}
+
+#[allow(dead_code)]
+fn action_from_permission_request(input: CodexPermissionRequestInput) -> CodexHookAction {
+    match input.tool_name.as_deref() {
+        Some("Bash") => CodexHookAction::Evaluate {
+            event: CodexEvent::PermissionRequest,
+            invocation: evaluator::Invocation::Shell {
+                command: input.tool_input.and_then(|t| t.command),
+                cwd: input.cwd,
+                session_id: input.session_id,
+            },
+        },
+        _ => CodexHookAction::SilentPassthrough,
+    }
+}
+
+#[allow(dead_code)]
+fn action_from_input_str(raw: &str) -> CodexHookAction {
+    let value: serde_json::Value = match serde_json::from_str(raw) {
+        Ok(v) => v,
+        Err(e) => {
+            return CodexHookAction::Malformed {
+                reason: format!("failed to parse hook input JSON: {e}"),
+            };
+        }
+    };
+
+    let event_name = value
+        .get("hook_event_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    match event_name {
+        "" => CodexHookAction::Malformed {
+            reason: "missing or empty hook_event_name".into(),
+        },
+        "PreToolUse" => match serde_json::from_value::<CodexPreToolUseInput>(value) {
+            Ok(input) => action_from_pre_tool_use(input),
+            Err(e) => CodexHookAction::Malformed {
+                reason: format!("failed to parse PreToolUse input: {e}"),
+            },
+        },
+        "PermissionRequest" => match serde_json::from_value::<CodexPermissionRequestInput>(value) {
+            Ok(input) => action_from_permission_request(input),
+            Err(e) => CodexHookAction::Malformed {
+                reason: format!("failed to parse PermissionRequest input: {e}"),
+            },
+        },
+        // Recognized-but-unhandled event names AND unknown event names take
+        // the same silent-passthrough path. Forward-compatible with future
+        // Codex events.
+        _ => CodexHookAction::SilentPassthrough,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +359,113 @@ mod tests {
             json,
             r#"{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"rule [curl-pipe-sh] blocked"}}}"#
         );
+    }
+
+    #[test]
+    fn action_pre_tool_use_bash_routes_to_evaluate() {
+        let json = r#"{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/repo","session_id":"s"}"#;
+        match action_from_input_str(json) {
+            CodexHookAction::Evaluate {
+                event: CodexEvent::PreToolUse,
+                invocation:
+                    evaluator::Invocation::Shell {
+                        command,
+                        cwd,
+                        session_id,
+                    },
+            } => {
+                assert_eq!(command.as_deref(), Some("ls"));
+                assert_eq!(cwd.as_deref(), Some("/repo"));
+                assert_eq!(session_id.as_deref(), Some("s"));
+            }
+            other => panic!("expected Evaluate(PreToolUse, Shell), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_permission_request_bash_routes_to_evaluate() {
+        let json = r#"{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#;
+        match action_from_input_str(json) {
+            CodexHookAction::Evaluate {
+                event: CodexEvent::PermissionRequest,
+                invocation: evaluator::Invocation::Shell { command, .. },
+            } => {
+                assert_eq!(command.as_deref(), Some("rm -rf /"));
+            }
+            other => panic!("expected Evaluate(PermissionRequest, Shell), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn action_pre_tool_use_apply_patch_is_silent_passthrough() {
+        let json = r#"{"hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::SilentPassthrough
+        ));
+    }
+
+    #[test]
+    fn action_pre_tool_use_mcp_is_silent_passthrough() {
+        let json = r#"{"hook_event_name":"PreToolUse","tool_name":"mcp__filesystem__read_file","tool_input":{}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::SilentPassthrough
+        ));
+    }
+
+    #[test]
+    fn action_post_tool_use_is_silent_passthrough() {
+        let json =
+            r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::SilentPassthrough
+        ));
+    }
+
+    #[test]
+    fn action_session_start_is_silent_passthrough() {
+        let json = r#"{"hook_event_name":"SessionStart"}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::SilentPassthrough
+        ));
+    }
+
+    #[test]
+    fn action_unknown_event_is_silent_passthrough() {
+        let json = r#"{"hook_event_name":"FutureCodexEvent","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::SilentPassthrough
+        ));
+    }
+
+    #[test]
+    fn action_missing_event_name_is_malformed() {
+        let json = r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::Malformed { .. }
+        ));
+    }
+
+    #[test]
+    fn action_empty_event_name_is_malformed() {
+        let json = r#"{"hook_event_name":"","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::Malformed { .. }
+        ));
+    }
+
+    #[test]
+    fn action_invalid_json_is_malformed() {
+        let json = r#"{"this is": "not valid"#;
+        assert!(matches!(
+            action_from_input_str(json),
+            CodexHookAction::Malformed { .. }
+        ));
     }
 }
