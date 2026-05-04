@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- New `longline hook codex` subcommand for OpenAI Codex hook integration.
+  Bash-only in this release; `apply_patch` and MCP tool surfaces pass
+  through to Codex's normal flow without policy evaluation, and will be
+  policy-evaluated in a later release. Decision mapping per the readiness
+  review: `PreToolUse` deny → block (`permissionDecision: "deny"` with
+  reason); allow / ask → no decision. `PermissionRequest` allow →
+  `behavior: "allow"`; deny → `behavior: "deny"` with `message`; ask →
+  no decision.
+- `runtime` field on audit log JSONL entries (`"claude"` or `"codex"`).
+  Always present. Existing JSONL consumers that ignore unknown fields
+  are unaffected; this is purely additive. New
+  `LogEntry::make_entry_with_runtime` constructor forces every call site
+  to be runtime-aware at compile time.
+- `.codex/` added as a project-root marker for `find_project_root`
+  alongside `.git/` and `.claude/`. Codex-only repos are discoverable
+  without a Claude or git checkout. Closest-marker-wins precedence is
+  preserved.
+- Codex audit log path: `~/.codex/hooks-logs/longline.jsonl`. Existing
+  Claude log path (`~/.claude/hooks-logs/longline.jsonl`) is unchanged.
+
+### Changed
+
+- The Codex adapter takes a fail-open posture: every hook-time error
+  (rules manifest / global / project config load failure, malformed
+  input, missing event name, evaluator panic) produces exit 0 + empty
+  stdout + a single stderr line + a JSONL fail-open audit entry under
+  `~/.codex/hooks-logs/`. The Claude adapter and bare `longline` are
+  **unchanged** — they retain today's `permissionDecision: "ask"` JSON
+  for stdin/parse errors and exit 2 for config-load errors.
+
+### Notes
+
+- The bare `longline` form (no subcommand) continues to dispatch to the
+  Claude adapter for back-compat. New install docs (Claude or Codex)
+  recommend the explicit `longline hook claude` / `longline hook codex`
+  form. The bare form will be deprecated in a later release and
+  eventually require an explicit `hook` subcommand.
+
 ## [0.15.9] - 2026-05-04
 
 ### Internal
