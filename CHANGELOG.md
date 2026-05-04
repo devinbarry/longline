@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.8] - 2026-05-04
+
+### Fixed
+
+- `cd_following` test fixtures relocated from
+  `CARGO_MANIFEST_DIR/target/test-tmp/...` to `std::env::temp_dir()` so
+  they pass `is_under_safe_root` on hosts where the repo checkout lives
+  outside `$HOME` (notably the GitLab runner at `/builds/...`). v0.15.7's
+  release pipeline failed at the `test_longline` job for this reason and
+  never reached the `sync_to_github` step, so the public mirror missed
+  v0.15.7. This release ships every change accumulated since v0.15.6 plus
+  the test-portability fix.
+
 ## [0.15.7] - 2026-05-02
 
 ### Added
