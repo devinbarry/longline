@@ -213,6 +213,37 @@ enum GroupBy {
     Level,
 }
 
+/// Best-effort parse of Codex hook stdin for fail-open audit entries.
+/// Returns (tool, cwd, command, session_id). Empty strings / None when a
+/// field is absent or stdin is unparseable. Never panics.
+fn parse_codex_input_fields(stdin: &str) -> (String, String, String, Option<String>) {
+    let v: serde_json::Value = match serde_json::from_str(stdin) {
+        Ok(v) => v,
+        Err(_) => return (String::new(), String::new(), String::new(), None),
+    };
+    let tool = v
+        .get("tool_name")
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+    let cwd = v
+        .get("cwd")
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    let command = v
+        .get("tool_input")
+        .and_then(|ti| ti.get("command"))
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    let session_id = v
+        .get("session_id")
+        .and_then(|s| s.as_str())
+        .map(String::from);
+    (tool, cwd, command, session_id)
+}
+
 fn home_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home)
@@ -319,20 +350,24 @@ pub fn run() -> i32 {
         Ok(c) => c,
         Err(e) => {
             if is_codex_hook {
-                // Drain stdin so Codex doesn't perceive a hung subprocess.
+                // Drain stdin so Codex doesn't perceive a hung subprocess,
+                // then best-effort parse it so the fail-open audit entry
+                // names tool/cwd/command when available (per spec
+                // §Audit Log Layout / fail-open observability).
                 let mut buf = String::new();
                 let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf);
                 eprintln!("longline: {e}");
+                let (tool, cwd, command, session_id) = parse_codex_input_fields(&buf);
                 let entry = crate::logger::make_entry_with_runtime(
                     "codex",
-                    "",
-                    "",
-                    "",
+                    &tool,
+                    &cwd,
+                    &command,
                     longline::domain::Decision::Allow,
                     Vec::new(),
                     Some(format!("rules manifest load failed: {e}")),
                     false,
-                    None,
+                    session_id,
                 );
                 let path = crate::runtime::codex::audit_log_path(&home_dir());
                 crate::logger::log_decision_to(&entry, &path);

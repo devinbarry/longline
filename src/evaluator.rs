@@ -124,10 +124,14 @@ pub(crate) fn evaluate_invocation(
 
 #[cfg_attr(not(test), allow(dead_code))]
 impl Invocation {
+    /// Returns the cwd if it's a non-empty string. Empty strings are treated
+    /// as "no cwd" so a `cwd: ""` payload from a runtime cannot be silently
+    /// resolved against the longline process's own cwd by any downstream
+    /// consumer (project-config discovery, etc.).
     pub(crate) fn cwd(&self) -> Option<&str> {
         match self {
             Self::Shell { cwd, .. } | Self::ReadPath { cwd, .. } | Self::SearchPath { cwd, .. } => {
-                cwd.as_deref()
+                cwd.as_deref().filter(|s| !s.is_empty())
             }
         }
     }

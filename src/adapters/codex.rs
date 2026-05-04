@@ -9,58 +9,32 @@ use longline::config;
 use longline::domain::Decision;
 use longline::policy;
 
-/// Codex `PreToolUse` hook input. Snake_case JSON, no `deny_unknown_fields`
-/// so Codex-specific extensions (`turn_id`, `permission_mode`, etc.) and
-/// future fields are tolerated.
+/// Codex `PreToolUse` hook input. Snake_case JSON. `deny_unknown_fields` is
+/// off by default, so Codex extensions (`turn_id`, `permission_mode`,
+/// `transcript_path`, `model`, `tool_use_id`) and future fields are silently
+/// tolerated without declaration. We only declare the fields we consume.
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct CodexPreToolUseInput {
-    #[allow(dead_code)]
     session_id: Option<String>,
     cwd: Option<String>,
-    #[allow(dead_code)]
-    hook_event_name: Option<String>,
     tool_name: Option<String>,
     tool_input: Option<CodexToolInput>,
-    // Codex extensions are not consumed but must be tolerated:
-    #[allow(dead_code)]
-    turn_id: Option<String>,
-    #[allow(dead_code)]
-    transcript_path: Option<serde_json::Value>,
-    #[allow(dead_code)]
-    model: Option<String>,
-    #[allow(dead_code)]
-    permission_mode: Option<String>,
-    #[allow(dead_code)]
-    tool_use_id: Option<String>,
 }
 
-/// Codex `PermissionRequest` hook input. Same shape as PreToolUse minus
-/// `tool_use_id`.
+/// Codex `PermissionRequest` hook input. Same shape as PreToolUse for the
+/// fields we consume; Codex extensions (`turn_id`, `permission_mode`, etc.)
+/// are tolerated without declaration.
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct CodexPermissionRequestInput {
-    #[allow(dead_code)]
     session_id: Option<String>,
     cwd: Option<String>,
-    #[allow(dead_code)]
-    hook_event_name: Option<String>,
     tool_name: Option<String>,
     tool_input: Option<CodexToolInput>,
-    #[allow(dead_code)]
-    turn_id: Option<String>,
-    #[allow(dead_code)]
-    transcript_path: Option<serde_json::Value>,
-    #[allow(dead_code)]
-    model: Option<String>,
-    #[allow(dead_code)]
-    permission_mode: Option<String>,
 }
 
 /// A loose union shape that captures whichever fields a tool sends. For
 /// `Bash` we only consume `command`; other tools may set arbitrary fields.
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct CodexToolInput {
     command: Option<String>,
 }
@@ -69,7 +43,6 @@ struct CodexToolInput {
 /// on PreToolUse, which would fail open per Codex's
 /// `unsupported_permission_decision_fails_open` regression test.
 #[derive(Serialize)]
-#[allow(dead_code)]
 enum PreToolUsePermissionDecision {
     #[serde(rename = "deny")]
     Deny,
@@ -77,7 +50,6 @@ enum PreToolUsePermissionDecision {
 
 #[derive(Serialize)]
 #[serde(rename_all = "lowercase")]
-#[allow(dead_code)]
 enum PermissionRequestBehavior {
     Allow,
     Deny,
@@ -85,14 +57,12 @@ enum PermissionRequestBehavior {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct CodexPreToolUseDecisionOutput {
     hook_specific_output: CodexPreToolUseHookSpecificOutput,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct CodexPreToolUseHookSpecificOutput {
     hook_event_name: &'static str,
     permission_decision: PreToolUsePermissionDecision,
@@ -101,28 +71,24 @@ struct CodexPreToolUseHookSpecificOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct CodexPermissionRequestDecisionOutput {
     hook_specific_output: CodexPermissionRequestHookSpecificOutput,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
 struct CodexPermissionRequestHookSpecificOutput {
     hook_event_name: &'static str,
     decision: CodexPermissionBehavior,
 }
 
 #[derive(Serialize)]
-#[allow(dead_code)]
 struct CodexPermissionBehavior {
     behavior: PermissionRequestBehavior,
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<String>,
 }
 
-#[allow(dead_code)]
 impl CodexPreToolUseDecisionOutput {
     fn deny(reason: String) -> Self {
         Self {
@@ -135,7 +101,6 @@ impl CodexPreToolUseDecisionOutput {
     }
 }
 
-#[allow(dead_code)]
 impl CodexPermissionRequestDecisionOutput {
     fn allow() -> Self {
         Self {
@@ -163,14 +128,12 @@ impl CodexPermissionRequestDecisionOutput {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 enum CodexEvent {
     PreToolUse,
     PermissionRequest,
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 enum CodexHookAction {
     /// Bash on a recognized event: evaluate the command.
     Evaluate {
@@ -185,7 +148,6 @@ enum CodexHookAction {
     Malformed { reason: String },
 }
 
-#[allow(dead_code)]
 fn action_from_pre_tool_use(input: CodexPreToolUseInput) -> CodexHookAction {
     match input.tool_name.as_deref() {
         Some("Bash") => CodexHookAction::Evaluate {
@@ -200,7 +162,6 @@ fn action_from_pre_tool_use(input: CodexPreToolUseInput) -> CodexHookAction {
     }
 }
 
-#[allow(dead_code)]
 fn action_from_permission_request(input: CodexPermissionRequestInput) -> CodexHookAction {
     match input.tool_name.as_deref() {
         Some("Bash") => CodexHookAction::Evaluate {
@@ -271,28 +232,97 @@ fn run_hook_input(
             };
 
             let audit_log_path = runtime::codex::audit_log_path(home);
-            let outcome = evaluator::evaluate_invocation(
-                final_config,
-                &audit_log_path,
-                invocation,
-                evaluator::EvaluationOptions {
-                    ask_on_deny: options.ask_on_deny,
-                    ask_ai: options.ask_ai,
-                    ask_ai_lenient: options.ask_ai_lenient,
-                },
-                RUNTIME_LITERAL,
-            );
+            // Capture audit-log fields BEFORE moving `invocation` into the
+            // evaluator, so a panic still has the data it needs for the
+            // fail-open JSONL entry.
+            let panic_tool = invocation.tool_name().to_string();
+            let panic_cwd = invocation.cwd().unwrap_or("").to_string();
+            let panic_command = invocation.command_or_empty().to_string();
 
-            emit_decision(event, outcome.decision, &outcome.reason);
-            0
+            let opts = evaluator::EvaluationOptions {
+                ask_on_deny: options.ask_on_deny,
+                ask_ai: options.ask_ai,
+                ask_ai_lenient: options.ask_ai_lenient,
+            };
+            // Spec §Fail-Open Posture lists "evaluator panic" as a fail-open
+            // source. catch_unwind ensures a panic anywhere in the evaluator
+            // / parser / policy / AI judge translates to exit 0 + empty
+            // stdout + stderr + JSONL audit entry rather than a crash.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                evaluator::evaluate_invocation(
+                    final_config,
+                    &audit_log_path,
+                    invocation,
+                    opts,
+                    RUNTIME_LITERAL,
+                )
+            }));
+
+            match outcome {
+                Ok(outcome) => {
+                    emit_decision(event, outcome.decision, &outcome.reason);
+                    0
+                }
+                Err(panic) => {
+                    let reason = describe_panic(&panic);
+                    eprintln!("longline: evaluator panic: {reason}");
+                    write_fail_open_entry(
+                        home,
+                        &panic_tool,
+                        &panic_cwd,
+                        &panic_command,
+                        &format!("evaluator panic: {reason}"),
+                    );
+                    0
+                }
+            }
         }
         CodexHookAction::SilentPassthrough => 0,
         CodexHookAction::Malformed { reason } => {
             eprintln!("longline: {reason}");
-            write_fail_open_entry(home, "", "", "", &reason);
+            // Best-effort: even when the input is "malformed" (missing
+            // hook_event_name etc.), we may still be able to extract the
+            // tool/cwd/command for the fail-open audit entry so operators
+            // can debug. JSON parse failures yield empty strings.
+            let (tool, cwd, command) = best_effort_audit_fields(input_str);
+            write_fail_open_entry(home, &tool, &cwd, &command, &reason);
             0
         }
     }
+}
+
+fn describe_panic(panic: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = panic.downcast_ref::<&'static str>() {
+        (*s).to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
+fn best_effort_audit_fields(input_str: &str) -> (String, String, String) {
+    let v: serde_json::Value = match serde_json::from_str(input_str) {
+        Ok(v) => v,
+        Err(_) => return (String::new(), String::new(), String::new()),
+    };
+    let tool = v
+        .get("tool_name")
+        .and_then(|t| t.as_str())
+        .unwrap_or("")
+        .to_string();
+    let cwd = v
+        .get("cwd")
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    let command = v
+        .get("tool_input")
+        .and_then(|ti| ti.get("command"))
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .to_string();
+    (tool, cwd, command)
 }
 
 fn emit_decision(event: CodexEvent, decision: Decision, reason: &str) {
@@ -336,7 +366,6 @@ fn write_fail_open_entry(home: &Path, tool: &str, cwd: &str, command: &str, reas
     crate::logger::log_decision_to(&entry, &path);
 }
 
-#[allow(dead_code)]
 fn action_from_input_str(raw: &str) -> CodexHookAction {
     let value: serde_json::Value = match serde_json::from_str(raw) {
         Ok(v) => v,

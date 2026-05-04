@@ -17,8 +17,9 @@ All notable changes to this project will be documented in this file.
 - `runtime` field on audit log JSONL entries (`"claude"` or `"codex"`).
   Always present. Existing JSONL consumers that ignore unknown fields
   are unaffected; this is purely additive. New
-  `LogEntry::make_entry_with_runtime` constructor forces every call site
-  to be runtime-aware at compile time.
+  `logger::make_entry_with_runtime` is the only public constructor and
+  forces every call site to be runtime-aware at compile time; the legacy
+  `make_entry` shim was removed.
 - `.codex/` added as a project-root marker for `find_project_root`
   alongside `.git/` and `.claude/`. Codex-only repos are discoverable
   without a Claude or git checkout. Closest-marker-wins precedence is
