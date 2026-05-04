@@ -633,4 +633,61 @@ mod tests {
         let json = r#"{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
         assert_eq!(capture_run_hook_input(json), 0);
     }
+
+    fn count_jsonl_entries(home: &Path) -> usize {
+        let log = home.join(".codex/hooks-logs/longline.jsonl");
+        match std::fs::read_to_string(&log) {
+            Ok(s) => s.lines().filter(|l| !l.trim().is_empty()).count(),
+            Err(_) => 0,
+        }
+    }
+
+    #[test]
+    fn passthrough_apply_patch_writes_no_jsonl() {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        let json = r#"{"hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{}}"#;
+        let exit = run_hook_input(embedded_rules(), &home, options, json);
+        assert_eq!(exit, 0);
+        assert_eq!(count_jsonl_entries(&home), 0);
+    }
+
+    #[test]
+    fn passthrough_post_tool_use_writes_no_jsonl() {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        let json =
+            r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        let exit = run_hook_input(embedded_rules(), &home, options, json);
+        assert_eq!(exit, 0);
+        assert_eq!(count_jsonl_entries(&home), 0);
+    }
+
+    #[test]
+    fn passthrough_unknown_event_writes_no_jsonl() {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        let json = r#"{"hook_event_name":"FutureCodexEvent"}"#;
+        let exit = run_hook_input(embedded_rules(), &home, options, json);
+        assert_eq!(exit, 0);
+        assert_eq!(count_jsonl_entries(&home), 0);
+    }
 }
