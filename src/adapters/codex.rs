@@ -1,6 +1,18 @@
+// Until Task 11 wires the codex adapter into cli.rs, run_hook and its helpers
+// have no production callers. Tests exercise the full surface, so we allow
+// dead_code at module scope to avoid sprinkling annotations on every item.
+#![allow(dead_code)]
+
+use std::io::Read;
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
 
 use crate::evaluator;
+use crate::runtime;
+use longline::config;
+use longline::domain::Decision;
+use longline::policy;
 
 /// Codex `PreToolUse` hook input. Snake_case JSON, no `deny_unknown_fields`
 /// so Codex-specific extensions (`turn_id`, `permission_mode`, etc.) and
@@ -207,6 +219,114 @@ fn action_from_permission_request(input: CodexPermissionRequestInput) -> CodexHo
         _ => CodexHookAction::SilentPassthrough,
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HookOptions {
+    pub ask_on_deny: bool,
+    pub ask_ai: bool,
+    pub ask_ai_lenient: bool,
+    pub cli_trust_level: Option<policy::TrustLevel>,
+    pub cli_safety_level: Option<policy::SafetyLevel>,
+}
+
+const RUNTIME_LITERAL: &str = "codex";
+
+pub(crate) fn run_hook(
+    rules_config: policy::RulesConfig,
+    home: &Path,
+    options: HookOptions,
+) -> i32 {
+    let mut input_str = String::new();
+    if let Err(e) = std::io::stdin().read_to_string(&mut input_str) {
+        eprintln!("longline: failed to read stdin: {e}");
+        write_fail_open_entry(home, "", "", "", &format!("failed to read stdin: {e}"));
+        return 0;
+    }
+    run_hook_input(rules_config, home, options, &input_str)
+}
+
+fn run_hook_input(
+    rules_config: policy::RulesConfig,
+    home: &Path,
+    options: HookOptions,
+    input_str: &str,
+) -> i32 {
+    match action_from_input_str(input_str) {
+        CodexHookAction::Evaluate { event, invocation } => {
+            let cwd_path = invocation.cwd().map(PathBuf::from);
+            let final_config = match config::finalize_config(
+                rules_config,
+                home,
+                cwd_path.as_deref(),
+                options.cli_trust_level,
+                options.cli_safety_level,
+            ) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("longline: {e}");
+                    write_fail_open_entry(
+                        home,
+                        invocation.tool_name(),
+                        invocation.cwd().unwrap_or(""),
+                        invocation.command_or_empty(),
+                        &format!("config finalization failed: {e}"),
+                    );
+                    return 0;
+                }
+            };
+
+            let audit_log_path = runtime::codex::audit_log_path(home);
+            let outcome = evaluator::evaluate_invocation(
+                final_config,
+                &audit_log_path,
+                invocation,
+                evaluator::EvaluationOptions {
+                    ask_on_deny: options.ask_on_deny,
+                    ask_ai: options.ask_ai,
+                    ask_ai_lenient: options.ask_ai_lenient,
+                },
+                RUNTIME_LITERAL,
+            );
+
+            emit_decision(event, outcome.decision, &outcome.reason);
+            0
+        }
+        CodexHookAction::SilentPassthrough => 0,
+        CodexHookAction::Malformed { reason } => {
+            eprintln!("longline: {reason}");
+            write_fail_open_entry(home, "", "", "", &reason);
+            0
+        }
+    }
+}
+
+fn emit_decision(event: CodexEvent, decision: Decision, reason: &str) {
+    match (event, decision) {
+        (CodexEvent::PreToolUse, Decision::Deny) => {
+            print_json(&CodexPreToolUseDecisionOutput::deny(reason.to_string()));
+        }
+        (CodexEvent::PreToolUse, _) => { /* allow / ask -> empty stdout */ }
+        (CodexEvent::PermissionRequest, Decision::Allow) => {
+            print_json(&CodexPermissionRequestDecisionOutput::allow());
+        }
+        (CodexEvent::PermissionRequest, Decision::Deny) => {
+            print_json(&CodexPermissionRequestDecisionOutput::deny(
+                reason.to_string(),
+            ));
+        }
+        (CodexEvent::PermissionRequest, Decision::Ask) => { /* empty stdout */ }
+    }
+}
+
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string(value) {
+        Ok(json) => println!("{json}"),
+        Err(e) => eprintln!("longline: failed to serialize output: {e}"),
+    }
+}
+
+/// Stub; full implementation lands in Task 10.
+fn write_fail_open_entry(_home: &Path, _tool: &str, _cwd: &str, _command: &str, _reason: &str) {}
 
 #[allow(dead_code)]
 fn action_from_input_str(raw: &str) -> CodexHookAction {
@@ -467,5 +587,50 @@ mod tests {
             action_from_input_str(json),
             CodexHookAction::Malformed { .. }
         ));
+    }
+
+    fn test_home() -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("longline-codex-task8-{nanos}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn embedded_rules() -> longline::policy::RulesConfig {
+        longline::policy::load_embedded_rules().expect("embedded rules load")
+    }
+
+    fn capture_run_hook_input(input: &str) -> i32 {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        run_hook_input(embedded_rules(), &home, options, input)
+    }
+
+    #[test]
+    fn pre_tool_use_bash_safe_returns_zero() {
+        let json =
+            r#"{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert_eq!(capture_run_hook_input(json), 0);
+    }
+
+    #[test]
+    fn pre_tool_use_bash_dangerous_returns_zero() {
+        let json = r#"{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#;
+        assert_eq!(capture_run_hook_input(json), 0);
+    }
+
+    #[test]
+    fn permission_request_bash_safe_returns_zero() {
+        let json = r#"{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
+        assert_eq!(capture_run_hook_input(json), 0);
     }
 }
