@@ -13,6 +13,7 @@ const LOG_MAX_BYTES_ENV: &str = "LONGLINE_LOG_MAX_BYTES";
 #[derive(Debug, Serialize)]
 pub struct LogEntry {
     pub version: &'static str,
+    pub runtime: &'static str,
     pub ts: String,
     pub tool: String,
     pub cwd: String,
@@ -136,9 +137,10 @@ fn log_decision_to_with_rotation(entry: &LogEntry, path: &Path, max_bytes: u64, 
     }
 }
 
-/// Create a log entry from evaluation results.
+/// Create a log entry from evaluation results, stamped with an explicit runtime.
 #[allow(clippy::too_many_arguments)]
-pub fn make_entry(
+pub fn make_entry_with_runtime(
+    runtime: &'static str,
     tool: &str,
     cwd: &str,
     command: &str,
@@ -150,6 +152,7 @@ pub fn make_entry(
 ) -> LogEntry {
     LogEntry {
         version: env!("CARGO_PKG_VERSION"),
+        runtime,
         ts: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         tool: tool.to_string(),
         cwd: cwd.to_string(),
@@ -162,6 +165,33 @@ pub fn make_entry(
         parse_ok,
         session_id,
     }
+}
+
+/// Legacy entry-point that hardcodes runtime="claude". Kept as a thin
+/// wrapper so existing call sites compile unchanged during the migration;
+/// removed in Task 3 once every call site is runtime-aware.
+#[allow(clippy::too_many_arguments)]
+pub fn make_entry(
+    tool: &str,
+    cwd: &str,
+    command: &str,
+    decision: Decision,
+    matched_rules: Vec<String>,
+    reason: Option<String>,
+    parse_ok: bool,
+    session_id: Option<String>,
+) -> LogEntry {
+    make_entry_with_runtime(
+        "claude",
+        tool,
+        cwd,
+        command,
+        decision,
+        matched_rules,
+        reason,
+        parse_ok,
+        session_id,
+    )
 }
 
 #[cfg(test)]
@@ -225,9 +255,45 @@ mod tests {
         );
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"version\":\""));
+        assert!(json.contains("\"runtime\":\"claude\""));
         assert!(json.contains("\"decision\":\"deny\""));
         assert!(json.contains("\"rm-recursive-root\""));
         assert!(json.contains("\"session_id\":\"session-123\""));
+    }
+
+    #[test]
+    fn test_make_entry_with_runtime_serializes_runtime_field() {
+        let entry = make_entry_with_runtime(
+            "claude",
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"runtime\":\"claude\""), "got: {json}");
+    }
+
+    #[test]
+    fn test_make_entry_with_runtime_codex() {
+        let entry = make_entry_with_runtime(
+            "codex",
+            "Bash",
+            "/tmp",
+            "rm -rf /",
+            Decision::Deny,
+            vec!["rm-recursive-root".into()],
+            Some("recursive delete".into()),
+            true,
+            None,
+        );
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"runtime\":\"codex\""), "got: {json}");
+        assert!(json.contains("\"decision\":\"deny\""), "got: {json}");
     }
 
     #[test]
