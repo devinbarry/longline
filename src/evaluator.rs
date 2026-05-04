@@ -66,6 +66,7 @@ pub(crate) fn evaluate_invocation(
     audit_log_path: &Path,
     invocation: Invocation,
     options: EvaluationOptions,
+    runtime: &'static str,
 ) -> EvaluationOutcome {
     match invocation {
         Invocation::Shell {
@@ -87,6 +88,7 @@ pub(crate) fn evaluate_invocation(
             ask_ai: options.ask_ai || options.ask_ai_lenient,
             ask_ai_lenient: options.ask_ai_lenient,
             project_ai_prompt: final_config.project_ai_prompt.as_deref(),
+            runtime,
         }),
         Invocation::ReadPath {
             tool_name: _,
@@ -183,6 +185,7 @@ struct ShellEvaluationRequest<'a> {
     ask_ai: bool,
     ask_ai_lenient: bool,
     project_ai_prompt: Option<&'a str>,
+    runtime: &'static str,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -200,7 +203,8 @@ fn evaluate_shell_command_with_parse_result(
         Ok(stmt) => stmt,
         Err(e) => {
             let log_reason = Some(format!("Parse error: {e}"));
-            let entry = logger::make_entry(
+            let entry = logger::make_entry_with_runtime(
+                request.runtime,
                 "Bash",
                 request.cwd,
                 request.command,
@@ -308,7 +312,8 @@ fn evaluate_shell_command_with_parse_result(
         Some(result.reason.clone())
     };
     let matched_rules: Vec<String> = result.rule_id.clone().into_iter().collect();
-    let mut entry = logger::make_entry(
+    let mut entry = logger::make_entry_with_runtime(
+        request.runtime,
         "Bash",
         request.cwd,
         request.command,
@@ -549,6 +554,7 @@ mod tests {
             &log_path,
             invocation,
             EvaluationOptions::default(),
+            "claude",
         )
     }
 
@@ -650,6 +656,7 @@ mod tests {
                 session_id: Some("session-ai".to_string()),
             },
             options,
+            "claude",
         )
     }
 
@@ -666,6 +673,7 @@ mod tests {
                 session_id: Some("session-1".to_string()),
             },
             EvaluationOptions::default(),
+            "claude",
         );
 
         assert_eq!(outcome.decision, Decision::Allow);
@@ -687,6 +695,7 @@ mod tests {
             &log_path,
             shell_invocation("ls -la"),
             EvaluationOptions::default(),
+            "claude",
         );
 
         assert_eq!(outcome.decision, Decision::Allow);
@@ -729,6 +738,7 @@ mod tests {
                 ask_ai: false,
                 ask_ai_lenient: false,
                 project_ai_prompt: None,
+                runtime: "claude",
             },
             Err("synthetic parser failure".to_string()),
         );
@@ -795,6 +805,7 @@ mod tests {
             &log_path,
             shell_invocation("if then"),
             EvaluationOptions::default(),
+            "claude",
         );
 
         assert_eq!(outcome.decision, Decision::Ask);
@@ -821,6 +832,7 @@ mod tests {
                 ask_on_deny: true,
                 ..Default::default()
             },
+            "claude",
         );
 
         assert_eq!(outcome.decision, Decision::Ask);
@@ -939,6 +951,7 @@ mod tests {
                     ask_ai_lenient: true,
                     ..Default::default()
                 },
+                "claude",
             );
             assert_eq!(missing.decision, Decision::Allow);
 
@@ -956,6 +969,7 @@ mod tests {
                     ask_ai_lenient: true,
                     ..Default::default()
                 },
+                "claude",
             );
             assert_eq!(path.decision, Decision::Ask);
             assert!(
@@ -979,6 +993,7 @@ mod tests {
                 session_id: Some("session-1".to_string()),
             },
             EvaluationOptions::default(),
+            "claude",
         );
 
         assert_eq!(outcome.decision, Decision::Ask);

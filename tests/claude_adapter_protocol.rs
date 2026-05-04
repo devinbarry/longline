@@ -227,3 +227,19 @@ fn test_e2e_allow_has_hook_event_name() {
         result.stdout
     );
 }
+
+#[test]
+fn test_e2e_claude_log_entry_includes_runtime_field() {
+    let env = TestEnv::new().build();
+    let result = env.run_claude_hook("rm -rf /");
+    assert_eq!(result.exit_code, 0);
+    result.assert_claude_decision("deny");
+
+    let log_path = env.home_path().join(".claude/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log_path).expect("claude log file exists");
+    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "claude");
+    assert_eq!(entry["tool"], "Bash");
+    assert_eq!(entry["decision"], "deny");
+}

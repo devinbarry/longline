@@ -125,6 +125,7 @@ fn run_hook_input(
                     ask_ai: options.ask_ai,
                     ask_ai_lenient: options.ask_ai_lenient,
                 },
+                "claude",
             );
 
             let output = ClaudeHookOutput::decision(outcome.decision, &outcome.reason);

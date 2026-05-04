@@ -167,33 +167,6 @@ pub fn make_entry_with_runtime(
     }
 }
 
-/// Legacy entry-point that hardcodes runtime="claude". Kept as a thin
-/// wrapper so existing call sites compile unchanged during the migration;
-/// removed in Task 3 once every call site is runtime-aware.
-#[allow(clippy::too_many_arguments)]
-pub fn make_entry(
-    tool: &str,
-    cwd: &str,
-    command: &str,
-    decision: Decision,
-    matched_rules: Vec<String>,
-    reason: Option<String>,
-    parse_ok: bool,
-    session_id: Option<String>,
-) -> LogEntry {
-    make_entry_with_runtime(
-        "claude",
-        tool,
-        cwd,
-        command,
-        decision,
-        matched_rules,
-        reason,
-        parse_ok,
-        session_id,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,7 +185,8 @@ mod tests {
     #[test]
     fn test_make_entry_does_not_truncate_long_command() {
         let long_cmd = "x".repeat(2000);
-        let entry = make_entry(
+        let entry = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/tmp",
             &long_cmd,
@@ -228,7 +202,8 @@ mod tests {
 
     #[test]
     fn test_make_entry_short_command() {
-        let entry = make_entry(
+        let entry = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/tmp",
             "ls",
@@ -243,7 +218,8 @@ mod tests {
 
     #[test]
     fn test_log_entry_serialization() {
-        let entry = make_entry(
+        let entry = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/home/user",
             "rm -rf /",
@@ -301,7 +277,8 @@ mod tests {
         let dir = unique_test_dir("basic-write");
         let path = dir.join("test.jsonl");
 
-        let entry = make_entry(
+        let entry = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/tmp",
             "ls",
@@ -326,7 +303,8 @@ mod tests {
         let dir = unique_test_dir("rotation-threshold");
         let path = dir.join("test.jsonl");
 
-        let first = make_entry(
+        let first = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/tmp",
             "first-command",
@@ -336,7 +314,8 @@ mod tests {
             true,
             None,
         );
-        let second = make_entry(
+        let second = make_entry_with_runtime(
+            "claude",
             "Bash",
             "/tmp",
             "second-command",
@@ -367,7 +346,8 @@ mod tests {
         let path = dir.join("test.jsonl");
 
         for i in 1..=12 {
-            let entry = make_entry(
+            let entry = make_entry_with_runtime(
+                "claude",
                 "Bash",
                 "/tmp",
                 &format!("cmd-{i}"),
