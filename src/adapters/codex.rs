@@ -325,8 +325,21 @@ fn print_json<T: serde::Serialize>(value: &T) {
     }
 }
 
-/// Stub; full implementation lands in Task 10.
-fn write_fail_open_entry(_home: &Path, _tool: &str, _cwd: &str, _command: &str, _reason: &str) {}
+fn write_fail_open_entry(home: &Path, tool: &str, cwd: &str, command: &str, reason: &str) {
+    let entry = crate::logger::make_entry_with_runtime(
+        RUNTIME_LITERAL,
+        tool,
+        cwd,
+        command,
+        Decision::Allow,
+        Vec::new(),
+        Some(reason.to_string()),
+        false,
+        None,
+    );
+    let path = runtime::codex::audit_log_path(home);
+    crate::logger::log_decision_to(&entry, &path);
+}
 
 #[allow(dead_code)]
 fn action_from_input_str(raw: &str) -> CodexHookAction {
@@ -689,5 +702,59 @@ mod tests {
         let exit = run_hook_input(embedded_rules(), &home, options, json);
         assert_eq!(exit, 0);
         assert_eq!(count_jsonl_entries(&home), 0);
+    }
+
+    fn read_last_jsonl(home: &Path) -> serde_json::Value {
+        let log = home.join(".codex/hooks-logs/longline.jsonl");
+        let content = std::fs::read_to_string(&log).expect("log file exists");
+        serde_json::from_str(content.lines().last().expect("at least one line")).unwrap()
+    }
+
+    #[test]
+    fn fail_open_on_malformed_json_writes_audit_entry() {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        let exit = run_hook_input(embedded_rules(), &home, options, r#"{"this is not": valid"#);
+        assert_eq!(exit, 0);
+        let entry = read_last_jsonl(&home);
+        assert_eq!(entry["runtime"], "codex");
+        assert_eq!(entry["parse_ok"], false);
+        assert_eq!(entry["decision"], "allow");
+        assert!(entry["reason"]
+            .as_str()
+            .unwrap()
+            .contains("failed to parse hook input JSON"));
+    }
+
+    #[test]
+    fn fail_open_on_missing_event_name_writes_audit_entry() {
+        let home = test_home();
+        let options = HookOptions {
+            ask_on_deny: false,
+            ask_ai: false,
+            ask_ai_lenient: false,
+            cli_trust_level: None,
+            cli_safety_level: None,
+        };
+        let exit = run_hook_input(
+            embedded_rules(),
+            &home,
+            options,
+            r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#,
+        );
+        assert_eq!(exit, 0);
+        let entry = read_last_jsonl(&home);
+        assert_eq!(entry["runtime"], "codex");
+        assert_eq!(entry["parse_ok"], false);
+        assert!(entry["reason"]
+            .as_str()
+            .unwrap()
+            .contains("missing or empty hook_event_name"));
     }
 }
