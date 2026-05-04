@@ -260,7 +260,7 @@ fn corrupt_global_config_codex_fail_open_writes_jsonl() {
 
     let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
     let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
-    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
     let entry: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["parse_ok"], false);
@@ -288,7 +288,7 @@ fn corrupt_project_config_codex_fail_open_writes_jsonl() {
 
     let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
     let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
-    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
     let entry: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["parse_ok"], false);
@@ -312,7 +312,7 @@ fn corrupt_rules_manifest_codex_fail_open_writes_jsonl() {
 
     let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
     let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
-    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
     let entry: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["parse_ok"], false);
@@ -329,7 +329,7 @@ fn codex_log_entry_includes_runtime_field() {
     assert_eq!(result.exit_code, 0);
     let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
     let content = std::fs::read_to_string(&log).expect("log file exists");
-    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
     let entry: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["tool"], "Bash");

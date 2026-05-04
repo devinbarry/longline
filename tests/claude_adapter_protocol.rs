@@ -237,7 +237,7 @@ fn test_e2e_claude_log_entry_includes_runtime_field() {
 
     let log_path = env.home_path().join(".claude/hooks-logs/longline.jsonl");
     let content = std::fs::read_to_string(&log_path).expect("claude log file exists");
-    let last = content.lines().filter(|l| !l.is_empty()).last().unwrap();
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
     let entry: serde_json::Value = serde_json::from_str(last).unwrap();
     assert_eq!(entry["runtime"], "claude");
     assert_eq!(entry["tool"], "Bash");

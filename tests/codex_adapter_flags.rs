@@ -31,8 +31,7 @@ fn read_last_jsonl(home: &std::path::Path) -> serde_json::Value {
     let content = std::fs::read_to_string(&log).expect("log file exists");
     let last = content
         .lines()
-        .filter(|l| !l.is_empty())
-        .last()
+        .rfind(|l| !l.is_empty())
         .expect("at least one entry");
     serde_json::from_str(last).unwrap()
 }
