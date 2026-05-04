@@ -131,6 +131,22 @@ impl Invocation {
             }
         }
     }
+
+    #[allow(dead_code)]
+    pub(crate) fn tool_name(&self) -> &str {
+        match self {
+            Self::Shell { .. } => "Bash",
+            Self::ReadPath { tool_name, .. } | Self::SearchPath { tool_name, .. } => tool_name,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn command_or_empty(&self) -> &str {
+        match self {
+            Self::Shell { command, .. } => command.as_deref().unwrap_or(""),
+            _ => "",
+        }
+    }
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
