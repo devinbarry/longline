@@ -267,6 +267,20 @@ pub fn classify_gh(cmd: &SimpleCommand, is_extra: bool) -> Option<&'static str> 
         return None;
     }
 
+    // R7 round-10 (Codex High): --hostname redirects auth to a
+    // potentially attacker-controlled host. Reject it uniformly across
+    // all classified gh subcommands. classify_gh_api also has its
+    // own --hostname rejection (Step 0d) which becomes redundant for
+    // the api path but is harmless. For pre-R7-allowlisted families
+    // (pr/issue/repo/run/workflow/auth) this IS technically a
+    // tightening vs pre-R7 (which allowed via basename allowlist), but
+    // we treat it as defense-in-depth — consistent with the round-7
+    // --show-token rejection which had the same "pre-R7 also allowed
+    // but high-impact secret leak" character.
+    if argv_has_any_long_flag(&cmd.argv, &["--hostname"]) {
+        return None;
+    }
+
     // Find the subcommand, skipping top-level value-flag pairs
     // (-R/--repo, --hostname). Without this, `gh release --repo view
     // delete v1` would misclassify as `release view` (a read-only
@@ -291,34 +305,51 @@ pub fn classify_gh(cmd: &SimpleCommand, is_extra: bool) -> Option<&'static str> 
         // asked uniformly. Apply strict invocation guard so PATH= /
         // LD_PRELOAD= / /tmp/gh / inline-assignment forms preserve
         // the pre-R7 ask.
+        //
+        // R7 round-10 (Codex High): also extend the "extras don't
+        // classify" rule from gh api (round-6 architectural fix) to
+        // R7-NEW families. Pre-R7 asked uniformly for these regardless
+        // of wrapper context; preserving that ask requires NOT
+        // classifying R7-NEW shapes on extracted (extra/substitution)
+        // leaves. Without this, `bash -c 'gh release view v1'` would
+        // classifier-allow because shell-c reparse drops outer
+        // assignments, defeating the strict invocation guard.
+        "release" if is_extra => None,
         "release" => {
             require_strict_invocation(cmd)?;
             classify_gh_release(cmd)
         }
+        "search" if is_extra => None,
         "search" => {
             require_strict_invocation(cmd)?;
             classify_gh_search(cmd)
         }
+        "gist" if is_extra => None,
         "gist" => {
             require_strict_invocation(cmd)?;
             classify_gh_gist(cmd)
         }
+        "label" if is_extra => None,
         "label" => {
             require_strict_invocation(cmd)?;
             classify_gh_label(cmd)
         }
+        "status" if is_extra => None,
         "status" => {
             require_strict_invocation(cmd)?;
             Some("status")
         }
+        "secret" if is_extra => None,
         "secret" => {
             require_strict_invocation(cmd)?;
             classify_gh_secret(cmd)
         }
+        "variable" if is_extra => None,
         "variable" => {
             require_strict_invocation(cmd)?;
             classify_gh_variable(cmd)
         }
+        "cache" if is_extra => None,
         "cache" => {
             require_strict_invocation(cmd)?;
             classify_gh_cache(cmd)
