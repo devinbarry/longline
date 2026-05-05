@@ -87,6 +87,23 @@ fn require_strict_invocation(cmd: &SimpleCommand) -> Option<()> {
     if !cmd.redirects.is_empty() {
         return None;
     }
+    // R7 round-10 (Opus High): `--hostname` redirects auth to a different
+    // host. classify_gh_api has its own --hostname rejection in Step 0d;
+    // this guard extends the same protection to R7-NEW families. The
+    // round-8 top-level value-flag stripper consumes `--hostname X` for
+    // subcommand-token detection (so the subcommand is correctly
+    // identified) — but consuming it for *detection* is not the same as
+    // rejecting it for *classification*. Subcommand detection wants the
+    // real subcommand; classification wants to refuse hostnames that
+    // redirect auth.
+    //
+    // -R / --repo are NOT rejected here: they change WHICH repo is
+    // queried, not WHERE the auth token goes. Pre-R7 also allowed
+    // them on pre-allowlisted families; for R7-NEW families they're
+    // benign.
+    if argv_has_any_long_flag(&cmd.argv, &["--hostname"]) {
+        return None;
+    }
     Some(())
 }
 
