@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.4] - 2026-05-05
+
+### Docs
+
+- README tagline now names both Claude Code and Codex CLI (the
+  previous text only mentioned Claude Code despite v0.16 supporting
+  both runtimes), and leads with the user-visible benefit — fewer
+  approval interruptions for safe commands — rather than the
+  enforcement framing.
+- New "Design goal" paragraph in the README makes explicit that
+  longline's purpose is speeding up development by minimising
+  permission prompts for safe operations, with per-project
+  allowlist customisation, rather than gatekeeping.
+- "What it does" updated to note the `PreToolUse` hook covers both
+  runtimes, and clarifies that Read/Grep/Glob path checks are
+  Claude-only.
+- The rolling release roadmap moved from
+  `docs/2026-04-29-codex-adapter-prep-roadmap.md` to
+  `docs/ROADMAP.md` so it sits next to `RELEASING.md` and is
+  discoverable. Long-superseded design docs (the original project
+  brief, all 2026-01/2026-02 plans, R4 test inventory output) moved
+  to `docs/archive/`.
+
+No code changes.
+
 ## [0.16.3] - 2026-05-05
 
 ### Docs
