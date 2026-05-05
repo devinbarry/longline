@@ -173,6 +173,72 @@ fn api_short_value_flags_consume_value_for_endpoint_detection() {
 }
 
 #[test]
+fn api_inline_gh_env_assignments_return_none() {
+    // R7 round-3 review (Codex High): inline assignments like
+    // `GH_TOKEN=abc gh api repos/foo` would have been allowed without
+    // this check, weakening secret handling. The proposal explicitly
+    // says "do not weaken secret handling" — pre-R7, gh api trust:full
+    // asked these. Classifier rejects any GH_*/GITHUB_*-prefixed
+    // assignment to preserve that ask.
+    assert_eq!(classify("GH_TOKEN=abc gh api repos/foo"), None);
+    assert_eq!(
+        classify("GH_ENTERPRISE_TOKEN=abc gh api repos/foo"),
+        None,
+        "enterprise token override"
+    );
+    assert_eq!(
+        classify("GH_HOST=example.invalid gh api repos/foo"),
+        None,
+        "host override env var"
+    );
+    assert_eq!(
+        classify("GH_ENTERPRISE_TOKEN=abc GH_HOST=example.invalid gh api repos/foo"),
+        None,
+        "combined token + host override"
+    );
+    assert_eq!(
+        classify("GITHUB_TOKEN=abc gh api repos/foo"),
+        None,
+        "GITHUB_-prefixed env var"
+    );
+}
+
+#[test]
+fn api_unrelated_env_assignments_still_classify() {
+    // Non-gh-affecting env assignments are not rejected — the classifier
+    // is targeted to GH_*/GITHUB_*. Other vars are harmless.
+    assert_eq!(classify("FOO=bar gh api repos/foo"), Some("api (GET)"));
+    assert_eq!(classify("PATH=/tmp gh api repos/foo"), Some("api (GET)"));
+}
+
+#[test]
+fn api_hostname_flag_returns_none() {
+    // R7 round-3 review (Codex High): --hostname redirects auth to a
+    // different host. Pre-R7 trust:full asked; preserve that ask.
+    assert_eq!(
+        classify("gh api --hostname example.invalid repos/foo"),
+        None
+    );
+    assert_eq!(
+        classify("gh api --hostname=example.invalid repos/foo"),
+        None,
+        "single-token --hostname=value"
+    );
+}
+
+#[test]
+fn api_cache_flag_returns_none() {
+    // R7 round-3 review (Codex Medium): --cache persists responses
+    // locally; same class as gh release download (deferred to R8).
+    assert_eq!(classify("gh api --cache 1h repos/foo"), None);
+    assert_eq!(
+        classify("gh api --cache=1h repos/foo"),
+        None,
+        "single-token --cache=value"
+    );
+}
+
+#[test]
 fn api_short_value_flags_with_endpoint_classify() {
     // Same flags, but with a real endpoint present after the value.
     // The classifier must consume the value tokens and then identify

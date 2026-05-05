@@ -253,3 +253,31 @@ tests:
       decision: allow
       rule_id: gh-readonly-classifier
     note: "endpoint follows -q value; classifier correctly identifies repos/foo as endpoint"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-3 review — secret/host override + local-write rejection
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-inline-gh-token-asks
+    command: "GH_TOKEN=abc gh api repos/foo"
+    expected:
+      decision: ask
+    note: "inline GH_TOKEN assignment must not bypass secret handling — proposal forbids weakening it"
+
+  - id: gh-api-inline-gh-host-override-asks
+    command: "GH_ENTERPRISE_TOKEN=abc GH_HOST=example.invalid gh api repos/foo"
+    expected:
+      decision: ask
+    note: "inline host-override env vars must redirect through trust:full ask, not classifier allow"
+
+  - id: gh-api-hostname-flag-asks
+    command: "gh api --hostname example.invalid repos/foo"
+    expected:
+      decision: ask
+    note: "--hostname flag is host override; preserve pre-R7 trust:full ask"
+
+  - id: gh-api-cache-flag-asks
+    command: "gh api --cache 1h repos/foo"
+    expected:
+      decision: ask
+    note: "--cache persists API responses locally — same class as gh release download (R8)"

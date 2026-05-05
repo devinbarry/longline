@@ -210,6 +210,20 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
         return None;
     }
 
+    // Step 0a-bis: reject inline secret/host-override env assignments. R7's
+    // proposal explicitly says "do not weaken secret handling." Pre-R7,
+    // `GH_TOKEN=abc gh api repos/foo` asked via the gh api trust:full
+    // allowlist. The classifier ignoring `cmd.assignments` would invert that
+    // to allow, which is a real regression. Reject any GH_*/GITHUB_*-prefixed
+    // assignment so the call falls through to the existing trust:full ask.
+    // (`env GH_TOKEN=...` already triggers the printenv rule independently.)
+    for assignment in &cmd.assignments {
+        let name = assignment.name.as_str();
+        if name.starts_with("GH_") || name.starts_with("GITHUB_") {
+            return None;
+        }
+    }
+
     // Step 0b: reject glued-short method flag forms like `-XGET` or `-XPOST`.
     // These can't be reliably parsed; conservatively reject them. Real callers
     // use `-X GET` (two tokens) or `--method GET`.
@@ -226,6 +240,25 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
     // ALL known value-taking flags (not just -X/--method) so that e.g.
     // `gh api --jq .` (no real endpoint) correctly returns None.
     if !has_api_endpoint(&cmd.argv) {
+        return None;
+    }
+
+    // Step 0d: reject host-override flag `--hostname`. Pre-R7 this asked via
+    // the gh api trust:full allowlist; the classifier preserving that ask
+    // matches the proposal's "do not weaken secret handling." A misdirected
+    // `gh api --hostname example.invalid repos/foo` would send the auth
+    // token to a different host. `--hostname` stays in
+    // `API_VALUE_TAKING_TWO_TOKEN_FLAGS` so endpoint detection still
+    // consumes its value correctly; this check is the explicit reject step.
+    if argv_has_any_long_flag(&cmd.argv, &["--hostname"]) {
+        return None;
+    }
+
+    // Step 0e: reject `--cache` flag. gh's `--cache` persists API responses
+    // locally — same class as `gh release download` (deferred to R8).
+    // Network-read but local-write; out of R7's "purely network read-only"
+    // contract.
+    if argv_has_any_long_flag(&cmd.argv, &["--cache"]) {
         return None;
     }
 
