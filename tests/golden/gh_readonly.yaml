@@ -405,3 +405,19 @@ tests:
       decision: allow
       rule_id: gh-readonly-classifier
     note: "non-api gh subcommands still classify on extras (proposal's command gh pr view case)"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-7 review — gh auth status --show-token defense-in-depth
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-auth-status-show-token-asks
+    command: "gh auth status --show-token"
+    expected:
+      decision: ask
+    note: "--show-token prints the auth token to stdout; classifier refuses (defense-in-depth, falls through to minimal-trust allowlist which today allows — not a pre-R7 regression but worth refusing in the classifier)"
+
+  - id: gh-auth-status-short-t-asks
+    command: "gh auth status -t"
+    expected:
+      decision: ask
+    note: "-t is short for --show-token; same rejection"

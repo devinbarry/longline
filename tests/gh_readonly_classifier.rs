@@ -480,6 +480,23 @@ fn search_variants_classify() {
 #[test]
 fn auth_status_classifies() {
     assert_eq!(classify("gh auth status"), Some("auth status"));
+    assert_eq!(classify("gh auth status --json hosts"), Some("auth status"));
+}
+
+#[test]
+fn auth_status_show_token_returns_none() {
+    // R7 round-7 review (Codex High): --show-token / -t print the user's
+    // auth token to stdout. Defense-in-depth: classifier refuses so the
+    // command falls through to minimal-trust allowlist (which today
+    // allows it; this isn't a pre-R7 regression but a defense-in-depth
+    // gap).
+    assert_eq!(classify("gh auth status --show-token"), None);
+    assert_eq!(classify("gh auth status -t"), None);
+    assert_eq!(
+        classify("gh auth status --json hosts --show-token"),
+        None,
+        "flag anywhere in argv must reject"
+    );
 }
 
 #[test]

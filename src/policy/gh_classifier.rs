@@ -387,6 +387,18 @@ fn classify_gh_search(cmd: &SimpleCommand) -> Option<&'static str> {
 }
 
 fn classify_gh_auth(cmd: &SimpleCommand) -> Option<&'static str> {
+    // R7 round-7 review (Codex High): `gh auth status --show-token` and
+    // `gh auth status -t` print the user's GitHub auth token to stdout,
+    // where it's then visible to the calling agent. Reject the flag in
+    // both forms so this shape falls through to the existing minimal-
+    // trust allowlist (which today allows it — defense-in-depth, not a
+    // pre-R7 regression).
+    if argv_has_any_long_flag(&cmd.argv, &["--show-token"]) {
+        return None;
+    }
+    if cmd.argv.iter().any(|a| a.text == "-t") {
+        return None;
+    }
     classify_simple_shape(cmd, "auth", "status", "auth status")
 }
 
