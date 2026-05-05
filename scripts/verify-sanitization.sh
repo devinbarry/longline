@@ -29,16 +29,21 @@ fi
 
 failed=0
 
-# Each check below uses `cmd || rc=$?` to capture grep's exit code
-# explicitly and route it through a `case` block. The naïve form
-# `if cmd; then ...; fi` would treat ANY non-zero exit (including regex
-# errors and internal failures, exit codes >= 2) as "no match" and
-# silently disable the gate. Fail-closed semantics require treating
-# unexpected exit codes as failures.
+# Each check below captures the producer's output FIRST (so set -e aborts
+# on producer failure) and runs grep against that captured output (so the
+# pipeline cannot collapse a producer failure into grep's "no match"
+# exit 1 — a real risk under `set -o pipefail`, where
+# `false | grep nomatch` returns 1, the rightmost non-zero, masking the
+# upstream failure).
+#
+# grep's exit codes: 0 = match found, 1 = no match, 2+ = error (regex
+# malformed, broken pipe, etc.). The naïve `if grep ...; then` form
+# treats 2+ the same as 1 (no match), silently disabling the gate.
 
 # 1. Working-tree contents. There is NO exclusion list. Anyone editing
 # scripts/verify-sanitization.sh or tests/sanitization_gate.sh must keep
-# them pattern-free (use runtime substring construction).
+# them pattern-free (use runtime substring construction). `git grep` is
+# not a pipeline so the failure-collapse risk doesn't apply here.
 rc=0
 git grep -nE "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
@@ -47,9 +52,11 @@ case "$rc" in
   *) echo "ERROR: working-tree scan failed unexpectedly (rc=$rc) — fail-closed" >&2; failed=1 ;;
 esac
 
-# 2. Tracked filenames themselves
+# 2. Tracked filenames themselves. Capture filenames first so a `git
+# ls-files` failure aborts via set -e instead of being masked by grep.
+filenames=$(git ls-files)
 rc=0
-git ls-files | grep -E "$SANITIZATION_PATTERN" || rc=$?
+printf '%s\n' "$filenames" | grep -E "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
   0) echo "ERROR: sanitization failed — sensitive strings in tracked filenames" >&2; failed=1 ;;
   1) ;;
@@ -59,9 +66,11 @@ esac
 # 3. Full rewritten history. -m includes merge diffs (omitted by default
 # when -p is set). Covers commit messages, diffs, AND author/committer
 # identity headers across all reachable refs — including the rewritten
-# github-sync branch and the tag.
+# github-sync branch and the tag. Capture history first; longline's repo
+# is small enough for this not to be a memory concern.
+history=$(git log -p -m --all)
 rc=0
-git log -p -m --all | grep -nE "$SANITIZATION_PATTERN" || rc=$?
+printf '%s\n' "$history" | grep -nE "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
   0) echo "ERROR: sanitization failed — sensitive strings in rewritten history" >&2; failed=1 ;;
   1) ;;
@@ -69,10 +78,11 @@ case "$rc" in
 esac
 
 # 4. Annotated tag messages and tag ref names. `git log -p` does NOT
-# surface annotated tag messages; check them explicitly.
+# surface annotated tag messages; check them explicitly. Capture tags
+# first to detect `git for-each-ref` failures.
+tags=$(git for-each-ref --format='%(refname) %(contents)' refs/tags)
 rc=0
-git for-each-ref --format='%(refname) %(contents)' refs/tags \
-  | grep -nE "$SANITIZATION_PATTERN" || rc=$?
+printf '%s\n' "$tags" | grep -nE "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
   0) echo "ERROR: sanitization failed — sensitive strings in tag messages or ref names" >&2; failed=1 ;;
   1) ;;
