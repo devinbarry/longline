@@ -253,11 +253,18 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     let inner_name = argv[i].text.clone();
     let inner_argv: Vec<Arg> = argv[i + 1..].to_vec();
 
+    // Carry outer assignments forward. Bash semantics: inline `KEY=val
+    // wrapper inner_cmd args` sets KEY=val for the wrapper's exec, which
+    // propagates to inner_cmd. Without this carry-forward, wrapper-
+    // unwrapped inner leaves see empty assignments and downstream policy
+    // (e.g. classify_gh_api's empty-assignments precondition) is bypassed
+    // by `PATH=/tmp command gh api ...`, `LD_PRELOAD=evil nice gh api ...`
+    // and similar.
     Some(SimpleCommand {
         name: Some(inner_name),
         argv: inner_argv,
         redirects: cmd.redirects.clone(),
-        assignments: vec![],
+        assignments: cmd.assignments.clone(),
         embedded_substitutions: cmd.embedded_substitutions.clone(),
     })
 }
@@ -285,11 +292,13 @@ fn extract_find_exec(cmd: &SimpleCommand) -> Vec<SimpleCommand> {
                     .filter(|a| a.text != "{}")
                     .cloned()
                     .collect();
+                // Carry outer find's assignments forward — `KEY=val find -exec
+                // inner ...` propagates KEY=val to the exec'd inner.
                 results.push(SimpleCommand {
                     name: Some(exec_name),
                     argv: exec_argv,
                     redirects: vec![],
-                    assignments: vec![],
+                    assignments: cmd.assignments.clone(),
                     embedded_substitutions: vec![],
                 });
             }
@@ -328,11 +337,16 @@ fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     if i < argv.len() {
         let xargs_cmd_name = argv[i].text.clone();
         let xargs_cmd_argv: Vec<Arg> = argv[i + 1..].to_vec();
+        // Carry outer xargs's assignments forward — `KEY=val xargs inner ...`
+        // propagates KEY=val to the xargs-spawned inner. Note: xargs runtime
+        // arg-append (e.g. `printf -- "-X POST" | xargs gh api repos/foo`)
+        // is a separate concern documented as a known limitation in the
+        // R7 spec; this carry-forward only addresses inline assignments.
         Some(SimpleCommand {
             name: Some(xargs_cmd_name),
             argv: xargs_cmd_argv,
             redirects: vec![],
-            assignments: vec![],
+            assignments: cmd.assignments.clone(),
             embedded_substitutions: vec![],
         })
     } else {

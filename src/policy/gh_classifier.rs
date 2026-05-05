@@ -237,6 +237,18 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
         return None;
     }
 
+    // Step 0a-ter: reject any redirects. Pre-R7 trust:full asked for
+    // every redirect form (`gh api repos/foo > ~/.bashrc`,
+    // `gh api repos/foo > ~/.ssh/authorized_keys`, `gh api repos/foo
+    // > /tmp/anything`). The existing redirect-write-etc rule only
+    // catches /etc/* targets; sensitive home-dir files like
+    // ~/.ssh/authorized_keys, ~/.bashrc, ~/.zshrc are NOT covered.
+    // Rejecting all redirects on gh api preserves pre-R7 ask uniformity
+    // for this class.
+    if !cmd.redirects.is_empty() {
+        return None;
+    }
+
     // Step 0b: reject glued-short method flag forms like `-XGET` or `-XPOST`.
     // These can't be reliably parsed; conservatively reject them. Real callers
     // use `-X GET` (two tokens) or `--method GET`.

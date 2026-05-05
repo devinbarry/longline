@@ -235,6 +235,40 @@ fn api_inline_path_and_dyld_overrides_return_none() {
 }
 
 #[test]
+fn api_redirect_returns_none() {
+    // R7 round-5 review (Opus High): `gh api repos/foo > ~/.bashrc`
+    // would have allowed without this check — the classifier ignored
+    // cmd.redirects. The existing redirect-write-etc rule only catches
+    // /etc/* targets; sensitive home-dir files (~/.ssh/authorized_keys,
+    // ~/.bashrc, ~/.zshrc) were not. Pre-R7 trust:full asked uniformly.
+    assert_eq!(
+        classify("gh api repos/foo > ~/.ssh/authorized_keys"),
+        None,
+        "redirect to authorized_keys could inject SSH keys"
+    );
+    assert_eq!(
+        classify("gh api repos/foo > ~/.bashrc"),
+        None,
+        "redirect to bashrc could inject shell hooks"
+    );
+    assert_eq!(
+        classify("gh api repos/foo >> ~/.zshrc"),
+        None,
+        "append-redirect to zshrc"
+    );
+    assert_eq!(
+        classify("gh api repos/foo > /tmp/anything"),
+        None,
+        "any redirect — pre-R7 asked uniformly"
+    );
+    assert_eq!(
+        classify("gh api repos/foo 2> /tmp/err"),
+        None,
+        "stderr redirect"
+    );
+}
+
+#[test]
 fn api_absolute_path_to_gh_returns_none() {
     // R7 round-4 review (Codex High): a malicious binary at /tmp/gh
     // would otherwise classify as read-only via the basename check.

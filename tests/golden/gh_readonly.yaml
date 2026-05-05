@@ -309,3 +309,43 @@ tests:
     expected:
       decision: ask
     note: "absolute-path gh could be a different binary; pre-R7 trust:full asked"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-5 review — redirect bypass + wrapper-assignment bypass
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-redirect-to-authorized-keys-asks
+    command: "gh api repos/foo > ~/.ssh/authorized_keys"
+    expected:
+      decision: ask
+    note: "redirect could inject SSH keys; pre-R7 trust:full asked, redirect-write-etc rule does not cover ~/.ssh/"
+
+  - id: gh-api-redirect-to-bashrc-asks
+    command: "gh api repos/foo > ~/.bashrc"
+    expected:
+      decision: ask
+    note: "redirect could inject shell hooks; pre-R7 trust:full asked"
+
+  - id: gh-api-redirect-to-tmp-asks
+    command: "gh api repos/foo > /tmp/out"
+    expected:
+      decision: ask
+    note: "any redirect on gh api — pre-R7 trust:full asked uniformly"
+
+  - id: gh-api-wrapper-with-path-override-asks
+    command: "PATH=/tmp command gh api repos/foo"
+    expected:
+      decision: ask
+    note: "wrapper-stripping with PATH override on the outer wrapper — fixed by carrying assignments forward in parser/wrappers.rs"
+
+  - id: gh-api-wrapper-with-ld-preload-asks
+    command: "LD_PRELOAD=/tmp/evil.so nice gh api repos/foo"
+    expected:
+      decision: ask
+    note: "LD_PRELOAD via nice wrapper — assignment carry-forward routes inner classify_gh_api to ask"
+
+  - id: gh-api-wrapper-no-assignments-still-allows
+    command: "command gh api repos/foo"
+    expected:
+      decision: allow
+    note: "wrapper without assignments — classifier still applies; this is the proposal's `command gh api` case"
