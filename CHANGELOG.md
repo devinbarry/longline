@@ -2,6 +2,100 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.2] - 2026-05-05
+
+### Added
+
+- **Read-only `gh` classifier.** Argv-aware policy step that auto-allows
+  provably read-only GitHub CLI invocations without consulting the
+  trust-level allowlist. Eliminates the v0.16 parent-supervision pain
+  point where every `gh api repos/.../contents/...` source-verification
+  call required a parent turn.
+
+  Read-only families covered (top-level invocations only — see
+  "Convergence cost" below for the wrapper-coverage trade-off):
+  - `gh api` when the effective method is GET, no body/field flags, no
+    inline assignments, no redirects, no `-X<glued>` shorts, no
+    `--hostname`, no `--cache`, no UnsafeString argv, and an endpoint
+    is present.
+  - `gh pr` view/list/diff/checks/status
+  - `gh issue` view/list/status
+  - `gh repo` view/list
+  - `gh run` view/list/watch
+  - `gh workflow` view/list
+  - `gh release` view/list
+  - `gh search` repos/issues/prs/code/commits
+  - `gh auth status` (sans `--show-token` / `-t` / `-h` / `--hostname`)
+  - `gh gist` view/list
+  - `gh label list`
+  - `gh status`
+  - `gh secret list`
+  - `gh variable list`
+  - `gh cache list`
+
+  Mutating commands continue to ask via the existing `gh-api-mutating`
+  rule and `trust: full` allowlist entries: `gh pr create/merge/...`,
+  `gh issue create/comment/...`, `gh release create/upload/...`,
+  `gh workflow run/enable/disable`, `gh run rerun/cancel/delete`,
+  `gh auth login/refresh/token/setup-git`, `gh secret/variable
+  set/delete`, any `gh api` with non-GET method or body/field flags.
+
+  `gh release download` deferred to R8 (filesystem policy stage).
+
+  Audit attribution: `rule_id: "gh-readonly-classifier"`, reason
+  `"read-only gh: <shape>"` (e.g. `"read-only gh: api (GET)"`).
+  Greppable in `~/.claude/hooks-logs/longline.jsonl` and
+  `~/.codex/hooks-logs/longline.jsonl`.
+
+### Removed
+
+- 16 redundant read-only `gh ...` entries from `rules/cli-tools.yaml`.
+  The new classifier handles them with broader trust-blind coverage.
+  No behaviour regression on any pre-R7-allowlisted shape.
+
+### Convergence cost
+
+R7's classifier ships after **12 rounds of dual-model post-impl
+review** (Opus + Codex xhigh) and **11 fix commits** between the
+initial implementation (`b00168a`) and convergence (`7c4637e`).
+Reviews surfaced an extensive list of bypass shapes that pre-R7's
+`trust: full` allowlist would have asked about: glued-short method
+flags, no-endpoint forms, command-substitution argv, body-flag
+glued-shorts, host-override env vars, PATH/LD_PRELOAD/dyld
+overrides, absolute-path gh, redirects to sensitive home-dir files,
+wrapper-assignment dropping during inner extraction, shell-c
+re-parse dropping outer assignments, `find -exec` / `xargs` /
+command-substitution / process-substitution feeding outer redirects,
+xargs runtime arg-append, top-level value-flag pair value spelling
+shape token, R7-NEW family lack of strict-invocation guard,
+`--hostname` token exfiltration, shell-c bypass for R7-NEW families
+extras, and subcommand-level value-flag value spelling shape token.
+
+The architectural insight that closed the most cases at once
+(round 6): **extras don't classify `gh api`**. That single rule
+collapsed shell-c, find-exec-with-redirect, xargs runtime arg-append,
+and command/process substitution bypasses into a single chokepoint.
+Round 10 extended it to all R7-NEW families; round 11 added the
+"shape immediately after subcommand" requirement to close
+subcommand-level value-flag bypasses.
+
+Lost wrapper coverage relative to the original proposal: the
+proposal listed `command gh api ...` and `xargs gh api ...` as
+in-scope. Round 6 reverted these to ask per user decision — the
+dogfood pain point is bare `gh api repos/.../contents/...`
+(top-level), which is unaffected. `command gh pr view 123` and
+other non-api wrapper cases continue to allow.
+
+The cost confirms the project's existing memory: dual-model review
+on non-trivial policy code catches material issues that single-model
+review misses, particularly around shell-parser edge cases and
+provenance-aware wrapper handling.
+
+No runtime behaviour changes outside `gh` policy. No Rust source
+changes outside `src/policy/` and one targeted `src/parser/wrappers.rs`
+edit (assignment carry-forward at three extraction sites — semantically
+correct independent of the classifier).
+
 ## [0.16.1] - 2026-05-05
 
 ### CI
