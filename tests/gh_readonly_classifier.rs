@@ -178,8 +178,12 @@ fn api_inline_gh_env_assignments_return_none() {
     // `GH_TOKEN=abc gh api repos/foo` would have been allowed without
     // this check, weakening secret handling. The proposal explicitly
     // says "do not weaken secret handling" — pre-R7, gh api trust:full
-    // asked these. Classifier rejects any GH_*/GITHUB_*-prefixed
-    // assignment to preserve that ask.
+    // asked these.
+    //
+    // R7 round-4 review (Codex High): widened the check to reject ANY
+    // inline assignment for gh api (not just GH_*/GITHUB_*) — covers
+    // PATH= execution-environment overrides, LD_PRELOAD= and dyld vars,
+    // plus arbitrary inline assignments that pre-R7 trust:full asked.
     assert_eq!(classify("GH_TOKEN=abc gh api repos/foo"), None);
     assert_eq!(
         classify("GH_ENTERPRISE_TOKEN=abc gh api repos/foo"),
@@ -204,11 +208,44 @@ fn api_inline_gh_env_assignments_return_none() {
 }
 
 #[test]
-fn api_unrelated_env_assignments_still_classify() {
-    // Non-gh-affecting env assignments are not rejected — the classifier
-    // is targeted to GH_*/GITHUB_*. Other vars are harmless.
-    assert_eq!(classify("FOO=bar gh api repos/foo"), Some("api (GET)"));
-    assert_eq!(classify("PATH=/tmp gh api repos/foo"), Some("api (GET)"));
+fn api_inline_path_and_dyld_overrides_return_none() {
+    // R7 round-4 review (Codex High): execution-environment overrides
+    // could let `PATH=/tmp gh api` or `LD_PRELOAD=evil.so gh api` run
+    // arbitrary code with the user's gh credentials. Pre-R7 these
+    // asked via trust:full; the broader assignment-rejection check
+    // preserves that ask.
+    assert_eq!(
+        classify("PATH=/tmp gh api repos/foo"),
+        None,
+        "PATH override could redirect gh lookup"
+    );
+    assert_eq!(
+        classify("LD_PRELOAD=/tmp/evil.so gh api repos/foo"),
+        None,
+        "LD_PRELOAD shim hijacks gh's address space"
+    );
+    assert_eq!(
+        classify("DYLD_INSERT_LIBRARIES=/tmp/evil.dylib gh api repos/foo"),
+        None,
+        "macOS dyld insert hijacks gh's address space"
+    );
+    // Even arbitrary harmless-looking vars are rejected — pre-R7
+    // trust:full asked for ALL inline assignments uniformly.
+    assert_eq!(classify("FOO=bar gh api repos/foo"), None);
+}
+
+#[test]
+fn api_absolute_path_to_gh_returns_none() {
+    // R7 round-4 review (Codex High): a malicious binary at /tmp/gh
+    // would otherwise classify as read-only via the basename check.
+    // Pre-R7 the allowlist also matched by basename and required
+    // trust:full → ask. R7 narrows the classifier to exact-name `gh`
+    // for gh api specifically; absolute-path forms fall through to
+    // the existing allowlist-asks behaviour. Non-api gh subcommands
+    // (pr/issue/etc.) keep the basename match.
+    assert_eq!(classify("/tmp/gh api repos/foo"), None);
+    assert_eq!(classify("/usr/local/bin/gh api repos/foo"), None);
+    assert_eq!(classify("./gh api repos/foo"), None);
 }
 
 #[test]

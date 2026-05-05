@@ -210,18 +210,31 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
         return None;
     }
 
-    // Step 0a-bis: reject inline secret/host-override env assignments. R7's
-    // proposal explicitly says "do not weaken secret handling." Pre-R7,
-    // `GH_TOKEN=abc gh api repos/foo` asked via the gh api trust:full
-    // allowlist. The classifier ignoring `cmd.assignments` would invert that
-    // to allow, which is a real regression. Reject any GH_*/GITHUB_*-prefixed
-    // assignment so the call falls through to the existing trust:full ask.
-    // (`env GH_TOKEN=...` already triggers the printenv rule independently.)
-    for assignment in &cmd.assignments {
-        let name = assignment.name.as_str();
-        if name.starts_with("GH_") || name.starts_with("GITHUB_") {
-            return None;
-        }
+    // Step 0a-bis: require bare `gh` (no absolute path) AND empty inline
+    // env assignments. R7's proposal explicitly says "do not weaken secret
+    // handling." Pre-R7, EVERY `gh api ...` form asked via the gh api
+    // trust:full allowlist — including `/usr/bin/gh api`, `/tmp/gh api`,
+    // `PATH=/tmp gh api`, `LD_PRELOAD=evil.so gh api`, and
+    // `GH_TOKEN=abc gh api`. R7's classifier (with its broader basename
+    // match and ignoring assignments) would invert all of those to allow,
+    // weakening secret + execution-environment handling.
+    //
+    // Conservative restriction: gh api classifies only when invoked as
+    // bare `gh` with zero inline assignments. This subsumes
+    // executable-resolution overrides (PATH=, LD_PRELOAD=, dyld vars,
+    // absolute paths to alternate binaries) AND secret-handling overrides
+    // (GH_*, GITHUB_*) in one rule. Non-api gh subcommands continue to
+    // accept basename-match (pre-R7 minimal/standard allowlist behaviour
+    // is preserved for them).
+    //
+    // (`env GH_TOKEN=... gh api` is independently caught by the printenv
+    // rule on the env wrapper; the inline-assignment form had no
+    // equivalent guard before this step.)
+    if cmd.name.as_deref() != Some("gh") {
+        return None;
+    }
+    if !cmd.assignments.is_empty() {
+        return None;
     }
 
     // Step 0b: reject glued-short method flag forms like `-XGET` or `-XPOST`.

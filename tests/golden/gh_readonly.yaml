@@ -281,3 +281,31 @@ tests:
     expected:
       decision: ask
     note: "--cache persists API responses locally — same class as gh release download (R8)"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-4 review — execution-environment + absolute-path overrides
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-inline-path-override-asks
+    command: "PATH=/tmp gh api repos/foo"
+    expected:
+      decision: ask
+    note: "PATH override could redirect gh executable lookup; pre-R7 trust:full asked"
+
+  - id: gh-api-ld-preload-asks
+    command: "LD_PRELOAD=/tmp/evil.so gh api repos/foo"
+    expected:
+      decision: ask
+    note: "LD_PRELOAD shim hijacks gh's address space; pre-R7 trust:full asked"
+
+  - id: gh-api-arbitrary-inline-assignment-asks
+    command: "FOO=bar gh api repos/foo"
+    expected:
+      decision: ask
+    note: "any inline assignment — even harmless-looking — must ask, matching pre-R7 trust:full uniformity"
+
+  - id: gh-api-absolute-path-asks
+    command: "/tmp/gh api repos/foo"
+    expected:
+      decision: ask
+    note: "absolute-path gh could be a different binary; pre-R7 trust:full asked"
