@@ -478,11 +478,30 @@ fn classify_simple_shape(
     // of --repo) as the shape, classifier-allowing what gh executes as
     // `release delete`. Round-8 review (Codex High).
     let tokens = argv_without_top_level_value_flags(&cmd.argv);
-    let mut iter = tokens.iter().filter(|t| !t.starts_with('-'));
-    if *iter.next()? != subcommand {
+    // Find the subcommand position in the stripped tokens (skipping
+    // leading non-recognized flags so the subcommand can appear after
+    // them).
+    let sub_idx = tokens.iter().position(|t| !t.starts_with('-'))?;
+    if tokens[sub_idx] != subcommand {
         return None;
     }
-    if *iter.next()? == second_token {
+    // R7 round-11 (Codex High): the token IMMEDIATELY after the
+    // subcommand must be the shape — NOT separated by any
+    // unrecognized flag. Without this, `gh release --notes view edit
+    // v1`, `gh secret --org list set FOO`, `gh label --description
+    // list create bug` etc. would classify as `release view` /
+    // `secret list` / `label list` while gh actually executes the
+    // mutating subcommand (edit/set/create) with the unrecognized
+    // flag's value spelling the apparent shape token. We don't have
+    // an exhaustive list of subcommand-level value flags; instead
+    // require the shape to be the very next token after the
+    // subcommand. Real read-only invocations always have this form
+    // (`gh pr view ...`, `gh release view ...`, `gh secret list ...`).
+    let next = tokens.get(sub_idx + 1)?;
+    if next.starts_with('-') {
+        return None;
+    }
+    if *next == second_token {
         return Some(shape);
     }
     None

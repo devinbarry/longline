@@ -552,3 +552,32 @@ tests:
     expected:
       decision: ask
     note: "shell-c drops outer assignments; extras-don't-classify-R7-new closes this"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-11 review — subcommand-level value-flag value as shape
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-release-notes-flag-value-bypass-asks
+    command: "gh release --notes view edit v1"
+    expected:
+      decision: ask
+    note: "--notes value 'view' must not be misread as shape; gh runs `release edit`"
+
+  - id: gh-secret-org-flag-value-bypass-asks
+    command: "gh secret --org list set FOO --body bar"
+    expected:
+      decision: ask
+    note: "--org value 'list' must not be misread as shape; gh runs `secret set`"
+
+  - id: gh-label-description-flag-value-bypass-asks
+    command: "gh label --description list create bug"
+    expected:
+      decision: ask
+    note: "--description value 'list' must not be misread as shape; gh runs `label create`"
+
+  - id: gh-pr-view-with-post-subcommand-json-flag-still-allows
+    command: "gh pr view 123 --json files"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "post-subcommand flags are normal; only between subcommand and shape is the bypass surface"

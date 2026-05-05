@@ -484,6 +484,77 @@ fn auth_status_classifies() {
 }
 
 #[test]
+fn subcommand_level_flag_value_does_not_become_shape() {
+    // R7 round-11 review (Codex High): subcommand-level value-flags
+    // (--notes, --description, --org, --filename, --ref) take values
+    // that may spell read-only shape tokens. Without requiring the
+    // shape token IMMEDIATELY after the subcommand, gh executes the
+    // mutating actual subcommand while classifier sees the flag
+    // value as the shape:
+    //   gh release --notes view edit v1   (gh runs `release edit`)
+    //   gh secret --org list set FOO      (gh runs `secret set`)
+    //   gh label --description list create bug
+    assert_eq!(
+        classify("gh release --notes view edit v1"),
+        None,
+        "release edit with --notes value spelling 'view'"
+    );
+    assert_eq!(
+        classify("gh secret --org list set FOO --body bar"),
+        None,
+        "secret set with --org value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh label --description list create bug"),
+        None,
+        "label create with --description value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh variable --org list set FOO"),
+        None,
+        "variable set with --org value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh cache --ref list delete 123"),
+        None,
+        "cache delete with --ref value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh gist --filename view create file.md"),
+        None,
+        "gist create with --filename value spelling 'view'"
+    );
+}
+
+#[test]
+fn legitimate_post_subcommand_flags_still_classify() {
+    // Flags AFTER the subcommand and shape are normal and must still
+    // classify: `gh pr view 123 --json files`, `gh issue list --state open`.
+    assert_eq!(
+        classify("gh pr view 123 --json files"),
+        Some("pr view"),
+        "post-subcommand --json flag"
+    );
+    assert_eq!(
+        classify("gh issue list --state open"),
+        Some("issue list"),
+        "post-subcommand --state flag"
+    );
+    assert_eq!(
+        classify("gh search code longline --limit 10"),
+        Some("search code"),
+        "post-subcommand --limit on R7-NEW family"
+    );
+    // Top-level value flags (-R/--repo) before subcommand still work
+    // because argv_without_top_level_value_flags strips them first.
+    assert_eq!(
+        classify("gh -R owner/repo pr view 123"),
+        Some("pr view"),
+        "-R before subcommand"
+    );
+}
+
+#[test]
 fn pre_r7_allowlisted_families_reject_hostname_override() {
     // R7 round-10 review (Codex High): `gh --hostname X pr view 123`
     // and similar pre-R7-allowlisted families would otherwise allow,
