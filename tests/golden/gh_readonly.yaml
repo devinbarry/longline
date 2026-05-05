@@ -344,8 +344,64 @@ tests:
       decision: ask
     note: "LD_PRELOAD via nice wrapper — assignment carry-forward routes inner classify_gh_api to ask"
 
-  - id: gh-api-wrapper-no-assignments-still-allows
+  # Note: per R7 round-6 architectural decision, gh api classifier does
+  # NOT fire on extracted leaves (any wrapper, find -exec, xargs,
+  # shell-c, command/process substitution). The proposal listed
+  # `command gh api ...` as in-scope wrapper coverage but rounds 5-6
+  # surfaced too many bypass shapes via wrapper-extracted leaves
+  # (PATH=/tmp wrapper, redirects on outer wrapper, substitution-as-
+  # data-pipe). Single architectural rule: "extras don't classify
+  # gh api" closes all of them uniformly. Loses wrapper coverage for
+  # gh api specifically; non-api gh subcommands (pr/issue/repo/etc.)
+  # keep classifier coverage on extras (proposal's `command gh pr view`
+  # case still allows).
+  - id: gh-api-wrapper-asks
     command: "command gh api repos/foo"
     expected:
+      decision: ask
+    note: "extras-don't-classify-api architectural rule (R7 round-6); preserves pre-R7 behavior for wrapper-extracted gh api"
+
+  - id: gh-api-shell-c-wrapper-asks
+    command: "bash -c 'gh api repos/foo'"
+    expected:
+      decision: ask
+    note: "shell-c re-parsing produces extra leaf; gh api classifier skipped on extras"
+
+  - id: gh-api-shell-c-with-path-override-asks
+    command: "PATH=/tmp bash -c 'gh api repos/foo'"
+    expected:
+      decision: ask
+    note: "shell-c with outer PATH override — extras-don't-classify-api closes this"
+
+  - id: gh-api-find-exec-asks
+    command: "find . -exec gh api repos/foo \\;"
+    expected:
+      decision: ask
+    note: "find -exec extracts gh api as extra leaf; classifier skipped"
+
+  - id: gh-api-find-exec-redirect-asks
+    command: "find . -exec gh api repos/foo \\; > ~/.ssh/authorized_keys"
+    expected:
+      decision: ask
+    note: "find -exec with outer redirect — extras-don't-classify-api closes the ssh-key-injection bypass"
+
+  - id: gh-api-xargs-asks
+    command: "echo repos/foo | xargs gh api"
+    expected:
+      decision: ask
+    note: "xargs runtime arg-append previously a documented limitation; closed by extras-don't-classify-api architectural rule"
+
+  - id: gh-api-command-substitution-with-outer-redirect-asks
+    command: "echo $(gh api repos/foo) > ~/.bashrc"
+    expected:
+      decision: ask
+    note: "command substitution feeding outer redirect — embedded gh api leaf is extra, classifier skipped"
+
+  # Non-api gh subcommands KEEP wrapper coverage — extras-don't-classify-api
+  # is targeted to api specifically, not the whole gh classifier.
+  - id: gh-pr-view-wrapper-still-allows
+    command: "command gh pr view 123"
+    expected:
       decision: allow
-    note: "wrapper without assignments — classifier still applies; this is the proposal's `command gh api` case"
+      rule_id: gh-readonly-classifier
+    note: "non-api gh subcommands still classify on extras (proposal's command gh pr view case)"

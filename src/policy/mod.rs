@@ -23,13 +23,66 @@ use allowlist::{
 use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
 
+/// Walk a statement tree like `parser::flatten`, but DO NOT descend into a
+/// SimpleCommand's `embedded_substitutions`. The caller then collects the
+/// substitution-derived leaves separately and routes them through the
+/// extras path with `is_extra: true`. This is the R7 round-6 architectural
+/// fix for the command/process-substitution-with-outer-redirect class
+/// (e.g. `echo $(gh api repos/foo) > ~/.bashrc`): the substituted gh api
+/// leaf must NOT classifier-Allow because its output flows through the
+/// outer SimpleCommand's redirects at runtime.
+fn flatten_top_only(stmt: &Statement) -> Vec<&Statement> {
+    match stmt {
+        Statement::SimpleCommand(_) | Statement::Opaque(_) | Statement::Empty => vec![stmt],
+        Statement::Pipeline(p) => p.stages.iter().flat_map(flatten_top_only).collect(),
+        Statement::List(l) => {
+            let mut out = flatten_top_only(&l.first);
+            for (_, s) in &l.rest {
+                out.extend(flatten_top_only(s));
+            }
+            out
+        }
+        Statement::Subshell(inner) => flatten_top_only(inner),
+        Statement::CommandSubstitution(inner) => flatten_top_only(inner),
+    }
+}
+
+/// Collect substitution-derived leaves: walk every SimpleCommand's
+/// `embedded_substitutions` and flatten each. The result is the set of
+/// leaves that the architectural rule treats as `is_extra: true` even
+/// though they aren't produced by `extract_inner_commands`.
+fn collect_substitution_leaves(stmt: &Statement) -> Vec<&Statement> {
+    let mut out = Vec::new();
+    fn walk<'a>(stmt: &'a Statement, out: &mut Vec<&'a Statement>) {
+        match stmt {
+            Statement::SimpleCommand(cmd) => {
+                for sub in &cmd.embedded_substitutions {
+                    out.extend(parser::flatten(sub));
+                }
+            }
+            Statement::Pipeline(p) => p.stages.iter().for_each(|s| walk(s, out)),
+            Statement::List(l) => {
+                walk(&l.first, out);
+                for (_, s) in &l.rest {
+                    walk(s, out);
+                }
+            }
+            Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => walk(inner, out),
+            Statement::Opaque(_) | Statement::Empty => {}
+        }
+    }
+    walk(stmt, &mut out);
+    out
+}
+
 /// Evaluate a parsed statement against the policy rules.
 /// Returns the most restrictive decision across all leaves and pipeline rules.
 pub fn evaluate(config: &RulesConfig, stmt: &Statement) -> PolicyResult {
-    let leaves = parser::flatten(stmt);
+    let leaves = flatten_top_only(stmt);
     let pipelines = collect_pipelines(stmt);
     let extra_stmts = parser::wrappers::extract_inner_commands(stmt);
-    evaluate_with_extras(config, &leaves, &pipelines, &extra_stmts)
+    let subst_leaves = collect_substitution_leaves(stmt);
+    evaluate_with_extras(config, &leaves, &pipelines, &extra_stmts, &subst_leaves)
 }
 
 /// Inner evaluation logic parameterized on the collected leaves/pipelines/extras.
@@ -40,6 +93,7 @@ fn evaluate_with_extras(
     leaves: &[&Statement],
     pipelines: &[&parser::Pipeline],
     extra_stmts: &[Statement],
+    subst_leaves: &[&Statement],
 ) -> PolicyResult {
     // Flatten and collect-pipelines over extra_stmts.
     // (Change B fix for Codex C1 — was missing in Spec B draft.)
@@ -71,9 +125,27 @@ fn evaluate_with_extras(
         }
     }
 
-    // Evaluate original leaves + unwrapped inner commands.
-    for leaf in leaves.iter().copied().chain(extra_leaves.iter().copied()) {
-        let result = evaluate_leaf(config, leaf);
+    // Evaluate original leaves + unwrapped inner commands +
+    // substitution-derived leaves.
+    //
+    // is_extra: true for leaves extracted from wrappers, find -exec,
+    // xargs, shell-c, AND for leaves derived from a SimpleCommand's
+    // embedded_substitutions (command/process substitution). Used by
+    // the gh api classifier to refuse classifier-Allow on extras
+    // (pre-R7 trust:full asked uniformly for extracted gh api
+    // invocations regardless of wrapper/substitution shape;
+    // preserving that ask requires NOT classifying api when it's an
+    // extracted leaf). Non-api gh subcommands continue classifying
+    // on extras so `command gh pr view 123` still allows per the
+    // proposal's stated wrapper coverage.
+    let originals_with_extra_flag = leaves.iter().copied().map(|l| (l, false));
+    let extras_with_extra_flag = extra_leaves.iter().copied().map(|l| (l, true));
+    let subst_with_extra_flag = subst_leaves.iter().copied().map(|l| (l, true));
+    for (leaf, is_extra) in originals_with_extra_flag
+        .chain(extras_with_extra_flag)
+        .chain(subst_with_extra_flag)
+    {
+        let result = evaluate_leaf(config, leaf, is_extra);
         if result.decision > worst.decision {
             worst = result;
         } else if result.decision == worst.decision
@@ -114,13 +186,17 @@ fn evaluate_with_extras(
         let all_covered = leaves.iter().all(|leaf| {
             is_allowlisted(config, leaf)
                 || shell_c_covered_via_extras(leaf, extra_stmts)
-                || classifier_covers(leaf)
+                || classifier_covers(leaf, false)
                 || allow_rule_covers(config, leaf)
         }) && extra_leaves.iter().all(|leaf| {
             is_allowlisted(config, leaf)
                 || is_covered_by_wrapper_entry(config, leaves, leaf)
                 || shell_c_covered_via_extras(leaf, extra_stmts)
-                || classifier_covers(leaf)
+                || classifier_covers(leaf, true)
+                || allow_rule_covers(config, leaf)
+        }) && subst_leaves.iter().all(|leaf| {
+            is_allowlisted(config, leaf)
+                || classifier_covers(leaf, true)
                 || allow_rule_covers(config, leaf)
         });
         if !all_covered {
@@ -224,9 +300,9 @@ fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bo
 /// `rule_id: Some("gh-readonly-classifier")` on the worst result, which
 /// pre-R7 was taken as proof that a restrictive rule had fired — but
 /// `gh-readonly-classifier` is permissive (Allow), not restrictive.
-fn classifier_covers(leaf: &Statement) -> bool {
+fn classifier_covers(leaf: &Statement, is_extra: bool) -> bool {
     match leaf {
-        Statement::SimpleCommand(cmd) => classify_gh(cmd).is_some(),
+        Statement::SimpleCommand(cmd) => classify_gh(cmd, is_extra).is_some(),
         _ => false,
     }
 }
@@ -258,7 +334,16 @@ fn allow_rule_covers(config: &RulesConfig, leaf: &Statement) -> bool {
 }
 
 /// Evaluate a single leaf node (SimpleCommand, Opaque, or Empty).
-fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
+///
+/// `is_extra`: true for leaves extracted from wrappers (env, command,
+/// nice, timeout, etc.), find -exec, xargs, shell-c, or command/process
+/// substitution; false for the original top-level statement leaves.
+/// The classifier consults this to skip `gh api` classification on
+/// extracted leaves (pre-R7 trust:full asked uniformly for those, and
+/// preserving that ask is the only way to close the wrapper-bypass
+/// surface without auditing every extraction site individually).
+/// Non-api gh subcommands keep classifying on extras.
+fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> PolicyResult {
     match leaf {
         Statement::Empty => PolicyResult::allow(),
         Statement::Opaque(_) => PolicyResult {
@@ -308,7 +393,7 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
             // preserve a leaf-level Allow against the default-decision
             // override. See the spec at
             // `docs/superpowers/specs/2026-05-05-r7-readonly-gh-classifier-design.md`.
-            if let Some(shape) = gh_classifier::classify_gh(cmd) {
+            if let Some(shape) = gh_classifier::classify_gh(cmd, is_extra) {
                 return PolicyResult {
                     decision: Decision::Allow,
                     rule_id: Some("gh-readonly-classifier".to_string()),
@@ -1741,7 +1826,7 @@ rules: []
         let pipelines = collect_pipelines(&outer);
 
         let config = load_embedded_rules().unwrap();
-        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts, &[]);
 
         // curl-pipe-shell rule must fire via extra_pipelines.
         assert_eq!(result.decision, Decision::Deny);
@@ -1763,7 +1848,7 @@ rules: []
         let pipelines = collect_pipelines(&outer);
 
         let config = load_embedded_rules().unwrap();
-        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts, &[]);
         assert_eq!(result.decision, Decision::Deny);
     }
 
@@ -1797,7 +1882,7 @@ rules: []
         let pipelines = collect_pipelines(&outer);
 
         let config = load_embedded_rules().unwrap();
-        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts, &[]);
         assert_eq!(result.decision, Decision::Allow);
     }
 
@@ -1813,7 +1898,7 @@ rules: []
         let pipelines = collect_pipelines(&outer);
 
         let config = load_embedded_rules().unwrap();
-        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts, &[]);
         assert_eq!(result.decision, Decision::Ask);
     }
 
@@ -1905,7 +1990,7 @@ rules:
         );
 
         let config = load_embedded_rules().expect("load embedded rules");
-        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
+        let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts, &[]);
 
         // Must be Ask, NOT Allow. If this flips to Allow, shell_c coverage
         // has been incorrectly decoupled from the inner-evaluation invariant.

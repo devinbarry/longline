@@ -172,7 +172,19 @@ fn basename(name: &str) -> &str {
 
 /// Public entry: classify a parsed simple command. Returns the
 /// human-readable shape name if read-only `gh`; `None` otherwise.
-pub fn classify_gh(cmd: &SimpleCommand) -> Option<&'static str> {
+///
+/// `is_extra`: true if this leaf was extracted from a wrapper
+/// (env / command / nice / timeout / find -exec / xargs / shell-c /
+/// command substitution / process substitution), false if it's the
+/// original top-level statement leaf. The classifier refuses
+/// `gh api` classification on extracted leaves — pre-R7 trust:full
+/// asked uniformly for all extracted gh api invocations regardless
+/// of wrapper shape, and preserving that ask is the only way to
+/// close the wrapper-bypass surface without auditing every
+/// extraction site individually for assignment / redirect / runtime-
+/// arg propagation. Non-api gh subcommands continue classifying on
+/// extras (preserves the proposal's `command gh pr view 123` case).
+pub fn classify_gh(cmd: &SimpleCommand, is_extra: bool) -> Option<&'static str> {
     let name = cmd.name.as_deref()?;
     if basename(name) != "gh" {
         return None;
@@ -185,6 +197,7 @@ pub fn classify_gh(cmd: &SimpleCommand) -> Option<&'static str> {
     let subcommand = first_non_flag(&cmd.argv)?.text.as_str();
 
     match subcommand {
+        "api" if is_extra => None,
         "api" => classify_gh_api(cmd),
         "pr" => classify_gh_pr(cmd),
         "issue" => classify_gh_issue(cmd),

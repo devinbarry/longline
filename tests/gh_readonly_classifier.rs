@@ -23,7 +23,10 @@ fn first_simple_command(stmt: &Statement) -> Option<&SimpleCommand> {
 fn classify(input: &str) -> Option<&'static str> {
     let stmt = parse(input).expect("parse");
     let leaf = first_simple_command(&stmt)?;
-    longline::policy::gh_classifier::classify_gh(leaf)
+    // Direct classifier unit tests treat the input as a top-level leaf
+    // (is_extra=false). The "extras don't classify gh api" rule is
+    // verified end-to-end via the golden test runner.
+    longline::policy::gh_classifier::classify_gh(leaf, false)
 }
 
 // ============================================================
