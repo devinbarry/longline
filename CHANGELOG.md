@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.3] - 2026-05-05
+
+### Docs
+
+- README "Release" badge URL adds `?event=push` so it tracks the
+  actual release path (tag-push events) rather than the default-branch
+  latest run. The unfiltered URL was showing "failing" because it
+  picked up an old failed `workflow_dispatch` run on `main` from
+  February 2026; all real release runs were green.
+- CHANGELOG entries for v0.16.1 and v0.16.2 cleaned of internal
+  review-process notes so they describe user-facing changes only.
+
+No code changes.
+
 ## [0.16.2] - 2026-05-05
 
 ### Added
