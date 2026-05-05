@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
   call required a parent turn.
 
   Read-only families covered (top-level invocations only — see
-  "Convergence cost" below for the wrapper-coverage trade-off):
+  "Wrapper coverage" below):
   - `gh api` when the effective method is GET, no body/field flags, no
     inline assignments, no redirects, no `-X<glued>` shorts, no
     `--hostname`, no `--cache`, no UnsafeString argv, and an endpoint
@@ -47,54 +47,38 @@ All notable changes to this project will be documented in this file.
   Greppable in `~/.claude/hooks-logs/longline.jsonl` and
   `~/.codex/hooks-logs/longline.jsonl`.
 
+### Wrapper coverage
+
+The classifier fires only on top-level invocations of `gh api` and
+the new families (`release`, `search`, `gist`, `label`, `status`,
+`secret list`, `variable list`, `cache list`). Wrapper-extracted
+forms ask:
+
+- `command gh api repos/foo`, `bash -c 'gh api repos/foo'`,
+  `find -exec gh api ...`, `xargs gh api ...`,
+  `echo $(gh api ...)`, `cat <(gh api ...)` — all ask.
+- `gh api` with `PATH=/tmp`, `LD_PRELOAD=`, `GH_TOKEN=`,
+  `--hostname`, `--cache`, redirects, or absolute-path `gh` — all ask.
+
+The pre-existing `gh pr/issue/repo/run/workflow/auth` families keep
+classifying through wrappers (so `command gh pr view 123` still
+allows), matching their pre-R7 minimal/standard allowlist behavior.
+
 ### Removed
 
 - 16 redundant read-only `gh ...` entries from `rules/cli-tools.yaml`.
   The new classifier handles them with broader trust-blind coverage.
   No behaviour regression on any pre-R7-allowlisted shape.
 
-### Convergence cost
+### Other
 
-R7's classifier ships after **12 rounds of dual-model post-impl
-review** (Opus + Codex xhigh) and **11 fix commits** between the
-initial implementation (`b00168a`) and convergence (`7c4637e`).
-Reviews surfaced an extensive list of bypass shapes that pre-R7's
-`trust: full` allowlist would have asked about: glued-short method
-flags, no-endpoint forms, command-substitution argv, body-flag
-glued-shorts, host-override env vars, PATH/LD_PRELOAD/dyld
-overrides, absolute-path gh, redirects to sensitive home-dir files,
-wrapper-assignment dropping during inner extraction, shell-c
-re-parse dropping outer assignments, `find -exec` / `xargs` /
-command-substitution / process-substitution feeding outer redirects,
-xargs runtime arg-append, top-level value-flag pair value spelling
-shape token, R7-NEW family lack of strict-invocation guard,
-`--hostname` token exfiltration, shell-c bypass for R7-NEW families
-extras, and subcommand-level value-flag value spelling shape token.
+- Wrapper extraction in `src/parser/wrappers.rs` now carries outer
+  inline assignments (e.g. `PATH=/tmp`) into the inner extracted
+  command at three sites: `unwrap_transparent`, `extract_find_exec`,
+  `extract_xargs_command`. Semantic correctness fix; affects any
+  policy code that inspects assignments on extracted leaves.
 
-The architectural insight that closed the most cases at once
-(round 6): **extras don't classify `gh api`**. That single rule
-collapsed shell-c, find-exec-with-redirect, xargs runtime arg-append,
-and command/process substitution bypasses into a single chokepoint.
-Round 10 extended it to all R7-NEW families; round 11 added the
-"shape immediately after subcommand" requirement to close
-subcommand-level value-flag bypasses.
-
-Lost wrapper coverage relative to the original proposal: the
-proposal listed `command gh api ...` and `xargs gh api ...` as
-in-scope. Round 6 reverted these to ask per user decision — the
-dogfood pain point is bare `gh api repos/.../contents/...`
-(top-level), which is unaffected. `command gh pr view 123` and
-other non-api wrapper cases continue to allow.
-
-The cost confirms the project's existing memory: dual-model review
-on non-trivial policy code catches material issues that single-model
-review misses, particularly around shell-parser edge cases and
-provenance-aware wrapper handling.
-
-No runtime behaviour changes outside `gh` policy. No Rust source
-changes outside `src/policy/` and one targeted `src/parser/wrappers.rs`
-edit (assignment carry-forward at three extraction sites — semantically
-correct independent of the classifier).
+No runtime behaviour changes outside `gh` policy.
 
 ## [0.16.1] - 2026-05-05
 
@@ -115,9 +99,7 @@ correct independent of the classifier).
   + commit messages) and trip the gate.
 - **Commit and tag message rewrite.** `--replace-message` is applied
   alongside `--replace-text` so the same redaction table covers blob
-  content AND commit / tag message bodies. Without this, R6's own
-  changelog explanations (which legitimately reference the
-  SANITIZATION_PATTERN) would have aborted the public push.
+  content AND commit / tag message bodies.
 - **Replacement-table fixes.** Added `REDACTED` and `REDACTED`
   entries with longest-first ordering. Without these,
   `REDACTED` would partial-redact to `REDACTED.REDACTED.co`.
@@ -155,10 +137,10 @@ correct independent of the classifier).
   public mirror) covering pre-release checklist with `process_mode`
   assertion, one-time setup (`glab variable set` flag/stdin form,
   `gh secret set` blocking-stdin behavior, default-branch correction,
-  resource_group setup), known footguns (protected-tag immutability,
-  first-tag-on-new-mirror auto-trigger gap, yanked-version recovery,
-  cancelled-run recovery, `refs/original` cleanup), and cross-model
-  review limitations.
+  resource_group setup), and known footguns (protected-tag
+  immutability, first-tag-on-new-mirror auto-trigger gap,
+  yanked-version recovery, cancelled-run recovery, `refs/original`
+  cleanup).
 - README CI / crates.io / license badges. Badge label honestly reads
   "Release" rather than "CI" (the workflow runs only on tag pushes).
 
