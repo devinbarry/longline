@@ -118,6 +118,12 @@ tests:
     expected:
       decision: ask
 
+  - id: gh-variable-list-allow
+    command: "gh variable list"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
   - id: gh-cache-list-allow
     command: "gh cache list"
     expected:

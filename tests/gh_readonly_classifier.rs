@@ -305,6 +305,14 @@ fn gist_read_only_classifies() {
 }
 
 #[test]
+fn gist_mutating_returns_none() {
+    assert_eq!(classify("gh gist create file.md"), None);
+    assert_eq!(classify("gh gist edit abc"), None);
+    assert_eq!(classify("gh gist delete abc"), None);
+    assert_eq!(classify("gh gist clone abc"), None);
+}
+
+#[test]
 fn label_list_classifies() {
     assert_eq!(classify("gh label list"), Some("label list"));
 }
@@ -347,6 +355,11 @@ fn variable_mutating_returns_none() {
 #[test]
 fn cache_list_classifies() {
     assert_eq!(classify("gh cache list"), Some("cache list"));
+}
+
+#[test]
+fn cache_mutating_returns_none() {
+    assert_eq!(classify("gh cache delete 12345"), None);
 }
 
 // ============================================================

@@ -14,11 +14,6 @@ use crate::parser::{Arg, ArgMeta, SimpleCommand};
 /// or starting with `<flag>=` triggers `gh api` rejection.
 const API_BODY_LONG_FLAGS: &[&str] = &["--field", "--form", "--raw-field", "--input"];
 
-/// Top-level value-flag long forms (TODO: not parsed in R7 — see
-/// "Known limitations" in the spec). Listed for future reference.
-#[allow(dead_code)]
-const TOP_LEVEL_VALUE_LONG_FLAGS: &[&str] = &["--repo", "--hostname"];
-
 /// Returns true if any argv token has UnsafeString classification.
 /// Used to reject `gh api` invocations whose runtime argv may differ
 /// from parsed argv (command substitution, variable expansion, etc.).
@@ -35,13 +30,21 @@ fn first_non_flag(argv: &[Arg]) -> Option<&Arg> {
     argv.iter().find(|a| !a.text.starts_with('-'))
 }
 
+/// Returns true if `arg.text` is `flag` exactly OR starts with `flag=`
+/// (the single-token `--flag=value` form). Allocation-free.
+fn arg_matches_long_flag(arg: &Arg, flag: &str) -> bool {
+    arg.text == flag
+        || (arg.text.starts_with(flag) && arg.text.as_bytes().get(flag.len()) == Some(&b'='))
+}
+
 /// Look up the value of a `<flag> <value>` or `<flag>=<value>` pair
 /// in argv. Returns the value if `flag` is present in either form.
+/// Allocation-free (manual prefix check, no `format!`).
 fn argv_value_for<'a>(argv: &'a [Arg], flag: &str) -> Option<&'a str> {
     for (i, arg) in argv.iter().enumerate() {
         // `--flag=value` form (single token)
-        if let Some(value) = arg.text.strip_prefix(&format!("{}=", flag)) {
-            return Some(value);
+        if arg.text.starts_with(flag) && arg.text.as_bytes().get(flag.len()) == Some(&b'=') {
+            return Some(&arg.text[flag.len() + 1..]);
         }
         // `--flag value` form (two tokens)
         if arg.text == flag {
@@ -52,13 +55,10 @@ fn argv_value_for<'a>(argv: &'a [Arg], flag: &str) -> Option<&'a str> {
 }
 
 /// Returns true if any of `flags` (with or without `=value` suffix)
-/// is present as a complete argv token.
+/// is present as a complete argv token. Allocation-free.
 fn argv_has_any_long_flag(argv: &[Arg], flags: &[&str]) -> bool {
-    argv.iter().any(|a| {
-        flags
-            .iter()
-            .any(|flag| a.text == *flag || a.text.starts_with(&format!("{}=", flag)))
-    })
+    argv.iter()
+        .any(|a| flags.iter().any(|flag| arg_matches_long_flag(a, flag)))
 }
 
 /// Returns true if argv contains any short body/field flag form for
