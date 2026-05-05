@@ -21,13 +21,47 @@ fn has_unsafe_argv(argv: &[Arg]) -> bool {
     argv.iter().any(|a| matches!(a.meta, ArgMeta::UnsafeString))
 }
 
-/// Skip over flag tokens (anything starting with `-`) and return the
-/// first non-flag positional. Used to find subcommands in non-api classifiers.
-/// Note: this is a simple scan that does NOT pair value-flags with their
-/// values; suitable for subcommand detection but not for endpoint detection
-/// (use `has_api_endpoint` for that).
-fn first_non_flag(argv: &[Arg]) -> Option<&Arg> {
-    argv.iter().find(|a| !a.text.starts_with('-'))
+/// Top-level gh flags that take a value as the next argv token. When
+/// scanning for subcommands and shape tokens, the VALUE of each pair
+/// must be skipped — otherwise `gh release --repo view delete v1`
+/// gets misread as `release view` (a read-only shape) when gh actually
+/// parses it as `release delete` with --repo="view".
+const GH_TOP_LEVEL_VALUE_FLAGS: &[&str] = &["-R", "--repo", "--hostname"];
+
+/// Returns argv with known top-level value-flag pairs removed.
+/// Single-token forms (`--repo=owner/repo`, `--hostname=X`) are also
+/// removed via prefix check. Allocation: one Vec<&str> per call,
+/// short-lived; classifier hot path is not a throughput bottleneck.
+fn argv_without_top_level_value_flags(argv: &[Arg]) -> Vec<&str> {
+    let mut out = Vec::with_capacity(argv.len());
+    let mut i = 0;
+    while i < argv.len() {
+        let t = argv[i].text.as_str();
+        // Two-token form: `--flag value`
+        if GH_TOP_LEVEL_VALUE_FLAGS.contains(&t) {
+            i += 2;
+            continue;
+        }
+        // Single-token form: `--flag=value` — skip just the flag token.
+        // (Other flags starting with `-` are passed through; the caller's
+        // filter handles them.)
+        if t.starts_with("--repo=") || t.starts_with("--hostname=") {
+            i += 1;
+            continue;
+        }
+        out.push(t);
+        i += 1;
+    }
+    out
+}
+
+/// Walk argv, skip top-level value-flag pairs, then return the first
+/// non-flag positional. Used to identify the gh subcommand even when
+/// preceded by `-R owner/repo` or `--hostname X`.
+fn first_subcommand_token(argv: &[Arg]) -> Option<&str> {
+    argv_without_top_level_value_flags(argv)
+        .into_iter()
+        .find(|t| !t.starts_with('-'))
 }
 
 /// Known two-token value-taking flags for `gh api` (where the flag consumes
@@ -190,11 +224,13 @@ pub fn classify_gh(cmd: &SimpleCommand, is_extra: bool) -> Option<&'static str> 
         return None;
     }
 
-    // First non-flag argv token is the subcommand (we do NOT skip
-    // top-level flags like `-R owner/repo` — see "Known limitations"
-    // in the spec; gh -R owner/repo pr view falls through to None and
-    // asks via the existing fallthrough).
-    let subcommand = first_non_flag(&cmd.argv)?.text.as_str();
+    // Find the subcommand, skipping top-level value-flag pairs
+    // (-R/--repo, --hostname). Without this, `gh release --repo view
+    // delete v1` would misclassify as `release view` (a read-only
+    // shape) when gh actually parses it as `release delete` with
+    // --repo="view" — an R7-introduced bypass surfaced in round-8
+    // review.
+    let subcommand = first_subcommand_token(&cmd.argv)?;
 
     match subcommand {
         "api" if is_extra => None,
@@ -331,11 +367,17 @@ fn classify_simple_shape(
     second_token: &str,
     shape: &'static str,
 ) -> Option<&'static str> {
-    let mut iter = cmd.argv.iter().filter(|a| !a.text.starts_with('-'));
-    if iter.next()?.text != subcommand {
+    // Skip top-level value-flag pairs (-R/--repo, --hostname) before
+    // identifying the subcommand and shape. Without this,
+    // `gh release --repo view delete v1` would treat "view" (the value
+    // of --repo) as the shape, classifier-allowing what gh executes as
+    // `release delete`. Round-8 review (Codex High).
+    let tokens = argv_without_top_level_value_flags(&cmd.argv);
+    let mut iter = tokens.iter().filter(|t| !t.starts_with('-'));
+    if *iter.next()? != subcommand {
         return None;
     }
-    if iter.next()?.text == second_token {
+    if *iter.next()? == second_token {
         return Some(shape);
     }
     None

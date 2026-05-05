@@ -484,6 +484,76 @@ fn auth_status_classifies() {
 }
 
 #[test]
+fn top_level_value_flag_value_does_not_become_shape() {
+    // R7 round-8 review (Codex High): `--repo` and `-R` and `--hostname`
+    // take the next argv token as their value. Without skipping that
+    // value, the classifier sees the value as the shape token. Real
+    // bypasses: `gh release --repo view delete v1` was parsing as
+    // `release view` (read-only shape) when gh actually executes
+    // `release delete` with --repo="view".
+    assert_eq!(
+        classify("gh release --repo view delete v1 --yes"),
+        None,
+        "release delete with --repo value spelling 'view'"
+    );
+    assert_eq!(
+        classify("gh secret --repo list set FOO --body bar"),
+        None,
+        "secret set with --repo value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh variable --repo list set FOO"),
+        None,
+        "variable set with --repo value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh label --repo list delete bug --yes"),
+        None,
+        "label delete with --repo value spelling 'list'"
+    );
+    assert_eq!(
+        classify("gh cache --repo list delete --all"),
+        None,
+        "cache delete with --repo value spelling 'list'"
+    );
+    // -R short form, same bug
+    assert_eq!(classify("gh release -R view delete v1"), None);
+    assert_eq!(classify("gh secret -R list set FOO --body bar"), None);
+    // --hostname two-token form
+    assert_eq!(
+        classify("gh release --hostname view delete v1"),
+        None,
+        "--hostname value spelling 'view'"
+    );
+}
+
+#[test]
+fn top_level_value_flag_with_legitimate_subcommand_classifies() {
+    // After skipping the flag-value pair, the legitimate read-only
+    // subcommand should still classify correctly.
+    assert_eq!(
+        classify("gh pr -R owner/repo view 123"),
+        Some("pr view"),
+        "-R before subcommand"
+    );
+    assert_eq!(
+        classify("gh pr --repo owner/repo view 123"),
+        Some("pr view"),
+        "--repo before subcommand"
+    );
+    assert_eq!(
+        classify("gh release --repo owner/repo view v1"),
+        Some("release view"),
+        "release view with --repo"
+    );
+    // --repo=value single-token form (no value to skip beyond the flag itself)
+    assert_eq!(
+        classify("gh pr --repo=owner/repo view 123"),
+        Some("pr view")
+    );
+}
+
+#[test]
 fn auth_status_show_token_returns_none() {
     // R7 round-7 review (Codex High): --show-token / -t print the user's
     // auth token to stdout. Defense-in-depth: classifier refuses so the
