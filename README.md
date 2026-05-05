@@ -4,11 +4,13 @@
 [![crates.io](https://img.shields.io/crates/v/longline.svg)](https://crates.io/crates/longline)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that parses Bash commands and enforces configurable security policies.
+A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) that auto-allows safe shell commands so AI coding agents stop interrupting you for approval — and still blocks the dangerous ones.
 
 ## What it does
 
-longline acts as a Claude Code `PreToolUse` hook. It intercepts Bash commands before execution, parses them using tree-sitter, evaluates them against YAML-defined safety rules, and returns allow/ask/deny decisions. It also handles Read, Grep, and Glob tools with path-based sensitive-file protection.
+longline acts as a `PreToolUse` hook for both Claude Code and Codex CLI. It intercepts Bash commands before execution, parses them using tree-sitter, evaluates them against YAML-defined safety rules, and returns allow/ask/deny decisions. Under Claude it also handles Read, Grep, and Glob tools with path-based sensitive-file protection.
+
+**Design goal — speed, not gatekeeping.** Claude Code and Codex stop to ask for approval on nearly every shell command, which interrupts flow even when the command is plainly safe. longline's job is to keep those tools moving: auto-allow the obviously safe operations, reserve prompts for things that genuinely warrant human review, and let each repo extend the allowlist with whatever the developer considers safe in that project. It's a safety hook, but the day-to-day reason it exists is to speed up development and automation by replacing constant approval prompts with a configurable, well-tested policy.
 
 **Key features:**
 - Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, and compound statements
