@@ -484,6 +484,50 @@ fn auth_status_classifies() {
 }
 
 #[test]
+fn r7_new_families_require_strict_invocation() {
+    // R7 round-9 review (Codex High): R7-NEW classified families
+    // (release, search, gist, label, status, secret list, variable
+    // list, cache list) had no pre-R7 YAML allowlist coverage. Without
+    // a strict-invocation guard, env-override / absolute-path /
+    // inline-assignment forms classified-allowed. Pre-R7 asked
+    // uniformly. Strict guard preserves pre-R7 ask.
+    assert_eq!(classify("PATH=/tmp gh release view v1"), None);
+    assert_eq!(classify("/tmp/gh status"), None);
+    assert_eq!(
+        classify("LD_PRELOAD=/tmp/evil.so gh secret list"),
+        None,
+        "shared-object hijack on R7-new family"
+    );
+    assert_eq!(classify("PATH=/tmp gh search code longline"), None);
+    assert_eq!(classify("/usr/local/bin/gh gist list"), None);
+    assert_eq!(classify("FOO=bar gh variable list"), None);
+    assert_eq!(
+        classify("gh cache list > /tmp/out"),
+        None,
+        "redirect on R7-new"
+    );
+}
+
+#[test]
+fn pre_r7_allowlisted_families_preserve_basename_match() {
+    // Pre-R7 minimal/standard allowlists matched these by basename
+    // and ignored assignments. R7 must NOT regress them — the strict
+    // guard is targeted to R7-new families only.
+    assert_eq!(classify("PATH=/tmp gh pr view 123"), Some("pr view"));
+    assert_eq!(
+        classify("/usr/local/bin/gh pr view 123"),
+        Some("pr view"),
+        "pre-R7 minimal-trust allowlist matched by basename"
+    );
+    assert_eq!(classify("FOO=bar gh issue list"), Some("issue list"));
+    assert_eq!(classify("PATH=/tmp gh run watch 123"), Some("run watch"));
+    assert_eq!(
+        classify("/usr/local/bin/gh auth status"),
+        Some("auth status")
+    );
+}
+
+#[test]
 fn top_level_value_flag_value_does_not_become_shape() {
     // R7 round-8 review (Codex High): `--repo` and `-R` and `--hostname`
     // take the next argv token as their value. Without skipping that

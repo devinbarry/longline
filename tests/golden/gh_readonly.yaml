@@ -451,3 +451,49 @@ tests:
       decision: allow
       rule_id: gh-readonly-classifier
     note: "short-form -R before subcommand"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-9 review — R7-new families need strict invocation guard
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-release-view-with-path-override-asks
+    command: "PATH=/tmp gh release view v1"
+    expected:
+      decision: ask
+    note: "R7-NEW family release view: pre-R7 had no allowlist coverage; require strict invocation"
+
+  - id: gh-status-absolute-path-asks
+    command: "/tmp/gh status"
+    expected:
+      decision: ask
+    note: "R7-NEW family status: pre-R7 asked; absolute-path bypass closed"
+
+  - id: gh-secret-list-ld-preload-asks
+    command: "LD_PRELOAD=/tmp/evil.so gh secret list"
+    expected:
+      decision: ask
+    note: "R7-NEW family secret list: shared-object hijack closed"
+
+  - id: gh-search-code-with-foo-bar-asks
+    command: "FOO=bar gh search code longline"
+    expected:
+      decision: ask
+    note: "R7-NEW family search: any inline assignment asks (uniform with R7 round-4 gh-api fix)"
+
+  # Pre-R7-allowlisted families must NOT regress under environment
+  # overrides — pre-R7 minimal/standard allowlist matched by basename
+  # and ignored assignments. R7 round-9 strict guard is targeted to
+  # R7-NEW families only.
+  - id: gh-pr-view-with-path-override-still-allows
+    command: "PATH=/tmp gh pr view 123"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "pre-R7 minimal-trust allowlist matched by basename; preserve via classifier"
+
+  - id: gh-pr-view-absolute-path-still-allows
+    command: "/usr/local/bin/gh pr view 123"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "pre-R7 minimal-trust allowlist matched by basename"

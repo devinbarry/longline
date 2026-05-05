@@ -64,6 +64,32 @@ fn first_subcommand_token(argv: &[Arg]) -> Option<&str> {
         .find(|t| !t.starts_with('-'))
 }
 
+/// R7 round-9 (Codex High): R7-NEW classified families (release, search,
+/// gist, label, status, secret list, variable list, cache list) had no
+/// pre-R7 YAML allowlist coverage — pre-R7 asked uniformly for them.
+/// Without this guard, `PATH=/tmp gh release view v1`,
+/// `/tmp/gh status`, `LD_PRELOAD=/tmp/evil.so gh secret list`, etc.
+/// would classifier-allow despite running an alternate binary or with
+/// a poisoned execution environment.
+///
+/// This is the same strict check `classify_gh_api` applies via Step
+/// 0a-bis. It's NOT applied to pre-R7-allowlisted families
+/// (pr/issue/repo/run/workflow/auth) because pre-R7 minimal/standard
+/// allowlists matched those by basename and ignored assignments —
+/// adding the strict check there would be a R7 regression vs pre-R7.
+fn require_strict_invocation(cmd: &SimpleCommand) -> Option<()> {
+    if cmd.name.as_deref() != Some("gh") {
+        return None;
+    }
+    if !cmd.assignments.is_empty() {
+        return None;
+    }
+    if !cmd.redirects.is_empty() {
+        return None;
+    }
+    Some(())
+}
+
 /// Known two-token value-taking flags for `gh api` (where the flag consumes
 /// the next token as its value rather than encoding it via `--flag=value`).
 /// Flags that indicate body/mutation (`-f`, `-F`, `--field`, etc.) are handled
@@ -233,22 +259,53 @@ pub fn classify_gh(cmd: &SimpleCommand, is_extra: bool) -> Option<&'static str> 
     let subcommand = first_subcommand_token(&cmd.argv)?;
 
     match subcommand {
+        // gh api: top-level only, with its own strict checks.
         "api" if is_extra => None,
         "api" => classify_gh_api(cmd),
+        // Pre-R7-allowlisted families: keep basename match + ignore
+        // assignments to preserve pre-R7 minimal/standard allowlist behavior.
         "pr" => classify_gh_pr(cmd),
         "issue" => classify_gh_issue(cmd),
         "repo" => classify_gh_repo(cmd),
         "run" => classify_gh_run(cmd),
         "workflow" => classify_gh_workflow(cmd),
-        "release" => classify_gh_release(cmd),
-        "search" => classify_gh_search(cmd),
         "auth" => classify_gh_auth(cmd),
-        "gist" => classify_gh_gist(cmd),
-        "label" => classify_gh_label(cmd),
-        "status" => Some("status"),
-        "secret" => classify_gh_secret(cmd),
-        "variable" => classify_gh_variable(cmd),
-        "cache" => classify_gh_cache(cmd),
+        // R7-NEW families: no pre-R7 YAML allowlist coverage — pre-R7
+        // asked uniformly. Apply strict invocation guard so PATH= /
+        // LD_PRELOAD= / /tmp/gh / inline-assignment forms preserve
+        // the pre-R7 ask.
+        "release" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_release(cmd)
+        }
+        "search" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_search(cmd)
+        }
+        "gist" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_gist(cmd)
+        }
+        "label" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_label(cmd)
+        }
+        "status" => {
+            require_strict_invocation(cmd)?;
+            Some("status")
+        }
+        "secret" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_secret(cmd)
+        }
+        "variable" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_variable(cmd)
+        }
+        "cache" => {
+            require_strict_invocation(cmd)?;
+            classify_gh_cache(cmd)
+        }
         _ => None,
     }
 }
