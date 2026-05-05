@@ -6,8 +6,15 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# I1: serialize same-tag runs; cancel a superseded in-flight run if the
+# operator force-pushes the same tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "true"   # I4: parity with GitLab CI
 
 jobs:
   publish:
@@ -20,10 +27,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # I3: cargo metadata replaces grep|sed; robust against future
+      # [workspace] blocks. python3 is always present on ubuntu-latest.
+      # Filter by package name instead of packages[0] indexing — order
+      # is not guaranteed if a workspace ever lands.
       - name: Verify version matches tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          CARGO_VERSION="v$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
+          CARGO_VERSION="v$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import sys, json; pkgs = json.load(sys.stdin)["packages"]; print(next(p for p in pkgs if p["name"] == "longline")["version"])')"
           if [ "$CARGO_VERSION" != "${{ github.ref_name }}" ]; then
             echo "Tag ${{ github.ref_name }} doesn't match Cargo.toml version $CARGO_VERSION"
             exit 1
@@ -32,16 +44,51 @@ jobs:
       - name: Run tests
         run: cargo test
 
-      - name: Enable publishing
+      # I2: skip-if-already-published. crates.io requires User-Agent (per
+      # https://crates.io/data-access) — without it the API returns 403.
+      # case statement (not naïve if-200) means we fail loudly on 429/5xx
+      # rather than guessing "not published" and re-attempting publish.
+      # --max-time bounds a hung TCP connect to 30s.
+      - name: Skip if version already published
         if: startsWith(github.ref, 'refs/tags/')
+        id: already_published
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          STATUS=$(curl -sS --max-time 30 -o /dev/null -w "%{http_code}" \
+            -A "longline-release-workflow (https://github.com/devinbarry/longline)" \
+            "https://crates.io/api/v1/crates/longline/$VERSION")
+          case "$STATUS" in
+            200)
+              echo "Version $VERSION already on crates.io — skipping publish step"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "Version $VERSION not yet on crates.io — will publish"
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "ERROR: unexpected HTTP $STATUS from crates.io probe — aborting"
+              exit 1
+              ;;
+          esac
+
+      - name: Enable publishing
+        if: startsWith(github.ref, 'refs/tags/') && steps.already_published.outputs.skip != 'true'
         run: sed -i 's/publish = false/publish = true/' Cargo.toml
 
       - name: Publish to crates.io
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && steps.already_published.outputs.skip != 'true'
         run: cargo publish --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      # Intentionally NO skip gate: half-state recovery (concurrency cancel
+      # mid-publish) needs the GitHub Release to land even when publish was
+      # skipped because the version already existed.
+      # softprops/action-gh-release@v2 is idempotent on existing releases
+      # (updates the body rather than failing on conflict) — that
+      # idempotency is the property the recovery story relies on.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
