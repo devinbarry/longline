@@ -218,3 +218,38 @@ tests:
       decision: allow
       rule_id: gh-readonly-classifier
     note: "endpoint follows jq filter value; classifier correctly identifies repos/foo as endpoint"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 round-2 review — short-form value flags consume their value
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-short-q-no-endpoint
+    command: "gh api -q ."
+    expected:
+      decision: ask
+    note: "-q is short for --jq; value `.` must not be treated as endpoint"
+
+  - id: gh-api-short-t-no-endpoint
+    command: "gh api -t '{{.}}'"
+    expected:
+      decision: ask
+    note: "-t is short for --template; value must not be treated as endpoint"
+
+  - id: gh-api-preview-no-endpoint
+    command: "gh api --preview foo"
+    expected:
+      decision: ask
+    note: "--preview takes a value; without endpoint, classifier returns None → ask"
+
+  - id: gh-api-hostname-no-endpoint
+    command: "gh api --hostname ghe.example.com"
+    expected:
+      decision: ask
+    note: "--hostname takes a value; without endpoint, classifier returns None → ask"
+
+  - id: gh-api-short-q-with-endpoint
+    command: "gh api -q . repos/foo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "endpoint follows -q value; classifier correctly identifies repos/foo as endpoint"

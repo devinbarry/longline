@@ -142,6 +142,58 @@ fn api_unsafe_argv_returns_none() {
     );
 }
 
+#[test]
+fn api_short_value_flags_consume_value_for_endpoint_detection() {
+    // -q is short for --jq; -t for --template; -p for --preview.
+    // Without consuming their values, the value tokens (e.g. ".") would
+    // be misidentified as the endpoint and the classifier would allow
+    // a malformed command. With proper value-flag handling: no endpoint
+    // present after value consumption → return None.
+    assert_eq!(classify("gh api -q ."), None, "gh api -q . has no endpoint");
+    assert_eq!(
+        classify("gh api -t '{{.}}'"),
+        None,
+        "gh api -t TEMPLATE has no endpoint"
+    );
+    assert_eq!(
+        classify("gh api -p baz"),
+        None,
+        "gh api -p PREVIEW has no endpoint"
+    );
+    assert_eq!(
+        classify("gh api --preview foo"),
+        None,
+        "gh api --preview FOO has no endpoint"
+    );
+    assert_eq!(
+        classify("gh api --hostname ghe.example.com"),
+        None,
+        "gh api --hostname HOST has no endpoint"
+    );
+}
+
+#[test]
+fn api_short_value_flags_with_endpoint_classify() {
+    // Same flags, but with a real endpoint present after the value.
+    // The classifier must consume the value tokens and then identify
+    // the trailing positional as the endpoint.
+    assert_eq!(
+        classify("gh api -q . repos/foo"),
+        Some("api (GET)"),
+        "endpoint follows -q value"
+    );
+    assert_eq!(
+        classify("gh api -t '{{.}}' repos/foo"),
+        Some("api (GET)"),
+        "endpoint follows -t value"
+    );
+    assert_eq!(
+        classify("gh api -H 'Accept: text/html' repos/foo"),
+        Some("api (GET)"),
+        "endpoint follows -H value"
+    );
+}
+
 // ============================================================
 // gh pr: read-only shapes
 // ============================================================

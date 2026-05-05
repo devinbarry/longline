@@ -34,14 +34,33 @@ fn first_non_flag(argv: &[Arg]) -> Option<&Arg> {
 /// the next token as its value rather than encoding it via `--flag=value`).
 /// Flags that indicate body/mutation (`-f`, `-F`, `--field`, etc.) are handled
 /// separately in the body-flag rejection steps, not listed here.
+///
+/// Sourced from `gh api --help`: `-X/--method`, `-q/--jq`, `-H/--header`,
+/// `-t/--template`, `-p/--preview`, `--cache`, plus the top-level
+/// `--hostname`. Long forms (`--jq`, `--template`, `--header`, `--method`,
+/// `--preview`, `--hostname`) and short forms (`-X`, `-q`, `-H`, `-t`, `-p`)
+/// are all listed so that endpoint detection consumes their values regardless
+/// of which form the caller used.
 const API_VALUE_TAKING_TWO_TOKEN_FLAGS: &[&str] = &[
+    // method
     "-X",
     "--method",
+    // jq filter
+    "-q",
     "--jq",
+    // headers
     "-H",
     "--header",
+    // go template
+    "-t",
     "--template",
+    // preview API version
+    "-p",
+    "--preview",
+    // cache duration
     "--cache",
+    // top-level hostname (gh -level flag, but appears in argv before subcommand)
+    "--hostname",
 ];
 
 /// Collect all method values specified via `-X <value>`, `--method <value>`,

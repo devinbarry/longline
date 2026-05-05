@@ -115,11 +115,13 @@ fn evaluate_with_extras(
             is_allowlisted(config, leaf)
                 || shell_c_covered_via_extras(leaf, extra_stmts)
                 || classifier_covers(leaf)
+                || allow_rule_covers(config, leaf)
         }) && extra_leaves.iter().all(|leaf| {
             is_allowlisted(config, leaf)
                 || is_covered_by_wrapper_entry(config, leaves, leaf)
                 || shell_c_covered_via_extras(leaf, extra_stmts)
                 || classifier_covers(leaf)
+                || allow_rule_covers(config, leaf)
         });
         if !all_covered {
             // Try to find a descriptive reason from trust-filtered allowlist entries
@@ -227,6 +229,32 @@ fn classifier_covers(leaf: &Statement) -> bool {
         Statement::SimpleCommand(cmd) => classify_gh(cmd).is_some(),
         _ => false,
     }
+}
+
+/// Returns true if `leaf` is a SimpleCommand matched by any rule with
+/// `decision: allow` whose level is at or below the configured safety
+/// level.
+///
+/// Used in the all-covered gate of `evaluate_with_extras` so that a
+/// user-defined permissive YAML rule (e.g. a project overlay containing
+/// `command: docker, decision: allow`) keeps working after R7 dropped
+/// the `rule_id.is_none()` gate guard. Without this predicate, an
+/// allow-rule-matched leaf would fall through to the default decision
+/// because it isn't allowlisted, classifier-covered, or shell-c-covered.
+///
+/// No rules with `decision: allow` exist in the bundled `rules/*.yaml`
+/// today; this predicate exists to preserve the rules-API contract for
+/// custom overlays.
+fn allow_rule_covers(config: &RulesConfig, leaf: &Statement) -> bool {
+    let cmd = match leaf {
+        Statement::SimpleCommand(c) => c,
+        _ => return false,
+    };
+    config.rules.iter().any(|rule| {
+        rule.level <= config.safety_level
+            && rule.decision == Decision::Allow
+            && matches_rule(&rule.matcher, cmd)
+    })
 }
 
 /// Evaluate a single leaf node (SimpleCommand, Opaque, or Empty).
@@ -1787,6 +1815,49 @@ rules: []
         let config = load_embedded_rules().unwrap();
         let result = evaluate_with_extras(&config, &leaves, &pipelines, &extra_stmts);
         assert_eq!(result.decision, Decision::Ask);
+    }
+
+    #[test]
+    fn evaluate_with_extras_honors_user_defined_allow_rule() {
+        // R7 round-2 review (Codex Important): removing the
+        // `worst.rule_id.is_none()` guard from the all-covered gate
+        // would have silently broken any future user-defined YAML rule
+        // with `decision: allow`. The `allow_rule_covers` predicate
+        // restores the contract.
+        //
+        // Build a synthetic config with a single allow-rule on `docker`,
+        // construct a `docker ps` command (NOT in any allowlist), and
+        // verify the result allows.
+        let yaml = r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: user-docker-allow
+    level: high
+    match:
+      command: docker
+    decision: allow
+    reason: "User permits docker"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        let stmt = parse("docker ps").unwrap();
+        let result = evaluate(&config, &stmt);
+        // The decision must be Allow — the rule fires and `allow_rule_covers`
+        // keeps the all-covered gate from re-firing it as default ask.
+        // Note: rule_id may be None here because evaluate_leaf's merge
+        // only replaces `worst` when `result.decision > worst.decision`
+        // (strict greater); for an Allow rule with worst already Allow
+        // the rule's rule_id is dropped at that level. Pre-existing
+        // behavior unrelated to R7 — Codex's Important finding was about
+        // the decision flipping to ask, which this test pins.
+        assert_eq!(
+            result.decision,
+            Decision::Allow,
+            "user-defined `decision: allow` rule must keep working post-R7"
+        );
     }
 
     #[test]
