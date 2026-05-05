@@ -1,5 +1,6 @@
 mod allowlist;
 mod config;
+pub mod gh_classifier;
 mod matching;
 
 #[allow(unused_imports)]
@@ -227,6 +228,22 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement) -> PolicyResult {
                     decision: Decision::Allow,
                     rule_id: None,
                     reason: "version check".to_string(),
+                };
+            }
+
+            // Read-only `gh` classifier (R7). Fires before the trust-level
+            // allowlist so that read-only `gh api` GET-only forms allow
+            // without requiring `trust: full`. The synthetic rule_id is
+            // load-bearing — `evaluate_with_extras`'s final-gate logic
+            // requires either a rule match or an allowlist match to
+            // preserve a leaf-level Allow against the default-decision
+            // override. See the spec at
+            // `docs/superpowers/specs/2026-05-05-r7-readonly-gh-classifier-design.md`.
+            if let Some(shape) = gh_classifier::classify_gh(cmd) {
+                return PolicyResult {
+                    decision: Decision::Allow,
+                    rule_id: Some("gh-readonly-classifier".to_string()),
+                    reason: format!("read-only gh: {}", shape),
                 };
             }
 

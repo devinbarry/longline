@@ -1,0 +1,152 @@
+tests:
+  # ════════════════════════════════════════════════════════════════
+  # gh api: read-only GET cases — allow via gh-readonly-classifier
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-dogfood-pain-point
+    command: "gh api repos/openai/codex/contents/codex-rs/hooks/src/engine/output_parser.rs?ref=main --jq .content"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "the v0.16 parent-supervision pain point — must auto-allow"
+
+  - id: gh-api-default-method
+    command: "gh api repos/owner/repo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-api-explicit-get-X
+    command: "gh api -X GET repos/owner/repo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-api-explicit-get-method-flag
+    command: "gh api --method GET repos/owner/repo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-api-method-equals-get
+    command: "gh api --method=GET repos/owner/repo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  # ════════════════════════════════════════════════════════════════
+  # gh api: mutating / unsafe — must ask
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-explicit-post-asks-via-rule
+    command: "gh api -X POST repos/foo/issues"
+    expected:
+      decision: ask
+      rule_id: gh-api-mutating
+    note: "preserved by the existing gh-api-mutating rule"
+
+  - id: gh-api-body-flag-asks-via-allowlist
+    command: "gh api repos/foo/issues -f title=x"
+    expected:
+      decision: ask
+    note: "classifier returns None on body flag; falls through to gh-api allowlist (trust:full → ask)"
+
+  - id: gh-api-glued-short-body-flag-asks
+    command: "gh api repos/foo/issues -ffoo=bar"
+    expected:
+      decision: ask
+
+  - id: gh-api-no-endpoint-asks
+    command: "gh api"
+    expected:
+      decision: ask
+    note: "Step 0 rejects: no endpoint after subcommand"
+
+  - id: gh-api-get-no-endpoint-asks
+    command: "gh api -X GET"
+    expected:
+      decision: ask
+
+  - id: gh-api-command-substitution-asks
+    command: "gh api $(echo repos/foo)"
+    expected:
+      decision: ask
+    note: "Step 0 rejects: UnsafeString in argv"
+
+  # ════════════════════════════════════════════════════════════════
+  # gh subcommand inspection — read-only allow
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-pr-view-allow
+    command: "gh pr view 123 --json files"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-pr-list-allow
+    command: "gh pr list --state open"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-pr-merge-asks
+    command: "gh pr merge 123"
+    expected:
+      decision: ask
+    note: "classifier returns None on merge; falls through to gh pr merge allowlist (trust:full → ask)"
+
+  - id: gh-search-code-allow
+    command: "gh search code longline"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-status-allow
+    command: "gh status"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-secret-list-allow
+    command: "gh secret list"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  - id: gh-secret-set-asks
+    command: "gh secret set FOO --body bar"
+    expected:
+      decision: ask
+
+  - id: gh-cache-list-allow
+    command: "gh cache list"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+
+  # ════════════════════════════════════════════════════════════════
+  # Wrapper interaction
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-command-wrapper-allow
+    command: "command gh pr view 123"
+    expected:
+      decision: allow
+    note: "command-wrapper unwrapping — inner gh leaf classifies; outer command leaf is allowlisted (rule_id None via allowlist dominates worst)"
+
+  - id: gh-env-wrapper-asks-via-printenv
+    command: "env GH_TOKEN=xyz gh api repos/foo"
+    expected:
+      decision: ask
+      rule_id: printenv
+    note: "env rule fires on the wrapper before/alongside the unwrapped gh leaf — proposal explicitly says env follows existing secret/env policy first"
+
+  # ════════════════════════════════════════════════════════════════
+  # Pipeline leaf preservation
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-pipeline-allow
+    command: "gh api repos/foo/bar | jq -r .content"
+    expected:
+      decision: allow
+    note: "gh leaf classifies via classifier; jq leaf via core-allowlist"

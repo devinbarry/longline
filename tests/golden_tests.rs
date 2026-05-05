@@ -301,3 +301,8 @@ fn golden_shell_builtins() {
 fn golden_shell_c_wrappers() {
     run_golden_suite("shell-c-wrappers.yaml");
 }
+
+#[test]
+fn golden_gh_readonly() {
+    run_golden_suite("gh_readonly.yaml");
+}
