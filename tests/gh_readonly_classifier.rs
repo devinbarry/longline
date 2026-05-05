@@ -394,3 +394,102 @@ fn version_check_returns_none_classifier_does_not_handle_it() {
     assert_eq!(classify("gh --version"), None);
     assert_eq!(classify("gh -V"), None);
 }
+
+// ============================================================
+// Bug 2 — method-flag bypass: conflicting method flags must reject (R7 fix)
+// ============================================================
+
+#[test]
+fn api_conflicting_method_flags_x_then_method_equals_returns_none() {
+    // `-X GET` first, then `--method=POST` — the second flag wins at runtime
+    // but only the first was previously checked. Must return None.
+    assert_eq!(
+        classify("gh api -X GET repos/foo --method=POST"),
+        None,
+        "conflicting method flags: -X GET then --method=POST"
+    );
+}
+
+#[test]
+fn api_conflicting_method_flags_method_then_method_equals_returns_none() {
+    // `--method GET` then `--method=POST` — conflicting flags, must reject.
+    assert_eq!(
+        classify("gh api --method GET repos/foo --method=POST"),
+        None,
+        "conflicting method flags: --method GET then --method=POST"
+    );
+}
+
+#[test]
+fn api_post_method_still_returns_none() {
+    // Baseline regression: single non-GET method flag still rejects.
+    assert_eq!(
+        classify("gh api -X POST repos/foo"),
+        None,
+        "single POST method flag"
+    );
+}
+
+#[test]
+fn api_dangling_x_flag_returns_none() {
+    // `-X` with no following value (dangling) is treated as non-GET and rejected.
+    assert_eq!(
+        classify("gh api -X"),
+        None,
+        "dangling -X with no method value"
+    );
+}
+
+// ============================================================
+// Bug 3 — value-flag values mistaken for endpoint (R7 fix)
+// ============================================================
+
+#[test]
+fn api_jq_only_no_endpoint_returns_none() {
+    // `gh api --jq .` — `.` is the jq filter value, not an endpoint.
+    assert_eq!(
+        classify("gh api --jq ."),
+        None,
+        "gh api --jq . has no endpoint; jq value must not be treated as endpoint"
+    );
+}
+
+#[test]
+fn api_header_only_no_endpoint_returns_none() {
+    // `gh api -H foo` — `foo` is the header value, not an endpoint.
+    assert_eq!(
+        classify("gh api -H foo"),
+        None,
+        "gh api -H foo has no endpoint; header value must not be treated as endpoint"
+    );
+}
+
+#[test]
+fn api_template_only_no_endpoint_returns_none() {
+    // `gh api --template t` — `t` is the template value, not an endpoint.
+    assert_eq!(
+        classify("gh api --template t"),
+        None,
+        "gh api --template t has no endpoint; template value must not be treated as endpoint"
+    );
+}
+
+#[test]
+fn api_jq_with_endpoint_classifies() {
+    // `gh api --jq . repos/foo` — the endpoint follows the jq filter.
+    assert_eq!(
+        classify("gh api --jq . repos/foo"),
+        Some("api (GET)"),
+        "gh api --jq . repos/foo has a real endpoint after the jq value"
+    );
+}
+
+#[test]
+fn api_header_with_endpoint_classifies() {
+    // `gh api -H "Accept: foo" repos/bar` — endpoint follows the header value.
+    assert_eq!(
+        classify("gh api -H \"Accept: foo\" repos/bar"),
+        Some("api (GET)"),
+        "gh api -H <header> repos/bar has a real endpoint after the header value"
+    );
+}

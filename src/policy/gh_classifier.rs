@@ -22,12 +22,101 @@ fn has_unsafe_argv(argv: &[Arg]) -> bool {
 }
 
 /// Skip over flag tokens (anything starting with `-`) and return the
-/// first non-flag positional. Used to find the endpoint after `gh api`.
-/// Note: this is a simple scan — it does NOT pair value-flags with
-/// their values; for `gh api` purposes, the first non-flag after the
-/// subcommand is the endpoint regardless of intervening flags.
+/// first non-flag positional. Used to find subcommands in non-api classifiers.
+/// Note: this is a simple scan that does NOT pair value-flags with their
+/// values; suitable for subcommand detection but not for endpoint detection
+/// (use `has_api_endpoint` for that).
 fn first_non_flag(argv: &[Arg]) -> Option<&Arg> {
     argv.iter().find(|a| !a.text.starts_with('-'))
+}
+
+/// Known two-token value-taking flags for `gh api` (where the flag consumes
+/// the next token as its value rather than encoding it via `--flag=value`).
+/// Flags that indicate body/mutation (`-f`, `-F`, `--field`, etc.) are handled
+/// separately in the body-flag rejection steps, not listed here.
+const API_VALUE_TAKING_TWO_TOKEN_FLAGS: &[&str] = &[
+    "-X",
+    "--method",
+    "--jq",
+    "-H",
+    "--header",
+    "--template",
+    "--cache",
+];
+
+/// Collect all method values specified via `-X <value>`, `--method <value>`,
+/// or `--method=<value>` in argv. Returns a `Vec` so that multiple conflicting
+/// method flags (e.g. `-X GET --method=POST`) are all captured.
+///
+/// A dangling `-X` or `--method` with no following token pushes `""` (empty
+/// string), which is not equal to "GET" and will cause the caller to reject.
+fn collect_api_methods(argv: &[Arg]) -> Vec<&str> {
+    let mut methods = Vec::new();
+    let mut i = 0;
+    while i < argv.len() {
+        let text = argv[i].text.as_str();
+        // `-X value` — two-token form
+        if text == "-X" {
+            if let Some(next) = argv.get(i + 1) {
+                methods.push(next.text.as_str());
+                i += 2;
+            } else {
+                methods.push(""); // dangling -X — non-GET
+                i += 1;
+            }
+            continue;
+        }
+        // `--method value` — two-token form
+        if text == "--method" {
+            if let Some(next) = argv.get(i + 1) {
+                methods.push(next.text.as_str());
+                i += 2;
+            } else {
+                methods.push(""); // dangling --method — non-GET
+                i += 1;
+            }
+            continue;
+        }
+        // `--method=value` — single-token form
+        if let Some(value) = text.strip_prefix("--method=") {
+            methods.push(value);
+        }
+        i += 1;
+    }
+    methods
+}
+
+/// Returns true if argv contains a non-flag positional endpoint token after
+/// the `api` subcommand. Skips values consumed by known value-taking flags
+/// so that e.g. `gh api --jq . repos/foo` correctly identifies `repos/foo`
+/// as the endpoint and `gh api --jq .` (no endpoint) returns false.
+fn has_api_endpoint(argv: &[Arg]) -> bool {
+    let mut iter = argv.iter().peekable();
+    let mut found_api = false;
+    while let Some(arg) = iter.next() {
+        let text = arg.text.as_str();
+        if !found_api {
+            if text == "api" {
+                found_api = true;
+            }
+            continue;
+        }
+        if text.starts_with('-') {
+            // Long-form `--flag=value` is a single token — no value to skip.
+            if text.contains('=') {
+                continue;
+            }
+            // Two-token value-flag: consume the next token as the flag's value.
+            if API_VALUE_TAKING_TWO_TOKEN_FLAGS.contains(&text) {
+                iter.next();
+            }
+            continue;
+        }
+        // First non-flag positional after `api` (after consuming value-flag
+        // values) is the endpoint.
+        return true;
+    }
+    false
 }
 
 /// Returns true if `arg.text` is `flag` exactly OR starts with `flag=`
@@ -35,23 +124,6 @@ fn first_non_flag(argv: &[Arg]) -> Option<&Arg> {
 fn arg_matches_long_flag(arg: &Arg, flag: &str) -> bool {
     arg.text == flag
         || (arg.text.starts_with(flag) && arg.text.as_bytes().get(flag.len()) == Some(&b'='))
-}
-
-/// Look up the value of a `<flag> <value>` or `<flag>=<value>` pair
-/// in argv. Returns the value if `flag` is present in either form.
-/// Allocation-free (manual prefix check, no `format!`).
-fn argv_value_for<'a>(argv: &'a [Arg], flag: &str) -> Option<&'a str> {
-    for (i, arg) in argv.iter().enumerate() {
-        // `--flag=value` form (single token)
-        if arg.text.starts_with(flag) && arg.text.as_bytes().get(flag.len()) == Some(&b'=') {
-            return Some(&arg.text[flag.len() + 1..]);
-        }
-        // `--flag value` form (two tokens)
-        if arg.text == flag {
-            return argv.get(i + 1).map(|a| a.text.as_str());
-        }
-    }
-    None
 }
 
 /// Returns true if any of `flags` (with or without `=value` suffix)
@@ -71,13 +143,6 @@ fn argv_has_short_body_field_flag(argv: &[Arg]) -> bool {
         let bytes = a.text.as_bytes();
         bytes.len() >= 2 && bytes[0] == b'-' && (bytes[1] == b'f' || bytes[1] == b'F')
     })
-}
-
-/// Look up the method specified by `-X` / `--method`. Returns:
-/// - `Some(method)` if a method flag is present (value extracted)
-/// - `None` if no method flag is present (default GET applies)
-fn extract_api_method(argv: &[Arg]) -> Option<&str> {
-    argv_value_for(argv, "-X").or_else(|| argv_value_for(argv, "--method"))
 }
 
 /// Returns the basename of `name`. `gh` matches if the basename is
@@ -138,43 +203,23 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
     }
 
     // Step 0c: require at least one non-flag positional AFTER `api`
-    // (the endpoint). The first non-flag is `api` itself; we need a
-    // second one. We must skip values consumed by value-paired flags
-    // (-X <method>, --method <method>) to avoid treating "GET" as the
-    // endpoint in `gh api -X GET` (no endpoint).
-    let mut found_api = false;
-    let mut has_endpoint = false;
-    let mut skip_next = false;
-    for arg in &cmd.argv {
-        if skip_next {
-            skip_next = false;
-            continue;
-        }
-        // Mark next token as a flag value if this is a value-taking flag.
-        if arg.text == "-X" || arg.text == "--method" {
-            skip_next = true;
-            continue;
-        }
-        if !arg.text.starts_with('-') {
-            if !found_api {
-                found_api = arg.text == "api";
-            } else {
-                has_endpoint = true;
-                break;
-            }
-        }
-    }
-    if !has_endpoint {
+    // (the endpoint). Uses `has_api_endpoint` which skips values consumed by
+    // ALL known value-taking flags (not just -X/--method) so that e.g.
+    // `gh api --jq .` (no real endpoint) correctly returns None.
+    if !has_api_endpoint(&cmd.argv) {
         return None;
     }
 
-    // Step 1: scan for explicit method flag.
-    if let Some(method) = extract_api_method(&cmd.argv) {
+    // Step 1: collect ALL method-flag occurrences. If any is non-GET (or
+    // empty/missing-value), reject. This prevents bypasses like
+    // `gh api -X GET repos/foo --method=POST` where the first flag passes
+    // but the second would override the method at runtime.
+    for method in collect_api_methods(&cmd.argv) {
         if !method.eq_ignore_ascii_case("GET") {
             return None;
         }
     }
-    // (Absent method: default GET — proceed.)
+    // (No method flags present: default GET — proceed.)
 
     // Step 2: reject any body/field flag.
     if argv_has_any_long_flag(&cmd.argv, API_BODY_LONG_FLAGS) {

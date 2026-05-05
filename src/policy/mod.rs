@@ -20,6 +20,7 @@ use allowlist::{
     find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,
     is_version_check,
 };
+use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
 
 /// Evaluate a parsed statement against the policy rules.
@@ -95,20 +96,32 @@ fn evaluate_with_extras(
         }
     }
 
-    // If nothing matched and not all leaves are allowlisted, use default decision.
+    // If nothing matched and not all leaves are covered, use default decision.
     // Change D (fix for Codex round-2 bare-allowlist hole): outer leaves may
     // also be covered by a successful shell-c unwrap — no need to bare-allowlist
     // bash/sh/sg. An outer leaf counts as covered only when its inner statement
     // was actually placed into extra_stmts for evaluation.
-    if worst.decision == Decision::Allow && worst.rule_id.is_none() {
-        let all_allowlisted = leaves.iter().all(|leaf| {
-            is_allowlisted(config, leaf) || shell_c_covered_via_extras(leaf, extra_stmts)
+    //
+    // R7 fix (Bug 1 — statement-level fail-open): the gate must run whenever
+    // worst.decision == Allow, regardless of rule_id. Pre-R7 the gate was
+    // guarded by `worst.rule_id.is_none()` because all rule_ids were
+    // restrictive (Ask/Deny). R7 introduced the permissive gh-readonly-classifier
+    // rule_id, which caused unknown leaves chained with a classified `gh` command
+    // to sneak through. The fix adds `classifier_covers` as a third coverage
+    // predicate so classifier-covered leaves are treated equivalently to
+    // allowlisted leaves in the all-covered check.
+    if worst.decision == Decision::Allow {
+        let all_covered = leaves.iter().all(|leaf| {
+            is_allowlisted(config, leaf)
+                || shell_c_covered_via_extras(leaf, extra_stmts)
+                || classifier_covers(leaf)
         }) && extra_leaves.iter().all(|leaf| {
             is_allowlisted(config, leaf)
                 || is_covered_by_wrapper_entry(config, leaves, leaf)
                 || shell_c_covered_via_extras(leaf, extra_stmts)
+                || classifier_covers(leaf)
         });
-        if !all_allowlisted {
+        if !all_covered {
             // Try to find a descriptive reason from trust-filtered allowlist entries
             let reason = leaves
                 .iter()
@@ -196,6 +209,23 @@ fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bo
             );
             extra_stmts.contains(&inner)
         }
+    }
+}
+
+/// Returns true if `leaf` is a SimpleCommand that the read-only gh classifier
+/// recognises as a provably read-only invocation.
+///
+/// Used in the all-covered gate of `evaluate_with_extras` so that classifier-
+/// covered leaves are treated equivalently to allowlisted leaves. Without this,
+/// a classified `gh` command chained with an unknown command (e.g.
+/// `gh pr view 123 && unknown_cmd`) would allow because the classifier sets
+/// `rule_id: Some("gh-readonly-classifier")` on the worst result, which
+/// pre-R7 was taken as proof that a restrictive rule had fired — but
+/// `gh-readonly-classifier` is permissive (Allow), not restrictive.
+fn classifier_covers(leaf: &Statement) -> bool {
+    match leaf {
+        Statement::SimpleCommand(cmd) => classify_gh(cmd).is_some(),
+        _ => false,
     }
 }
 

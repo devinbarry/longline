@@ -157,3 +157,64 @@ tests:
     expected:
       decision: allow
     note: "gh leaf classifies via classifier; jq leaf via core-allowlist"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 Bug 1 — statement-level fail-open (all three statement forms)
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-statement-fail-open-and
+    command: "gh pr view 123 && unknown_command_xyz"
+    expected:
+      decision: ask
+    note: "classified gh leaf + unknown leaf in && list must ask, not allow"
+
+  - id: gh-statement-fail-open-or
+    command: "unknown_command_xyz || gh pr view 123"
+    expected:
+      decision: ask
+    note: "unknown leaf + classified gh leaf in || list must ask, not allow"
+
+  - id: gh-pipeline-fail-open
+    command: "gh api repos/foo | unknown_command_xyz"
+    expected:
+      decision: ask
+    note: "classified gh api leaf piped to unknown command must ask, not allow"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 Bug 2 — method-flag bypass
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-method-bypass-X-then-method-equals
+    command: "gh api -X GET repos/foo --method=POST"
+    expected:
+      decision: ask
+    note: "conflicting method flags: -X GET then --method=POST; must ask not allow"
+
+  - id: gh-method-bypass-method-then-method-equals
+    command: "gh api --method GET repos/foo --method=POST"
+    expected:
+      decision: ask
+    note: "conflicting method flags: --method GET then --method=POST; must ask not allow"
+
+  # ════════════════════════════════════════════════════════════════
+  # R7 Bug 3 — value-flag values mistaken for endpoint
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-jq-no-endpoint
+    command: "gh api --jq ."
+    expected:
+      decision: ask
+    note: "jq filter value must not be treated as endpoint; no endpoint → classifier returns None → ask"
+
+  - id: gh-header-no-endpoint
+    command: "gh api -H foo"
+    expected:
+      decision: ask
+    note: "header value must not be treated as endpoint; no endpoint → classifier returns None → ask"
+
+  - id: gh-jq-with-endpoint
+    command: "gh api --jq . repos/foo"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "endpoint follows jq filter value; classifier correctly identifies repos/foo as endpoint"
