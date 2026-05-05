@@ -57,9 +57,12 @@ assert_passes() {
 assert_passes "clean baseline"
 
 # Case 2 — staged-but-uncommitted working-tree content. Only check 1
-# catches this (git grep searches the index); proves check 1 is
-# independently functional. The filename "leak.txt" is clean so check 2
-# does not fire; the content is not committed so check 3 does not fire.
+# catches this (git grep searches the working tree of tracked files;
+# truly untracked files are out of scope, but in CI filter-repo has
+# already operated, so untracked files cannot exist there). Proves
+# check 1 is independently functional. The filename "leak.txt" is clean
+# so check 2 does not fire; the content is not committed so check 3
+# does not fire.
 echo "leaked: $T_DOMAIN" > leak.txt
 git add leak.txt
 assert_fails "uncommitted content (check 1 only)"
@@ -86,6 +89,6 @@ git reset --quiet --hard HEAD~2
 # surface tag annotations.
 git tag -a leaky-tag -m "release with $T_LINUX_PATH"
 assert_fails "annotated tag message (check 4 only)"
-git tag -d leaky-tag
+git tag -d leaky-tag >/dev/null
 
 echo "All sanitization gate cases passed."
