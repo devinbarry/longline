@@ -22,9 +22,8 @@ PATTERN="$T_DOMAIN|$T_HOST|$T_USER_PATH|$T_LINUX_PATH"
 export SANITIZATION_PATTERN="$PATTERN"
 
 # Synthetic minimal repo — NOT a clone of $ROOT. Cloning the real repo
-# would inherit legitimately-tracked literals (e.g. SANITIZATION_PATTERN
-# in .gitlab-ci.yml, pre-release-checklist examples in docs/RELEASING.md).
-# Those files exist on master because they are stripped by `git filter-repo`
+# would inherit legitimately-tracked literals (the SANITIZATION_PATTERN
+# declaration in .gitlab-ci.yml). That file is stripped by `git filter-repo`
 # before the gate runs in CI. A synthetic repo lets us test the gate's
 # behavior in isolation from the strip pipeline.
 WORKDIR=$(mktemp -d)
