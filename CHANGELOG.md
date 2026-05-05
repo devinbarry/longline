@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.1] - 2026-05-05
+
+### CI
+
+- **Sanitization gate.** Added a fail-closed pre-push verification step
+  that scans the rewritten history (with merge diffs and committer
+  headers via `--format=fuller`), working tree, tracked filenames, and
+  annotated tag messages + tagger identity for the sensitive-string
+  pattern. Aborts the GitHub mirror push on any hit. Pattern source-of-
+  truth lives in `.gitlab-ci.yml`'s `SANITIZATION_PATTERN` env var; gate
+  script is generic and ships publicly.
+- **Identity rewrite during sanitization.** `git filter-repo` now runs
+  with `--name-callback` and `--email-callback` so author / committer /
+  tagger identity headers are redacted by the same pattern. Without
+  this, commits authored under a sensitive identity would survive the
+  path-strip and replace-text passes (which only operate on file content
+  + commit messages) and trip the gate.
+- **Commit and tag message rewrite.** `--replace-message` is applied
+  alongside `--replace-text` so the same redaction table covers blob
+  content AND commit / tag message bodies. Without this, R6's own
+  changelog explanations (which legitimately reference the
+  SANITIZATION_PATTERN) would have aborted the public push.
+- **Replacement-table fixes.** Added `REDACTED` and `REDACTED`
+  entries with longest-first ordering. Without these,
+  `REDACTED` would partial-redact to `REDACTED.REDACTED.co`.
+- **Cross-pipeline serialization.** Added `resource_group: github-mirror`
+  on `sync_to_github` so close-together tag pipelines can't race the
+  GitHub force-push. One-time operator setup
+  (`process_mode=oldest_first`) documented in `docs/RELEASING.md`.
+- **Strip-list defensive additions.** `.vscode/`, `.zed/`, `.cursor/`,
+  `.aider.conf.yml`, `.envrc`, `.direnv/`, `.gitmodules`, `.lfsconfig`,
+  `AGENTS.md`, `GEMINI.md`. None tracked today; defensive.
+- **Annotated tag preserved on the public mirror.** Removed the
+  `git tag -f "$CI_COMMIT_TAG"` line that was overwriting the
+  filter-repo-rewritten annotated tag with a lightweight tag, losing the
+  release message + signature.
+- **GH Actions concurrency.** `cancel-in-progress` per ref so re-tagged
+  publishes don't race.
+- **Skip if version already published.** Workflow probes crates.io with
+  the required User-Agent (per the data-access policy) and skips
+  `cargo publish` on 200, fails loudly on 5xx/429. `--max-time 30`
+  bounds hung TCP connects.
+- **Version check via `cargo metadata`** instead of `grep | sed`.
+  Filters by package name; robust against future workspace blocks.
+- **`CARGO_HUSKY_DONT_INSTALL_HOOKS`** added to GH Actions env (parity
+  with GitLab CI). Avoids spurious git-hook installs during CI test
+  runs.
+- Removed unused `stage: deploy` from `.freezedeployment` template.
+- `sync_to_github` opts out of the cargo cache (no cargo invocation in
+  that job).
+- `git fetch --unshallow || true` replaced with explicit shallow check
+  that fails loudly on actual unshallow failure.
+
+### Docs
+
+- New `docs/RELEASING.md` runbook (private-only, stripped from the
+  public mirror) covering pre-release checklist with `process_mode`
+  assertion, one-time setup (`glab variable set` flag/stdin form,
+  `gh secret set` blocking-stdin behavior, default-branch correction,
+  resource_group setup), known footguns (protected-tag immutability,
+  first-tag-on-new-mirror auto-trigger gap, yanked-version recovery,
+  cancelled-run recovery, `refs/original` cleanup), and cross-model
+  review limitations.
+- README CI / crates.io / license badges. Badge label honestly reads
+  "Release" rather than "CI" (the workflow runs only on tag pushes).
+
+No runtime behavior changes. No Rust source touched.
+
 ## [0.16.0] - 2026-05-04
 
 ### Added
