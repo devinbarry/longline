@@ -116,4 +116,26 @@ if [ "$rc" -ne 2 ]; then
 fi
 echo "ok: invalid regex (gate exits 2, not 0)"
 
+# Case 8 — sensitive content in COMMITTER metadata only (author clean).
+# Default `git log -p` format shows only Author, not Committer; the gate
+# must use --format=fuller (or explicit format) to surface committer.
+# Without that, a committer-only leak would slip past the gate.
+GIT_AUTHOR_NAME="author" GIT_AUTHOR_EMAIL="author@example.com" \
+  GIT_COMMITTER_NAME="committer" \
+  GIT_COMMITTER_EMAIL="committer@${T_DOMAIN}.example" \
+  git commit --quiet --allow-empty -m "commit with sensitive committer"
+assert_fails "committer email leak (check 3 covers committer)"
+git reset --quiet --hard HEAD~1
+
+# Case 9 — sensitive content in TAGGER metadata only (tag message clean,
+# tagger identity sensitive). `git for-each-ref` `%(contents)` does NOT
+# include tagger atoms; the gate must include `%(taggername)
+# %(taggeremail)` in the format. Without that, a tagger-only leak would
+# slip past the gate.
+GIT_COMMITTER_NAME="tagger" \
+  GIT_COMMITTER_EMAIL="tagger@${T_HOST}.example" \
+  git tag -a leaky-tagger -m "clean message body"
+assert_fails "tagger email leak (check 4 covers tagger metadata)"
+git tag -d leaky-tagger >/dev/null
+
 echo "All sanitization gate cases passed."

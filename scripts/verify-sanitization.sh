@@ -64,11 +64,14 @@ case "$rc" in
 esac
 
 # 3. Full rewritten history. -m includes merge diffs (omitted by default
-# when -p is set). Covers commit messages, diffs, AND author/committer
-# identity headers across all reachable refs — including the rewritten
-# github-sync branch and the tag. Capture history first; longline's repo
+# when -p is set). --format=fuller surfaces BOTH the Author and the
+# Commit (committer) headers — the default `git log` format only shows
+# Author. Without --format=fuller, a committer-only sensitive identity
+# would survive the gate as a defense-in-depth gap (production is still
+# safe via filter-repo's --email-callback, but the gate is meant to be
+# an independent postcondition). Capture history first; longline's repo
 # is small enough for this not to be a memory concern.
-history=$(git log -p -m --all)
+history=$(git log -p -m --all --format=fuller)
 rc=0
 printf '%s\n' "$history" | grep -nE "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
@@ -77,10 +80,12 @@ case "$rc" in
   *) echo "ERROR: history scan failed unexpectedly (rc=$rc) — fail-closed" >&2; failed=1 ;;
 esac
 
-# 4. Annotated tag messages and tag ref names. `git log -p` does NOT
-# surface annotated tag messages; check them explicitly. Capture tags
+# 4. Annotated tag messages, tag ref names, AND tagger identity.
+# `git log -p` does NOT surface annotated tag messages or tagger atoms;
+# `%(contents)` covers the tag message body but omits tagger name/email,
+# which need explicit %(taggername)/%(taggeremail) atoms. Capture tags
 # first to detect `git for-each-ref` failures.
-tags=$(git for-each-ref --format='%(refname) %(contents)' refs/tags)
+tags=$(git for-each-ref --format='%(refname) %(taggername) %(taggeremail) %(contents)' refs/tags)
 rc=0
 printf '%s\n' "$tags" | grep -nE "$SANITIZATION_PATTERN" || rc=$?
 case "$rc" in
