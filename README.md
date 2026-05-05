@@ -1,6 +1,6 @@
 # longline
 
-[![CI](https://github.com/devinbarry/longline/actions/workflows/release.yml/badge.svg)](https://github.com/devinbarry/longline/actions/workflows/release.yml)
+[![Release](https://github.com/devinbarry/longline/actions/workflows/release.yml/badge.svg)](https://github.com/devinbarry/longline/actions/workflows/release.yml)
 [![crates.io](https://img.shields.io/crates/v/longline.svg)](https://crates.io/crates/longline)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 

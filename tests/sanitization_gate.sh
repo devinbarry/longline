@@ -90,4 +90,30 @@ git tag -a leaky-tag -m "release with $T_LINUX_PATH"
 assert_fails "annotated tag message (check 4 only)"
 git tag -d leaky-tag >/dev/null
 
+# Case 6 — sensitive content in commit author/committer metadata. Check 3
+# catches this because `git log -p` includes Author/Committer headers.
+# This case asserts the production pipeline's metadata-rewrite step
+# (`git filter-repo --email-callback` / `--name-callback` in
+# .gitlab-ci.yml) is necessary — without it, an upstream commit whose
+# author email contains the sensitive pattern would survive the path-
+# strip + replace-text passes (which do NOT touch identity headers) and
+# trip the gate, blocking the public push.
+git -c user.email="user@${T_DOMAIN}.example" \
+    -c user.name="contributor" \
+    commit --quiet --allow-empty -m "commit by sensitive author"
+assert_fails "author email leak (check 3 covers metadata)"
+git reset --quiet --hard HEAD~1
+
+# Case 7 — invalid regex pattern. Gate must exit 2 (config error) and
+# refuse to scan, NOT exit 0 with "PASSED" (which would happen if
+# malformed regex caused every check to return "no match" via grep
+# rc=2 being treated as "no match" by an `if cmd; then` form).
+rc=0
+SANITIZATION_PATTERN='(' "$GATE" >/dev/null 2>&1 || rc=$?
+if [ "$rc" -ne 2 ]; then
+  echo "FAIL: invalid regex case — gate exited $rc, expected 2 (config error)" >&2
+  exit 1
+fi
+echo "ok: invalid regex (gate exits 2, not 0)"
+
 echo "All sanitization gate cases passed."
