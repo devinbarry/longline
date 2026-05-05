@@ -81,6 +81,17 @@ fn evaluate_with_extras(
         {
             // Propagate allowlist reason when decision is the same but worst has no reason
             worst = result;
+        } else if result.decision == worst.decision
+            && result.rule_id.is_some()
+            && worst.rule_id.is_none()
+        {
+            // Propagate rule_id from an inner classifier hit (e.g. gh-readonly-classifier
+            // on an unwrapped extra leaf) so the all-allowlisted gate does not re-fire when
+            // the outer wrapper leaf's allowlist match already set worst.reason but left
+            // worst.rule_id = None. Without this, `command gh pr view 123` would ask
+            // because the outer `command` leaf fills reason (via core-allowlist) but the
+            // inner classifier result is never merged.
+            worst = result;
         }
     }
 
