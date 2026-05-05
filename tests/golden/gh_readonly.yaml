@@ -138,7 +138,8 @@ tests:
     command: "command gh pr view 123"
     expected:
       decision: allow
-    note: "command-wrapper unwrapping — inner gh leaf classifies; outer command leaf is allowlisted (rule_id None via allowlist dominates worst)"
+      rule_id: gh-readonly-classifier
+    note: "command-wrapper unwrapping — inner gh leaf classifies; rule_id propagated from the classifier via the evaluate_with_extras merge branch added in Bundle 3"
 
   - id: gh-env-wrapper-asks-via-printenv
     command: "env GH_TOKEN=xyz gh api repos/foo"
