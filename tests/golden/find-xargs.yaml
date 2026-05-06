@@ -751,6 +751,18 @@ tests:
       decision: deny
       rule_id: rm-recursive-root
     note: "find -exec sh -c must expose the inner rm command to the existing deny rule"
+  - id: timeout-find-exec-sh-c-rm-root-deny
+    command: "timeout 1 find . -exec sh -c 'rm -rf /' sh {} ;"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "transparent wrappers around find must still expose find -exec sh -c"
+  - id: command-find-exec-sh-c-rm-root-deny
+    command: "command find . -exec sh -c 'rm -rf /' sh {} ;"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "command wrapper around find must still expose find -exec sh -c"
   - id: find-exec-command-ls-allow
     command: "find . -exec command ls ;"
     expected:
@@ -819,6 +831,18 @@ tests:
       decision: deny
       rule_id: rm-recursive-root
     note: "xargs sh -c must expose the inner rm command to the existing deny rule"
+  - id: timeout-xargs-sh-c-rm-root-deny
+    command: "echo foo | timeout 1 xargs sh -c 'rm -rf /'"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "transparent wrappers around xargs must still expose xargs sh -c"
+  - id: command-xargs-sh-c-rm-root-deny
+    command: "echo foo | command xargs sh -c 'rm -rf /'"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "command wrapper around xargs must still expose xargs sh -c"
   - id: xargs-command-ls-allow
     command: "echo foo | xargs command ls"
     expected:

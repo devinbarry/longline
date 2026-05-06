@@ -378,6 +378,7 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                 }
                 v
             };
+            let find_xargs_candidates = cmds_to_shell_c.clone();
             for sub in &cmd.embedded_substitutions {
                 collect_inner_commands(sub, out);
             }
@@ -387,10 +388,13 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
             // peeled off before evaluation. They are also included in the
             // shell-c candidate set so `find -exec sh -c ...` and
             // `xargs sh -c ...` expose their parsed inner commands.
-            if let Some(ref name) = cmd.name {
+            for candidate in find_xargs_candidates {
+                let Some(ref name) = candidate.name else {
+                    continue;
+                };
                 let basename = wrapper_basename(name);
                 if basename == "find" {
-                    for inner in extract_find_exec(cmd) {
+                    for inner in extract_find_exec(&candidate) {
                         out.push(Statement::SimpleCommand(inner.clone()));
                         cmds_to_shell_c.push(inner.clone());
                         let before_inner_unwrap = out.len();
@@ -402,7 +406,7 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                         }
                     }
                 } else if basename == "xargs" {
-                    if let Some(inner) = extract_xargs_command(cmd) {
+                    if let Some(inner) = extract_xargs_command(&candidate) {
                         out.push(Statement::SimpleCommand(inner.clone()));
                         cmds_to_shell_c.push(inner.clone());
                         let before_inner_unwrap = out.len();
