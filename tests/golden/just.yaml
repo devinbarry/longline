@@ -91,7 +91,9 @@ tests:
     command: "just clean"
     expected:
       decision: ask
+      rule_id: just-unknown-recipe
   - id: just-unknown-recipe
     command: "just foobar"
     expected:
       decision: ask
+      rule_id: just-unknown-recipe

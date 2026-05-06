@@ -413,14 +413,17 @@ tests:
     command: "tmux send-keys -t 'session:0' 'ls' Enter"
     expected:
       decision: ask
+      rule_id: tmux-mutate
   - id: tmux-new-session-ask
     command: "tmux new-session -d -s mysession"
     expected:
       decision: ask
+      rule_id: tmux-mutate
   - id: tmux-kill-session-ask
     command: "tmux kill-session -t mysession"
     expected:
       decision: ask
+      rule_id: tmux-mutate
   # tmux: bare and unknown (should ask)
   - id: tmux-bare-ask
     command: "tmux"

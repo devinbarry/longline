@@ -40,30 +40,36 @@ tests:
     command: "python -c 'print(1)'"
     expected:
       decision: ask
+      rule_id: python-exec
   - id: python3-inline-code
     command: "python3 -c 'import json; print(json.dumps({}))'"
     expected:
       decision: ask
+      rule_id: python-exec
 
   # ── Python: script execution (should ask) ──────────────────────
   - id: python-script-exec
     command: "python3 script.py"
     expected:
       decision: ask
+      rule_id: python-exec
   - id: python-script-with-args
     command: "python3 script.py --arg value"
     expected:
       decision: ask
+      rule_id: python-exec
 
   # ── Python: unsafe modules (should ask) ────────────────────────
   - id: python-m-http-server
     command: "python3 -m http.server 8080"
     expected:
       decision: ask
+      rule_id: python-exec
   - id: python-m-pip
     command: "python3 -m pip install requests"
     expected:
       decision: ask
+      rule_id: python-m-pip-install
 
   # ── Node: version checks (allowed) ────────────────────────────
   - id: node-version-long
@@ -80,12 +86,14 @@ tests:
     command: "node -e 'console.log(1)'"
     expected:
       decision: ask
+      rule_id: node-exec
 
   # ── Node: script execution (should ask) ───────────────────────
   - id: node-script
     command: "node script.js"
     expected:
       decision: ask
+      rule_id: node-exec
 
   # ── Ruby: version checks (allowed) ────────────────────────────
   - id: ruby-version-long

@@ -1,5 +1,6 @@
 mod allowlist;
 mod config;
+mod descriptive_asks;
 pub mod gh_classifier;
 mod matching;
 
@@ -413,6 +414,10 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                     rule_id: None,
                     reason,
                 };
+            }
+
+            if let Some(result) = descriptive_asks::classify(cmd, is_extra) {
+                return result;
             }
 
             // Not allowlisted, no rule -- return allow (default_decision
