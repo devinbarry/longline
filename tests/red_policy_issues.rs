@@ -249,9 +249,10 @@ fn red_find_exec_shell_is_not_allowlisted() {
     let result = eval_cmd(cmd);
     assert_eq!(
         result.decision,
-        Decision::Ask,
+        Decision::Deny,
         "cmd={cmd} result={result:?}"
     );
+    assert_eq!(result.rule_id.as_deref(), Some("rm-recursive-root"));
 }
 
 #[test]
@@ -260,9 +261,10 @@ fn red_xargs_shell_is_not_allowlisted() {
     let result = eval_cmd(cmd);
     assert_eq!(
         result.decision,
-        Decision::Ask,
+        Decision::Deny,
         "cmd={cmd} result={result:?}"
     );
+    assert_eq!(result.rule_id.as_deref(), Some("rm-recursive-root"));
 }
 
 // ---------------------------------------------------------------------------
