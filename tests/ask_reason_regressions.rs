@@ -263,6 +263,10 @@ fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
         "command find . -exec sh -c 'rm -rf /' sh {} \\;",
         "timeout 1 xargs sh -c 'rm -rf /'",
         "command xargs sh -c 'rm -rf /'",
+        "find . -exec xargs sh -c 'rm -rf /' \\;",
+        "find . -exec command xargs sh -c 'rm -rf /' \\;",
+        "find . -exec timeout 1 xargs sh -c 'rm -rf /' \\;",
+        "xargs find . -exec sh -c 'rm -rf /' sh {} \\;",
     ] {
         assert_deny_reason(
             command,

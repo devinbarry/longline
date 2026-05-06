@@ -6,6 +6,8 @@
 //!
 //! To add a new wrapper: add one entry to the WRAPPERS table.
 
+use std::collections::{HashSet, VecDeque};
+
 use super::{Arg, SimpleCommand, Statement};
 
 /// Maximum recursion depth for chained wrappers.
@@ -354,6 +356,121 @@ fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     }
 }
 
+fn simple_command_key(cmd: &SimpleCommand) -> String {
+    format!("{cmd:?}")
+}
+
+fn queue_find_xargs_candidate(
+    cmd: &SimpleCommand,
+    depth: usize,
+    seen: &mut HashSet<String>,
+    queue: &mut VecDeque<(SimpleCommand, usize)>,
+) {
+    let Some(ref name) = cmd.name else {
+        return;
+    };
+    let basename = wrapper_basename(name);
+    if basename != "find" && basename != "xargs" {
+        return;
+    }
+    if seen.insert(simple_command_key(cmd)) {
+        queue.push_back((cmd.clone(), depth));
+    }
+}
+
+fn push_find_xargs_extra(
+    inner: SimpleCommand,
+    depth: usize,
+    out: &mut Vec<Statement>,
+    cmds_to_shell_c: &mut Vec<SimpleCommand>,
+    seen_queue: &mut HashSet<String>,
+    queued: &mut VecDeque<(SimpleCommand, usize)>,
+    seen_emitted: &mut HashSet<String>,
+) {
+    let newly_emitted = seen_emitted.insert(simple_command_key(&inner));
+    queue_find_xargs_candidate(&inner, depth, seen_queue, queued);
+    if !newly_emitted {
+        return;
+    }
+
+    out.push(Statement::SimpleCommand(inner.clone()));
+    cmds_to_shell_c.push(inner.clone());
+
+    let before_inner_unwrap = out.len();
+    unwrap_recursive(&inner, out, 0);
+    let unwrapped: Vec<SimpleCommand> = out[before_inner_unwrap..]
+        .iter()
+        .filter_map(|st| match st {
+            Statement::SimpleCommand(sc) => Some(sc.clone()),
+            Statement::Opaque(_) => None,
+            Statement::Pipeline(_)
+            | Statement::List(_)
+            | Statement::Subshell(_)
+            | Statement::CommandSubstitution(_)
+            | Statement::Empty => None,
+        })
+        .collect();
+
+    for sc in unwrapped {
+        cmds_to_shell_c.push(sc.clone());
+        queue_find_xargs_candidate(&sc, depth, seen_queue, queued);
+    }
+}
+
+fn collect_find_xargs_extras(
+    initial_candidates: &[SimpleCommand],
+    out: &mut Vec<Statement>,
+    cmds_to_shell_c: &mut Vec<SimpleCommand>,
+) {
+    let mut queued = VecDeque::new();
+    let mut seen_queue = HashSet::new();
+    let mut seen_emitted = HashSet::new();
+
+    for candidate in initial_candidates {
+        queue_find_xargs_candidate(candidate, 0, &mut seen_queue, &mut queued);
+    }
+
+    while let Some((candidate, depth)) = queued.pop_front() {
+        if depth >= MAX_UNWRAP_DEPTH {
+            out.push(Statement::Opaque(
+                "wrapper depth limit exceeded".to_string(),
+            ));
+            continue;
+        }
+
+        let Some(ref name) = candidate.name else {
+            continue;
+        };
+        let basename = wrapper_basename(name);
+
+        if basename == "find" {
+            for inner in extract_find_exec(&candidate) {
+                push_find_xargs_extra(
+                    inner,
+                    depth + 1,
+                    out,
+                    cmds_to_shell_c,
+                    &mut seen_queue,
+                    &mut queued,
+                    &mut seen_emitted,
+                );
+            }
+        } else if basename == "xargs" {
+            if let Some(inner) = extract_xargs_command(&candidate) {
+                push_find_xargs_extra(
+                    inner,
+                    depth + 1,
+                    out,
+                    cmds_to_shell_c,
+                    &mut seen_queue,
+                    &mut queued,
+                    &mut seen_emitted,
+                );
+            }
+        }
+    }
+}
+
 /// Walk a statement tree, find all wrapper SimpleCommands, unwrap them
 /// recursively (max depth 16, then ask), return all synthesized inner commands.
 pub fn extract_inner_commands(stmt: &Statement) -> Vec<Statement> {
@@ -378,7 +495,6 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                 }
                 v
             };
-            let find_xargs_candidates = cmds_to_shell_c.clone();
             for sub in &cmd.embedded_substitutions {
                 collect_inner_commands(sub, out);
             }
@@ -388,37 +504,8 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
             // peeled off before evaluation. They are also included in the
             // shell-c candidate set so `find -exec sh -c ...` and
             // `xargs sh -c ...` expose their parsed inner commands.
-            for candidate in find_xargs_candidates {
-                let Some(ref name) = candidate.name else {
-                    continue;
-                };
-                let basename = wrapper_basename(name);
-                if basename == "find" {
-                    for inner in extract_find_exec(&candidate) {
-                        out.push(Statement::SimpleCommand(inner.clone()));
-                        cmds_to_shell_c.push(inner.clone());
-                        let before_inner_unwrap = out.len();
-                        unwrap_recursive(&inner, out, 0);
-                        for st in &out[before_inner_unwrap..] {
-                            if let Statement::SimpleCommand(sc) = st {
-                                cmds_to_shell_c.push(sc.clone());
-                            }
-                        }
-                    }
-                } else if basename == "xargs" {
-                    if let Some(inner) = extract_xargs_command(&candidate) {
-                        out.push(Statement::SimpleCommand(inner.clone()));
-                        cmds_to_shell_c.push(inner.clone());
-                        let before_inner_unwrap = out.len();
-                        unwrap_recursive(&inner, out, 0);
-                        for st in &out[before_inner_unwrap..] {
-                            if let Statement::SimpleCommand(sc) = st {
-                                cmds_to_shell_c.push(sc.clone());
-                            }
-                        }
-                    }
-                }
-            }
+            let find_xargs_candidates = cmds_to_shell_c.clone();
+            collect_find_xargs_extras(&find_xargs_candidates, out, &mut cmds_to_shell_c);
 
             // Apply shell-c to the outer cmd AND to any SimpleCommands
             // produced by argv-skip wrapper unwrapping and find/xargs
