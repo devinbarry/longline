@@ -144,6 +144,21 @@ fn gh_suspicious_wrapper_uses_executed_command_position() {
         "GitHub CLI invocation uses an untrusted wrapper or environment shape",
     );
     assert_ask_reason(
+        "exec -ca gh gh api repos/foo",
+        "gh-suspicious-wrapper",
+        "GitHub CLI invocation uses an untrusted wrapper or environment shape",
+    );
+    assert_ask_reason(
+        "exec -la gh gh api repos/foo",
+        "gh-suspicious-wrapper",
+        "GitHub CLI invocation uses an untrusted wrapper or environment shape",
+    );
+    assert_ask_reason(
+        "exec -cla gh gh api repos/foo",
+        "gh-suspicious-wrapper",
+        "GitHub CLI invocation uses an untrusted wrapper or environment shape",
+    );
+    assert_ask_reason(
         "stdbuf -o gh gh api repos/foo",
         "gh-suspicious-wrapper",
         "GitHub CLI invocation uses an untrusted wrapper or environment shape",

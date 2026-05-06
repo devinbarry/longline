@@ -50,16 +50,12 @@ fn exec_command_index(cmd: &SimpleCommand) -> Option<usize> {
             index += 2;
             continue;
         }
-        if text.starts_with("-a") && text.len() > 2 {
-            index += 1;
-            continue;
-        }
-        if text.len() > 1
-            && text.starts_with('-')
-            && text[1..].chars().all(|ch| matches!(ch, 'c' | 'l'))
-        {
-            index += 1;
-            continue;
+        if text.len() > 1 && text.starts_with('-') {
+            let opts = &text[1..];
+            if opts.chars().all(|ch| matches!(ch, 'a' | 'c' | 'l')) {
+                index += if opts.contains('a') { 2 } else { 1 };
+                continue;
+            }
         }
         if text.starts_with('-') {
             return None;
