@@ -10,6 +10,7 @@ include:
   - codex.yaml
   - filesystem.yaml
   - secrets.yaml
+  - descriptive-ask.yaml
   - django.yaml
   - package-managers.yaml
   - network.yaml

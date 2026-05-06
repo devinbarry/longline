@@ -1,0 +1,12 @@
+# Descriptive ask fallbacks that must load after specific policy domains.
+
+allowlists:
+  commands: []
+
+rules:
+  - id: rm-generic
+    level: high
+    match:
+      command: rm
+    decision: ask
+    reason: "Deletes files or directories"

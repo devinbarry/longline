@@ -7,6 +7,7 @@ const CLI_TOOLS: &str = include_str!("../rules/cli-tools.yaml");
 const CODEX: &str = include_str!("../rules/codex.yaml");
 const FILESYSTEM: &str = include_str!("../rules/filesystem.yaml");
 const SECRETS: &str = include_str!("../rules/secrets.yaml");
+const DESCRIPTIVE_ASK: &str = include_str!("../rules/descriptive-ask.yaml");
 const DJANGO: &str = include_str!("../rules/django.yaml");
 const PACKAGE_MANAGERS: &str = include_str!("../rules/package-managers.yaml");
 const NETWORK: &str = include_str!("../rules/network.yaml");
@@ -28,6 +29,7 @@ pub fn get(name: &str) -> Option<&'static str> {
         "codex.yaml" => Some(CODEX),
         "filesystem.yaml" => Some(FILESYSTEM),
         "secrets.yaml" => Some(SECRETS),
+        "descriptive-ask.yaml" => Some(DESCRIPTIVE_ASK),
         "django.yaml" => Some(DJANGO),
         "package-managers.yaml" => Some(PACKAGE_MANAGERS),
         "network.yaml" => Some(NETWORK),
@@ -52,6 +54,7 @@ pub fn all_files() -> Vec<(&'static str, &'static str)> {
         ("codex.yaml", CODEX),
         ("filesystem.yaml", FILESYSTEM),
         ("secrets.yaml", SECRETS),
+        ("descriptive-ask.yaml", DESCRIPTIVE_ASK),
         ("django.yaml", DJANGO),
         ("package-managers.yaml", PACKAGE_MANAGERS),
         ("network.yaml", NETWORK),
