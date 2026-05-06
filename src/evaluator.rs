@@ -840,10 +840,13 @@ mod tests {
         );
 
         assert_eq!(outcome.decision, Decision::Ask);
-        assert_eq!(outcome.reason, "Unrecognized command structure");
+        assert_eq!(
+            outcome.reason,
+            "Shell syntax is too complex to analyze safely"
+        );
         assert_eq!(
             outcome.log_reason.as_deref(),
-            Some("Unrecognized command structure")
+            Some("Shell syntax is too complex to analyze safely")
         );
         assert_eq!(outcome.matched_rules, Vec::<String>::new());
         assert!(outcome.parse_ok);

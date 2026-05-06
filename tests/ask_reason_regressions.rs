@@ -271,3 +271,15 @@ fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
         );
     }
 }
+
+#[test]
+fn opaque_shell_message_is_actionable() {
+    let result = evaluate("bash tests/scripts/test_check_annotated_tags.sh; echo \"exit=$?\"");
+
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(result.rule_id, None);
+    assert_eq!(
+        result.reason,
+        "Shell syntax is too complex to analyze safely"
+    );
+}

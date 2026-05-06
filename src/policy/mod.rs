@@ -350,7 +350,7 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
         Statement::Opaque(_) => PolicyResult {
             decision: Decision::Ask,
             rule_id: None,
-            reason: "Unrecognized command structure".to_string(),
+            reason: "Shell syntax is too complex to analyze safely".to_string(),
         },
         Statement::SimpleCommand(cmd) => {
             // Check rules first -- rules always take priority
