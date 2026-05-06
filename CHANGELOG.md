@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.5] - 2026-05-06
+
+### Added
+
+- Descriptive ask reasons for common previously-default prompts:
+  process termination (`kill`, `killall`, `pkill`), generic file
+  deletion, permission changes, mutating `tmux` commands, `uv tool
+  install`, `uv version --bump`, `uv remove`, direct Python/Node
+  script execution, `source`, shell job-control commands, unknown
+  `just` recipes, project-local scripts, and suspicious `gh` wrapper
+  or environment shapes.
+- Regression coverage for recent longline log misses so legitimate asks
+  no longer fall back to the opaque "No matching rule" reason.
+
+### Fixed
+
+- `find -exec ...` and `xargs ...` now reuse shell-c analysis for
+  direct, transparent-wrapper, nested, and shell-c-produced commands.
+  Hidden dangerous payloads such as `rm -rf /` now surface to the
+  existing `rm-recursive-root` deny rule instead of being hidden behind
+  an allowlisted wrapper.
+- Redirected shell-c wrappers now ask with `shell-c-redirect` instead
+  of being treated as covered allows. This prevents safe-looking inner
+  commands such as `cat README.md` from hiding sensitive writes like
+  `> ~/.ssh/authorized_keys`.
+- Generic descriptive fallback rules are ordered after more specific
+  rules, preserving targeted messages for secret deletion, forceful
+  process termination, and world-writable permission changes.
+- Opaque shell syntax now reports `Shell syntax is too complex to
+  analyze safely`, and `longline check` labels those rows as
+  `(opaque)` instead of `(default)`.
+
 ## [0.16.4] - 2026-05-05
 
 ### Docs
