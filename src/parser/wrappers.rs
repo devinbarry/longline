@@ -550,12 +550,28 @@ fn collect_shell_c_recursive(stmt: &Statement, out: &mut Vec<Statement>, depth: 
     // Depth increments here so nested shell-c (bash -c 'bash -c "..."') is bounded.
     match stmt {
         Statement::SimpleCommand(inner_cmd) => {
+            let before_unwrap = out.len();
             unwrap_recursive(inner_cmd, out, 0);
+            let unwrap_end = out.len();
+            let mut cmds_to_shell_c: Vec<SimpleCommand> = {
+                let mut v = vec![inner_cmd.clone()];
+                for st in &out[before_unwrap..unwrap_end] {
+                    if let Statement::SimpleCommand(sc) = st {
+                        v.push(sc.clone());
+                    }
+                }
+                v
+            };
             for sub in &inner_cmd.embedded_substitutions {
                 collect_inner_commands(sub, out);
             }
-            if let Some(nested) = crate::parser::shell_c::unwrap_shell_c(inner_cmd) {
-                collect_shell_c_recursive(&nested, out, depth + 1);
+            let find_xargs_candidates = cmds_to_shell_c.clone();
+            collect_find_xargs_extras(&find_xargs_candidates, out, &mut cmds_to_shell_c);
+
+            for sc in cmds_to_shell_c {
+                if let Some(nested) = crate::parser::shell_c::unwrap_shell_c(&sc) {
+                    collect_shell_c_recursive(&nested, out, depth + 1);
+                }
             }
         }
         Statement::Pipeline(p) => {
