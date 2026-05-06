@@ -17,6 +17,21 @@ rules:
     decision: ask
     reason: "Forceful process termination"
 
+  - id: kill-process
+    level: high
+    match:
+      command:
+        any_of: [kill, killall]
+    decision: ask
+    reason: "Terminates processes"
+
+  - id: pkill-pattern
+    level: high
+    match:
+      command: pkill
+    decision: ask
+    reason: "Terminates processes matching a pattern"
+
   - id: iptables-modify
     level: high
     match:
@@ -36,6 +51,13 @@ rules:
         any_of: ["777"]
     decision: ask
     reason: "Setting world-writable permissions"
+
+  - id: chmod-modify
+    level: high
+    match:
+      command: chmod
+    decision: ask
+    reason: "Changes file permissions"
 
   - id: edit-etc-hosts
     level: high

@@ -48,18 +48,27 @@ tests:
     command: "rm /tmp/build/output.o"
     expected:
       decision: ask
+      rule_id: rm-generic
   - id: rm-rf-node-modules-safe
     command: "rm -rf ./node_modules"
     expected:
       decision: ask
+      rule_id: rm-generic
   - id: rm-rf-dist-safe
     command: "rm -rf dist"
     expected:
       decision: ask
+      rule_id: rm-generic
   - id: rm-single-file
     command: "rm file.txt"
     expected:
       decision: ask
+      rule_id: rm-generic
+  - id: rm-single-file-generic-ask
+    command: "rm src/afterhours/hook_handler.py"
+    expected:
+      decision: ask
+      rule_id: rm-generic
   - id: rm-rf-bin
     command: "rm -rf /bin"
     expected:
@@ -114,11 +123,14 @@ tests:
     command: "rm -rf target/"
     expected:
       decision: ask
+      rule_id: rm-generic
   - id: rm-i-file
     command: "rm -i important.txt"
     expected:
       decision: ask
+      rule_id: rm-generic
   - id: rm-multiple-files
     command: "rm a.txt b.txt c.txt"
     expected:
       decision: ask
+      rule_id: rm-generic

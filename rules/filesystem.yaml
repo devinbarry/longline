@@ -118,6 +118,13 @@ rules:
     decision: ask
     reason: "xargs executing rm on piped input"
 
+  - id: rm-generic
+    level: high
+    match:
+      command: rm
+    decision: ask
+    reason: "Deletes files or directories"
+
   # ============================================================
   # HIGH: Filesystem destructive operations (allowlist bypass)
   # ============================================================

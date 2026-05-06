@@ -14,14 +14,34 @@ tests:
     command: "chmod 644 /tmp/file"
     expected:
       decision: ask
+      rule_id: chmod-modify
   - id: chmod-755-no-rule
     command: "chmod 755 script.sh"
     expected:
       decision: ask
+      rule_id: chmod-modify
   - id: chmod-plus-x-no-rule
     command: "chmod +x script.sh"
     expected:
       decision: ask
+      rule_id: chmod-modify
+
+  # process control
+  - id: kill-term
+    command: "kill -TERM 12345"
+    expected:
+      decision: ask
+      rule_id: kill-process
+  - id: killall-process
+    command: "killall pytest"
+    expected:
+      decision: ask
+      rule_id: kill-process
+  - id: pkill-pattern
+    command: "pkill -f pytest"
+    expected:
+      decision: ask
+      rule_id: pkill-pattern
 
   # visudo / sudoers
   # Bare visudo has no args, so edit-sudoers rule doesn't match (requires /etc/sudoers arg)
