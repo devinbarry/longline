@@ -39,6 +39,100 @@ fn gh_suspicious_wrapper() -> PolicyResult {
     )
 }
 
+fn exec_command_index(cmd: &SimpleCommand) -> Option<usize> {
+    let mut index = 0;
+    while index < cmd.argv.len() {
+        let text = cmd.argv[index].text.as_str();
+        if text == "--" {
+            return (index + 1 < cmd.argv.len()).then_some(index + 1);
+        }
+        if text == "-a" {
+            index += 2;
+            continue;
+        }
+        if text.starts_with("-a") && text.len() > 2 {
+            index += 1;
+            continue;
+        }
+        if text.len() > 1
+            && text.starts_with('-')
+            && text[1..].chars().all(|ch| matches!(ch, 'c' | 'l'))
+        {
+            index += 1;
+            continue;
+        }
+        if text.starts_with('-') {
+            return None;
+        }
+        return Some(index);
+    }
+    None
+}
+
+fn stdbuf_command_index(cmd: &SimpleCommand) -> Option<usize> {
+    let mut index = 0;
+    while index < cmd.argv.len() {
+        let text = cmd.argv[index].text.as_str();
+        if text == "--" {
+            return (index + 1 < cmd.argv.len()).then_some(index + 1);
+        }
+        if matches!(
+            text,
+            "-i" | "-o" | "-e" | "--input" | "--output" | "--error"
+        ) {
+            index += 2;
+            continue;
+        }
+        if text.starts_with("--input=")
+            || text.starts_with("--output=")
+            || text.starts_with("--error=")
+        {
+            index += 1;
+            continue;
+        }
+        if text.len() > 2
+            && text.starts_with('-')
+            && matches!(text.as_bytes()[1], b'i' | b'o' | b'e')
+        {
+            index += 1;
+            continue;
+        }
+        if text.starts_with('-') {
+            return None;
+        }
+        return Some(index);
+    }
+    None
+}
+
+fn unbuffer_command_index(cmd: &SimpleCommand) -> Option<usize> {
+    let mut index = 0;
+    while index < cmd.argv.len() {
+        let text = cmd.argv[index].text.as_str();
+        if text == "--" {
+            return (index + 1 < cmd.argv.len()).then_some(index + 1);
+        }
+        if text == "-p" {
+            index += 1;
+            continue;
+        }
+        if text.starts_with('-') {
+            return None;
+        }
+        return Some(index);
+    }
+    None
+}
+
+fn wrapper_command_index(cmd: &SimpleCommand, wrapper: &str) -> Option<usize> {
+    match wrapper {
+        "exec" => exec_command_index(cmd),
+        "stdbuf" => stdbuf_command_index(cmd),
+        "unbuffer" => unbuffer_command_index(cmd),
+        _ => None,
+    }
+}
+
 fn classified_gh_wrapper(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyResult> {
     let name = basename(cmd.name.as_deref()?);
 
@@ -50,12 +144,10 @@ fn classified_gh_wrapper(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyRe
     }
 
     if matches!(name, "exec" | "stdbuf" | "unbuffer") {
-        let texts: Vec<&str> = cmd.argv.iter().map(|a| a.text.as_str()).collect();
-        if let Some(pos) = texts.iter().position(|text| basename(text) == "gh") {
-            if texts
-                .get(pos + 1)
-                .is_some_and(|subcommand| sensitive_gh_family(subcommand))
-            {
+        if let Some(pos) = wrapper_command_index(cmd, name) {
+            let command = cmd.argv.get(pos).map(|arg| arg.text.as_str())?;
+            let subcommand = cmd.argv.get(pos + 1).map(|arg| arg.text.as_str());
+            if basename(command) == "gh" && subcommand.is_some_and(sensitive_gh_family) {
                 return Some(gh_suspicious_wrapper());
             }
         }

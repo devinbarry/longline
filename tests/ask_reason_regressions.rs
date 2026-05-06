@@ -36,6 +36,11 @@ fn assert_ask_not_default(command: &str) {
     );
 }
 
+fn assert_not_rule(command: &str, rule_id: &str) {
+    let result = evaluate(command);
+    assert_ne!(result.rule_id.as_deref(), Some(rule_id), "{command}");
+}
+
 #[test]
 fn yaml_safe_descriptive_ask_reasons() {
     assert_ask_reason(
@@ -129,6 +134,23 @@ fn descriptive_rules_do_not_overmatch_existing_allows() {
     assert_allow("tmux capture-pane -t session -p");
     assert_allow("PATH=/tmp gh pr view 123");
     assert_allow("command gh pr view 123");
+}
+
+#[test]
+fn gh_suspicious_wrapper_uses_executed_command_position() {
+    assert_ask_reason(
+        "exec -a gh gh api repos/foo",
+        "gh-suspicious-wrapper",
+        "GitHub CLI invocation uses an untrusted wrapper or environment shape",
+    );
+    assert_ask_reason(
+        "stdbuf -o gh gh api repos/foo",
+        "gh-suspicious-wrapper",
+        "GitHub CLI invocation uses an untrusted wrapper or environment shape",
+    );
+
+    assert_not_rule("exec echo gh api", "gh-suspicious-wrapper");
+    assert_not_rule("stdbuf -oL echo gh api", "gh-suspicious-wrapper");
 }
 
 #[test]
