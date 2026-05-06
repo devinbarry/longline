@@ -118,6 +118,20 @@ rules:
     decision: ask
     reason: "xargs executing rm on piped input"
 
+  - id: rm-secrets
+    level: critical
+    match:
+      command: rm
+      args:
+        any_of: [".env", ".env.local", ".env.production", ".env.staging",
+                  ".env.development", ".envrc",
+                  "~/.ssh/id_*", "~/.ssh/id_rsa", "~/.ssh/id_ed25519",
+                  "~/.ssh/id_ecdsa", "~/.ssh/authorized_keys",
+                  "~/.aws/credentials", "~/.aws/config",
+                  "~/.kube/config"]
+    decision: ask
+    reason: "Deleting sensitive file"
+
   - id: rm-generic
     level: high
     match:
