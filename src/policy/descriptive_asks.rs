@@ -1,5 +1,5 @@
 use crate::domain::{Decision, PolicyResult};
-use crate::parser::SimpleCommand;
+use crate::parser::{SimpleCommand, Statement};
 
 fn ask(rule_id: &str, reason: &str) -> PolicyResult {
     PolicyResult {
@@ -158,11 +158,33 @@ fn classified_gh_wrapper(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyRe
     None
 }
 
+fn redirected_shell_c(cmd: &SimpleCommand) -> Option<PolicyResult> {
+    if cmd.redirects.is_empty() {
+        return None;
+    }
+
+    if matches!(
+        crate::parser::shell_c::unwrap_shell_c(cmd),
+        Some(stmt) if !matches!(stmt, Statement::Opaque(_))
+    ) {
+        return Some(ask(
+            "shell-c-redirect",
+            "Shell command wrapper output is redirected",
+        ));
+    }
+
+    None
+}
+
 pub(super) fn classify(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyResult> {
     let full_name = cmd.name.as_deref()?;
     let name = basename(full_name);
 
     if let Some(result) = classified_gh_wrapper(cmd, is_extra) {
+        return Some(result);
+    }
+
+    if let Some(result) = redirected_shell_c(cmd) {
         return Some(result);
     }
 

@@ -280,6 +280,21 @@ fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
 }
 
 #[test]
+fn redirected_shell_c_wrappers_do_not_allow_sensitive_writes() {
+    for command in [
+        "bash -c 'cat README.md' > ~/.ssh/authorized_keys",
+        "find . -exec sh -c 'cat README.md' sh {} \\; > ~/.ssh/authorized_keys",
+        "xargs sh -c 'cat README.md' > ~/.ssh/authorized_keys",
+    ] {
+        assert_ask_reason(
+            command,
+            "shell-c-redirect",
+            "Shell command wrapper output is redirected",
+        );
+    }
+}
+
+#[test]
 fn opaque_shell_message_is_actionable() {
     let result = evaluate("bash tests/scripts/test_check_annotated_tags.sh; echo \"exit=$?\"");
 

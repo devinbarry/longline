@@ -151,3 +151,22 @@ rules:
         result.stdout
     );
 }
+
+#[test]
+fn test_e2e_check_labels_opaque_ask() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let file = dir.path().join("cmds.txt");
+    std::fs::write(
+        &file,
+        "bash tests/scripts/test_check_annotated_tags.sh; echo \"exit=$?\"\n",
+    )
+    .unwrap();
+
+    let result = run_subcommand(&["check", "--config", &rules_path(), file.to_str().unwrap()]);
+    assert_eq!(result.exit_code, 0);
+    assert!(
+        result.stdout.contains("(opaque)"),
+        "Should label opaque policy asks: {}",
+        result.stdout
+    );
+}

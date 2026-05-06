@@ -499,7 +499,7 @@ fn run_check(
                     None => match result.decision {
                         Decision::Allow => "(allowlist)".to_string(),
                         Decision::Ask => {
-                            if result.reason.contains("Unrecognized") {
+                            if result.reason == "Shell syntax is too complex to analyze safely" {
                                 "(opaque)".to_string()
                             } else {
                                 "(default)".to_string()

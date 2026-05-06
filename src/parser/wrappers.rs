@@ -294,12 +294,14 @@ fn extract_find_exec(cmd: &SimpleCommand) -> Vec<SimpleCommand> {
                     .filter(|a| a.text != "{}")
                     .cloned()
                     .collect();
-                // Carry outer find's assignments forward — `KEY=val find -exec
-                // inner ...` propagates KEY=val to the exec'd inner.
+                // Carry outer find's assignments and redirects forward. Runtime
+                // stdout/stderr from `find -exec inner ...` flows through find's
+                // redirects, so dropping them can hide sensitive writes from
+                // policy when the inner command is otherwise allowlisted.
                 results.push(SimpleCommand {
                     name: Some(exec_name),
                     argv: exec_argv,
-                    redirects: vec![],
+                    redirects: cmd.redirects.clone(),
                     assignments: cmd.assignments.clone(),
                     embedded_substitutions: vec![],
                 });
@@ -339,15 +341,16 @@ fn extract_xargs_command(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     if i < argv.len() {
         let xargs_cmd_name = argv[i].text.clone();
         let xargs_cmd_argv: Vec<Arg> = argv[i + 1..].to_vec();
-        // Carry outer xargs's assignments forward — `KEY=val xargs inner ...`
-        // propagates KEY=val to the xargs-spawned inner. Note: xargs runtime
+        // Carry outer xargs's assignments and redirects forward. xargs-spawned
+        // child stdout/stderr flows through xargs's redirects, so dropping
+        // them can hide sensitive writes from policy. Note: xargs runtime
         // arg-append (e.g. `printf -- "-X POST" | xargs gh api repos/foo`)
         // is a separate concern documented as a known limitation in the
         // R7 spec; this carry-forward only addresses inline assignments.
         Some(SimpleCommand {
             name: Some(xargs_cmd_name),
             argv: xargs_cmd_argv,
-            redirects: vec![],
+            redirects: cmd.redirects.clone(),
             assignments: cmd.assignments.clone(),
             embedded_substitutions: vec![],
         })
