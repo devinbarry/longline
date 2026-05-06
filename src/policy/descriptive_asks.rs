@@ -39,6 +39,22 @@ fn gh_suspicious_wrapper() -> PolicyResult {
     )
 }
 
+fn exec_option_width(text: &str) -> Option<usize> {
+    if !text.starts_with('-') || text == "-" {
+        return None;
+    }
+
+    let mut chars = text[1..].chars();
+    while let Some(ch) = chars.next() {
+        match ch {
+            'c' | 'l' => {}
+            'a' => return Some(if chars.as_str().is_empty() { 2 } else { 1 }),
+            _ => return None,
+        }
+    }
+    Some(1)
+}
+
 fn exec_command_index(cmd: &SimpleCommand) -> Option<usize> {
     let mut index = 0;
     while index < cmd.argv.len() {
@@ -46,19 +62,9 @@ fn exec_command_index(cmd: &SimpleCommand) -> Option<usize> {
         if text == "--" {
             return (index + 1 < cmd.argv.len()).then_some(index + 1);
         }
-        if text == "-a" {
-            index += 2;
-            continue;
-        }
-        if text.len() > 1 && text.starts_with('-') {
-            let opts = &text[1..];
-            if opts.chars().all(|ch| matches!(ch, 'a' | 'c' | 'l')) {
-                index += if opts.contains('a') { 2 } else { 1 };
-                continue;
-            }
-        }
         if text.starts_with('-') {
-            return None;
+            index += exec_option_width(text)?;
+            continue;
         }
         return Some(index);
     }
