@@ -36,9 +36,30 @@ fn assert_ask_not_default(command: &str) {
     );
 }
 
+fn assert_reason_not_default(command: &str) {
+    let result = evaluate(command);
+    assert_ne!(
+        result.reason, "No matching rule; using default decision",
+        "{command}: {result:?}"
+    );
+}
+
 fn assert_not_rule(command: &str, rule_id: &str) {
     let result = evaluate(command);
     assert_ne!(result.rule_id.as_deref(), Some(rule_id), "{command}");
+}
+
+fn assert_ask_not_rule(command: &str, rule_id: &str) {
+    let result = evaluate(command);
+    assert_eq!(result.decision, Decision::Ask, "{command}: {result:?}");
+    assert_ne!(result.rule_id.as_deref(), Some(rule_id), "{command}");
+}
+
+fn assert_deny_reason(command: &str, rule_id: &str, reason: &str) {
+    let result = evaluate(command);
+    assert_eq!(result.decision, Decision::Deny, "{command}: {result:?}");
+    assert_eq!(result.rule_id.as_deref(), Some(rule_id), "{command}");
+    assert_eq!(result.reason, reason, "{command}");
 }
 
 #[test]
@@ -216,7 +237,33 @@ fn existing_specific_ask_rules_are_not_shadowed() {
 fn current_recent_examples_no_longer_use_default_reason() {
     assert_ask_not_default("kill -TERM 25455 25457 25947");
     assert_ask_not_default("rm src/afterhours/hook_handler.py && ls src/afterhours/hook_handler/");
-    assert_ask_not_default(
+    assert_reason_not_default(
         "find docs -maxdepth 2 -type d -exec sh -c 'echo \"=== {} ===\"; ls \"{}\" | head -20' \\;",
     );
+}
+
+#[test]
+fn find_xargs_shell_c_preserves_r7_boundaries() {
+    for command in [
+        "find . -exec sh -c 'gh api repos/foo' sh {} \\;",
+        "xargs sh -c 'gh api repos/foo'",
+        "find . -exec sh -c 'gh release view v1' sh {} \\;",
+        "xargs sh -c 'gh release view v1'",
+    ] {
+        assert_ask_not_rule(command, "gh-readonly-classifier");
+    }
+}
+
+#[test]
+fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
+    for command in [
+        "find . -exec sh -c 'rm -rf /' sh {} \\;",
+        "xargs sh -c 'rm -rf /'",
+    ] {
+        assert_deny_reason(
+            command,
+            "rm-recursive-root",
+            "Recursive delete targeting root filesystem",
+        );
+    }
 }

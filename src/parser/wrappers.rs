@@ -369,42 +369,7 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
             let before_unwrap = out.len();
             unwrap_recursive(cmd, out, 0);
             let unwrap_end = out.len();
-            for sub in &cmd.embedded_substitutions {
-                collect_inner_commands(sub, out);
-            }
-            // Special-case: find -exec / xargs
-            // Extracted commands are pushed AND passed through unwrap_recursive
-            // so transparent wrappers (command, builtin, timeout, etc.) are
-            // peeled off before evaluation.
-            if let Some(ref name) = cmd.name {
-                let basename = wrapper_basename(name);
-                if basename == "find" {
-                    for inner in extract_find_exec(cmd) {
-                        out.push(Statement::SimpleCommand(inner.clone()));
-                        unwrap_recursive(&inner, out, 0);
-                    }
-                } else if basename == "xargs" {
-                    if let Some(inner) = extract_xargs_command(cmd) {
-                        out.push(Statement::SimpleCommand(inner.clone()));
-                        unwrap_recursive(&inner, out, 0);
-                    }
-                }
-            }
-
-            // Known precision gap: find -exec bash -c '...' \; and xargs bash -c '...'
-            // produce inner SimpleCommands that we DO NOT re-run through shell-c unwrap
-            // here. That means `find . -exec bash -c 'rm -rf /' \;` currently asks
-            // rather than denying. This is fail-closed (safe — no silent allow), but a
-            // precision gap compared to the top-level `bash -c 'rm -rf /'` which denies.
-            // A follow-up could iterate the find/xargs output through collect_shell_c_recursive
-            // to close this gap; out of scope for Spec B.
-
-            // Apply shell-c to the outer cmd AND to any SimpleCommands
-            // produced by argv-skip wrapper unwrapping (e.g., the bash
-            // extracted from `timeout 30 bash -c "docker ps"`). Each is
-            // processed with depth=0 — these are semantically independent
-            // shell-c invocations, not continuations of a nesting chain.
-            let cmds_to_shell_c: Vec<SimpleCommand> = {
+            let mut cmds_to_shell_c: Vec<SimpleCommand> = {
                 let mut v = vec![cmd.clone()];
                 for st in &out[before_unwrap..unwrap_end] {
                     if let Statement::SimpleCommand(sc) = st {
@@ -413,6 +378,49 @@ fn collect_inner_commands(stmt: &Statement, out: &mut Vec<Statement>) {
                 }
                 v
             };
+            for sub in &cmd.embedded_substitutions {
+                collect_inner_commands(sub, out);
+            }
+            // Special-case: find -exec / xargs
+            // Extracted commands are pushed AND passed through unwrap_recursive
+            // so transparent wrappers (command, builtin, timeout, etc.) are
+            // peeled off before evaluation. They are also included in the
+            // shell-c candidate set so `find -exec sh -c ...` and
+            // `xargs sh -c ...` expose their parsed inner commands.
+            if let Some(ref name) = cmd.name {
+                let basename = wrapper_basename(name);
+                if basename == "find" {
+                    for inner in extract_find_exec(cmd) {
+                        out.push(Statement::SimpleCommand(inner.clone()));
+                        cmds_to_shell_c.push(inner.clone());
+                        let before_inner_unwrap = out.len();
+                        unwrap_recursive(&inner, out, 0);
+                        for st in &out[before_inner_unwrap..] {
+                            if let Statement::SimpleCommand(sc) = st {
+                                cmds_to_shell_c.push(sc.clone());
+                            }
+                        }
+                    }
+                } else if basename == "xargs" {
+                    if let Some(inner) = extract_xargs_command(cmd) {
+                        out.push(Statement::SimpleCommand(inner.clone()));
+                        cmds_to_shell_c.push(inner.clone());
+                        let before_inner_unwrap = out.len();
+                        unwrap_recursive(&inner, out, 0);
+                        for st in &out[before_inner_unwrap..] {
+                            if let Statement::SimpleCommand(sc) = st {
+                                cmds_to_shell_c.push(sc.clone());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Apply shell-c to the outer cmd AND to any SimpleCommands
+            // produced by argv-skip wrapper unwrapping and find/xargs
+            // extraction. Each is processed with depth=0 — these are
+            // semantically independent shell-c invocations, not continuations
+            // of a nesting chain.
             for sc in cmds_to_shell_c {
                 if let Some(inner) = crate::parser::shell_c::unwrap_shell_c(&sc) {
                     // Push the inner Statement as an extra; evaluate() will

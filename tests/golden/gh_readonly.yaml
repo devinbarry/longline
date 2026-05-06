@@ -547,6 +547,30 @@ tests:
       decision: ask
     note: "R7-new family via shell-c — extras-don't-classify rule extended in round 10"
 
+  - id: gh-api-find-exec-shell-c-asks
+    command: "find . -exec sh -c 'gh api repos/foo' sh {} \\;"
+    expected:
+      decision: ask
+    note: "find -exec sh -c reparses gh api as an extra leaf; do not classify with gh-readonly-classifier"
+
+  - id: gh-api-xargs-shell-c-asks
+    command: "xargs sh -c 'gh api repos/foo'"
+    expected:
+      decision: ask
+    note: "xargs sh -c reparses gh api as an extra leaf; do not classify with gh-readonly-classifier"
+
+  - id: gh-release-view-find-exec-shell-c-asks
+    command: "find . -exec sh -c 'gh release view v1' sh {} \\;"
+    expected:
+      decision: ask
+    note: "R7-new family via find -exec sh -c remains Ask, not gh-readonly-classifier"
+
+  - id: gh-release-view-xargs-shell-c-asks
+    command: "xargs sh -c 'gh release view v1'"
+    expected:
+      decision: ask
+    note: "R7-new family via xargs sh -c remains Ask, not gh-readonly-classifier"
+
   - id: gh-secret-list-shell-c-with-path-override-asks
     command: "PATH=/tmp bash -c 'gh secret list'"
     expected:
