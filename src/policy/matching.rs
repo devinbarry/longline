@@ -115,6 +115,16 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         return false;
                     }
                 }
+                if !args_matcher.all_of.is_empty() {
+                    let has_all = args_matcher.all_of.iter().all(|pattern| {
+                        cmd.argv
+                            .iter()
+                            .any(|a| glob_match::glob_match(pattern, a.as_ref()))
+                    });
+                    if !has_all {
+                        return false;
+                    }
+                }
             }
             true
         }

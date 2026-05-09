@@ -186,6 +186,11 @@ pub struct FlagsMatcher {
 pub struct ArgsMatcher {
     #[serde(default)]
     pub any_of: Vec<String>,
+    /// All of these patterns must match some argument. Useful for scoping
+    /// a rule to a specific subcommand alongside `any_of` value patterns,
+    /// e.g. require `config` AND any of the corrupting flag names.
+    #[serde(default)]
+    pub all_of: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

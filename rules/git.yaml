@@ -74,9 +74,33 @@ rules:
     match:
       command: git
       args:
-        any_of: ["core.bare", "core.worktree", "core.repositoryformatversion", "core.hooksPath"]
+        all_of: ["config"]
+        any_of:
+          - "core.bare"
+          - "core.bare=**"
+          - "core.worktree"
+          - "core.worktree=**"
+          - "core.repositoryformatversion"
+          - "core.repositoryformatversion=**"
+          - "core.hooksPath"
+          - "core.hooksPath=**"
+      flags:
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all"]
     decision: deny
-    reason: "Setting core.bare/core.worktree/core.repositoryformatversion/core.hooksPath can corrupt the repo or redirect git hooks. Edit .git/config by hand if you genuinely need this."
+    reason: "Setting these core.* flags can corrupt the repo or redirect git hooks. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-c-corrupting-core-flags
+    level: critical
+    match:
+      command: git
+      args:
+        any_of:
+          - "core.bare=**"
+          - "core.worktree=**"
+          - "core.repositoryformatversion=**"
+          - "core.hooksPath=**"
+    decision: deny
+    reason: "Setting core.* flags via `git -c key=value` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
 
   - id: git-filter-branch
     level: critical

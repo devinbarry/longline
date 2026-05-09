@@ -380,6 +380,61 @@ tests:
       rule_id: git-config-corrupting-core-flags
     # Critical (deny) wins over global (ask) — most-restrictive ordering
 
+  # --- Joined key=value form (key and value as a single positional) ---
+  - id: git-config-core-bare-joined-deny
+    command: "git config core.bare=true"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # `key=value` joined-positional form must not bypass
+  - id: git-config-core-hookspath-joined-deny
+    command: "git config core.hooksPath=/tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+
+  # --- `git -c key=value <subcommand>` ad-hoc override (the silent channel) ---
+  - id: git-c-core-bare-commit-deny
+    command: "git -c core.bare=true commit -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-corrupting-core-flags
+    # The ad-hoc override channel that motivated the rule
+  - id: git-c-core-hookspath-commit-deny
+    command: "git -c core.hooksPath=/tmp/evil commit -am x"
+    expected:
+      decision: deny
+      rule_id: git-c-corrupting-core-flags
+  - id: git-c-core-worktree-status-deny
+    command: "git -c core.worktree=/tmp/elsewhere status"
+    expected:
+      decision: deny
+      rule_id: git-c-corrupting-core-flags
+
+  # --- Reads and unsets must NOT deny (unset is the corruption fix path) ---
+  - id: git-config-get-core-bare-allow
+    command: "git config --get core.bare"
+    expected:
+      decision: allow
+    # Read-only sanity check; falls through to allowlisted git config
+  - id: git-config-unset-core-bare-allow
+    command: "git config --unset core.bare"
+    expected:
+      decision: allow
+    # `--unset core.bare` is the fix when the repo got corrupted; must not deny
+  - id: git-config-list-core-allow
+    command: "git config --list"
+    expected:
+      decision: allow
+    # Plain --list listing should not be denied even though args may include core.X strings
+
+  # --- `git log --grep core.bare` must NOT false-positive ---
+  - id: git-log-grep-core-bare-allow
+    command: "git log --grep core.bare"
+    expected:
+      decision: allow
+    # Searching commit messages for the literal string is a read
+
   # ============================================================
   # 9. WORKTREE OPERATIONS
   # ============================================================
