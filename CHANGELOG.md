@@ -2,6 +2,69 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.6] - 2026-05-09
+
+### Added
+
+- Deny rules for git operations that can silently corrupt a repo or
+  rewrite history. Triggered by a 2026-05-09 incident where
+  `core.bare = true` and a `user.email` override were silently set on
+  the operator's working repo, producing three commits with the wrong
+  author identity. Coverage:
+  - `git config core.{bare,worktree,repositoryformatversion,hooksPath}`
+    in space-separated and `key=value` joined-positional forms.
+  - `git -c core.X=value` and `git --config-env=core.X=ENV` ad-hoc
+    overrides (the silent one-shot channel).
+  - `git config --edit` / `-e` (which opens `.git/config` in
+    `$GIT_EDITOR` — agent-controllable).
+  - `git filter-branch`, `git filter-repo` (subcommand and direct
+    executable forms), `git replace`.
+- Deny rules for direct writes to git admin paths that bypass git
+  entirely. These cover the "go around git" attack class:
+  - Shell redirects (`>`, `>>`, `>|`, `<>`) targeting
+    `.git/{config,HEAD,refs/**,packed-refs,hooks/**,index,info/**,objects/info/**}`.
+  - Copy-style commands `cp`, `install`, `ditto`, `rsync`, `mv`, `ln`,
+    `scp`, `curl`, `wget`, `tar`, `bsdtar` writing to the same paths
+    or to the `.git` directory itself. Joined-flag forms covered:
+    `curl --output=.git/...`, `wget --directory-prefix=.git/...`,
+    `tar --directory=.git/...`.
+- Deny rule for `git update-ref refs/heads/{main,master}` (and
+  `origin/main`, `origin/master` equivalents). This is the exact
+  pattern from the incident, where the model used `update-ref` to
+  bypass the worktree-checkout safety check. Other refs still ask.
+- Ask rule for `git symbolic-ref HEAD refs/heads/<branch>` (write
+  form). Read forms (`git symbolic-ref HEAD`, `--short`, `-q`)
+  remain allowed.
+- `args.all_of` matcher: rules can require all listed patterns AND
+  any of another set. Lets rules scope to a specific subcommand
+  (`config`) AND a specific value pattern (`core.bare=...`) without
+  false-positiving on commands that mention the same string in a
+  different context (e.g. `git log --grep core.bare`).
+
+### Fixed
+
+- `git config --get`, `--unset`, `--unset-all`, `--get-all`,
+  `--get-regexp`, `--get-color`, `--list`, `-l` against any `core.*`
+  key now allows. `--unset core.bare` is the recovery path when the
+  corruption flag has been set; denying it would block the fix.
+- `git log --grep core.bare` (and grep over commit messages
+  containing the literal flag name in general) no longer
+  false-positives.
+
+### Still asks (intentional, not denied)
+
+- `git update-ref HEAD <value>` (moving HEAD itself) — the matcher is
+  positional-agnostic and cannot distinguish HEAD-as-target from
+  HEAD-as-value without per-position info.
+- `cp .git/config /tmp/backup` (`.git/config` as source for a
+  read-style copy) — same positional-matching limitation.
+- `GIT_CONFIG_PARAMETERS=`, `GIT_CONFIG_KEY_*=`, `GIT_DIR=`,
+  `GIT_WORK_TREE=` env-var injection — matching shell-level env
+  assignments needs parser support not yet in place.
+- Bare `-c core.bare` (no `=value`) — git's behavior on the no-value
+  form is ambiguous, and adding the bare key to the value-pattern set
+  would resurrect the `git log --grep core.bare` false positive.
+
 ## [0.16.5] - 2026-05-06
 
 ### Added
