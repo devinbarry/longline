@@ -67,8 +67,63 @@ allowlists:
 
 rules:
   # ============================================================
+  # CRITICAL: Repo-corrupting operations
+  # ============================================================
+  - id: git-config-corrupting-core-flags
+    level: critical
+    match:
+      command: git
+      args:
+        any_of: ["core.bare", "core.worktree", "core.repositoryformatversion", "core.hooksPath"]
+    decision: deny
+    reason: "Setting core.bare/core.worktree/core.repositoryformatversion/core.hooksPath can corrupt the repo or redirect git hooks. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-filter-branch
+    level: critical
+    match:
+      command: git
+      args:
+        any_of: ["filter-branch"]
+    decision: deny
+    reason: "git filter-branch rewrites history across a whole repo. Run it manually if you really need it."
+
+  - id: git-filter-repo
+    level: critical
+    match:
+      command: git
+      args:
+        any_of: ["filter-repo"]
+    decision: deny
+    reason: "git filter-repo rewrites history across a whole repo. Run it manually if you really need it."
+
+  - id: git-filter-repo-direct
+    level: critical
+    match:
+      command: git-filter-repo
+    decision: deny
+    reason: "git-filter-repo rewrites history across a whole repo. Run it manually if you really need it."
+
+  - id: git-replace
+    level: critical
+    match:
+      command: git
+      args:
+        any_of: ["replace"]
+    decision: deny
+    reason: "git replace manipulates the commit graph. Use revert/rebase instead, or run replace by hand if you genuinely need it."
+
+  # ============================================================
   # HIGH: VCS destructive operations
   # ============================================================
+  - id: git-update-ref
+    level: high
+    match:
+      command: git
+      args:
+        any_of: ["update-ref"]
+    decision: ask
+    reason: "git update-ref bypasses worktree-checkout and lost-commit safety. Prefer git branch/checkout/reset/merge."
+
   - id: git-force-push-main
     level: high
     match:

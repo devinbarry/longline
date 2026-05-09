@@ -348,6 +348,38 @@ tests:
       decision: ask
     # Modifies system-wide config
 
+  # --- Repo-corrupting core flags (deny) ---
+  - id: git-config-core-bare-deny
+    command: "git config core.bare true"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # core.bare detaches the working tree; can silently corrupt the repo
+  - id: git-config-core-worktree-deny
+    command: "git config core.worktree /tmp/elsewhere"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # core.worktree redirects the working tree to an arbitrary path
+  - id: git-config-core-hookspath-deny
+    command: "git config core.hooksPath /tmp/evil-hooks"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # core.hooksPath redirects all git hooks to attacker-controlled scripts
+  - id: git-config-core-repofmt-deny
+    command: "git config core.repositoryformatversion 99"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # core.repositoryformatversion can render the repo unparseable
+  - id: git-config-core-bare-global-deny
+    command: "git config --global core.bare true"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+    # Critical (deny) wins over global (ask) — most-restrictive ordering
+
   # ============================================================
   # 9. WORKTREE OPERATIONS
   # ============================================================
@@ -797,9 +829,40 @@ tests:
     command: "git update-ref -d refs/heads/main"
     expected:
       decision: ask
-    # Deletes refs; not allowlisted
-  - id: git-filter-branch-ask
-    command: "git filter-branch -- --all"
+      rule_id: git-update-ref
+    # Deletes refs; matches the git-update-ref rule
+  - id: git-update-ref-write-ask
+    command: "git update-ref refs/heads/master HEAD"
     expected:
       decision: ask
-    # History rewriting; not allowlisted
+      rule_id: git-update-ref
+    # Bypasses worktree-checkout safety
+  - id: git-filter-branch-deny
+    command: "git filter-branch -- --all"
+    expected:
+      decision: deny
+      rule_id: git-filter-branch
+    # History rewriting; denied
+  - id: git-filter-repo-deny
+    command: "git filter-repo --force"
+    expected:
+      decision: deny
+      rule_id: git-filter-repo
+    # History rewriting via subcommand form
+  - id: git-filter-repo-direct-deny
+    command: "git-filter-repo --force"
+    expected:
+      decision: deny
+      rule_id: git-filter-repo-direct
+    # History rewriting via direct executable form
+  - id: git-replace-deny
+    command: "git replace --edit abc1234"
+    expected:
+      decision: deny
+      rule_id: git-replace
+    # Manipulates the commit graph
+  - id: git-replace-graft-deny
+    command: "git replace --graft abc1234 def5678"
+    expected:
+      decision: deny
+      rule_id: git-replace
