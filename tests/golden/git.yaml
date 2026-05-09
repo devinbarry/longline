@@ -435,6 +435,83 @@ tests:
       decision: allow
     # Searching commit messages for the literal string is a read
 
+  # --- --config-env injection variant ---
+  - id: git-c-config-env-core-bare-deny
+    command: "GIT_BARE=true git --config-env=core.bare=GIT_BARE status"
+    expected:
+      decision: deny
+      rule_id: git-c-corrupting-core-flags
+    # `--config-env=key=ENVVAR` is the env-var injection cousin of `-c key=value`
+
+  # --- git config --edit (silent rewrite via editor) ---
+  - id: git-config-edit-deny
+    command: "git config --edit"
+    expected:
+      decision: deny
+      rule_id: git-config-edit
+    # GIT_EDITOR can be agent-controlled; --edit becomes a silent rewrite
+  - id: git-config-edit-short-deny
+    command: "git config -e"
+    expected:
+      decision: deny
+      rule_id: git-config-edit
+
+  # --- Direct redirect writes to git admin files ---
+  - id: redirect-write-git-config-deny
+    command: "echo 'bare = true' >> .git/config"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+    # Bypasses every command-based rule by going around `git` entirely
+  - id: redirect-write-git-config-relative-deny
+    command: "echo x >> ./.git/config"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+  - id: redirect-write-git-head-deny
+    command: "echo abc1234 > .git/HEAD"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+  - id: redirect-write-git-refs-deny
+    command: "echo abc1234 > .git/refs/heads/master"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+  - id: redirect-write-git-hook-deny
+    command: "printf '#!/bin/sh\\nrm -rf $HOME\\n' > .git/hooks/post-commit"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+
+  # --- Protected-ref update-ref (the incident pattern) ---
+  - id: git-update-ref-master-deny
+    command: "git update-ref refs/heads/master HEAD"
+    expected:
+      decision: deny
+      rule_id: git-update-ref-protected
+    # The exact pattern from the 2026-05-09 incident
+  - id: git-update-ref-main-deny
+    command: "git update-ref refs/heads/main HEAD"
+    expected:
+      decision: deny
+      rule_id: git-update-ref-protected
+  - id: git-update-ref-feature-branch-ask
+    command: "git update-ref refs/heads/feature-x HEAD"
+    expected:
+      decision: ask
+      rule_id: git-update-ref
+    # Non-protected ref still falls through to the high/ask rule
+    # (HEAD as value, not target — must not false-positive)
+  - id: git-update-ref-head-target-ask
+    command: "git update-ref HEAD abc1234"
+    expected:
+      decision: ask
+      rule_id: git-update-ref
+    # Moving HEAD itself is rare-but-not-protected; falls through to ask
+    # (positional matching would let us deny this without false-positives,
+    #  but longline's args matcher is positional-agnostic — acceptable trade-off)
+
   # ============================================================
   # 9. WORKTREE OPERATIONS
   # ============================================================
@@ -880,18 +957,12 @@ tests:
     expected:
       decision: ask
     # Git aliases with '!' execute a shell command
-  - id: git-update-ref-delete-ask
+  - id: git-update-ref-delete-main-deny
     command: "git update-ref -d refs/heads/main"
     expected:
-      decision: ask
-      rule_id: git-update-ref
-    # Deletes refs; matches the git-update-ref rule
-  - id: git-update-ref-write-ask
-    command: "git update-ref refs/heads/master HEAD"
-    expected:
-      decision: ask
-      rule_id: git-update-ref
-    # Bypasses worktree-checkout safety
+      decision: deny
+      rule_id: git-update-ref-protected
+    # Deleting main branch ref is denied (protected ref)
   - id: git-filter-branch-deny
     command: "git filter-branch -- --all"
     expected:

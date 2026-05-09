@@ -787,6 +787,88 @@ rules:
         assert!(result.rule_id.is_none());
     }
 
+    // --- args all_of matching tests ---
+
+    #[test]
+    fn test_args_all_of_matches_when_all_present() {
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: scoped-rule
+    level: high
+    match:
+      command: git
+      args:
+        all_of: ["config"]
+        any_of: ["core.bare", "core.bare=**"]
+    decision: ask
+    reason: "scoped"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        let stmt = parse("git config core.bare true").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(result.rule_id.as_deref(), Some("scoped-rule"));
+    }
+
+    #[test]
+    fn test_args_all_of_no_match_when_subcommand_absent() {
+        // Rule should NOT fire on `git log core.bare` because all_of requires "config"
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: scoped-rule
+    level: high
+    match:
+      command: git
+      args:
+        all_of: ["config"]
+        any_of: ["core.bare"]
+    decision: ask
+    reason: "scoped"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        let stmt = parse("git log core.bare").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+        assert!(result.rule_id.is_none());
+    }
+
+    #[test]
+    fn test_args_all_of_no_match_when_value_pattern_absent() {
+        // Rule should NOT fire when "config" is present but no any_of pattern matches
+        let yaml = r#"
+version: 1
+default_decision: allow
+safety_level: high
+allowlists:
+  commands: []
+rules:
+  - id: scoped-rule
+    level: high
+    match:
+      command: git
+      args:
+        all_of: ["config"]
+        any_of: ["core.bare"]
+    decision: ask
+    reason: "scoped"
+"#;
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        let stmt = parse("git config user.email foo@bar.com").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Allow);
+        assert!(result.rule_id.is_none());
+    }
+
     #[test]
     fn test_none_of_with_keep_long_flag() {
         let yaml = r#"

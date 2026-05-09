@@ -99,8 +99,39 @@ rules:
           - "core.worktree=**"
           - "core.repositoryformatversion=**"
           - "core.hooksPath=**"
+          - "--config-env=core.bare=**"
+          - "--config-env=core.worktree=**"
+          - "--config-env=core.repositoryformatversion=**"
+          - "--config-env=core.hooksPath=**"
     decision: deny
-    reason: "Setting core.* flags via `git -c key=value` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
+    reason: "Setting core.* flags via `git -c key=value` or `git --config-env=key=ENVVAR` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-config-edit
+    level: critical
+    match:
+      command: git
+      args:
+        all_of: ["config"]
+      flags:
+        any_of: ["-e", "--edit"]
+    decision: deny
+    reason: "git config --edit opens .git/config in the editor; with an agent-controlled GIT_EDITOR this becomes a silent rewrite. Edit .git/config by hand if you genuinely need this."
+
+  - id: redirect-write-git-admin
+    level: critical
+    match:
+      redirect:
+        op:
+          any_of: [">", ">>", ">|", "<>"]
+        target:
+          any_of:
+            - "**/.git/config"
+            - "**/.git/HEAD"
+            - "**/.git/refs/**"
+            - "**/.git/packed-refs"
+            - "**/.git/hooks/**"
+    decision: deny
+    reason: "Direct write to a git admin file (config / HEAD / refs / packed-refs / hooks) can corrupt the repo or arm a malicious hook. Edit by hand if you genuinely need this."
 
   - id: git-filter-branch
     level: critical
@@ -135,6 +166,22 @@ rules:
         any_of: ["replace"]
     decision: deny
     reason: "git replace manipulates the commit graph. Use revert/rebase instead, or run replace by hand if you genuinely need it."
+
+  - id: git-update-ref-protected
+    level: critical
+    match:
+      command: git
+      args:
+        all_of: ["update-ref"]
+        any_of:
+          - "main"
+          - "master"
+          - "refs/heads/main"
+          - "refs/heads/master"
+          - "refs/remotes/origin/main"
+          - "refs/remotes/origin/master"
+    decision: deny
+    reason: "Moving main/master via git update-ref bypasses worktree-checkout safety. This is the exact pattern from the 2026-05-09 incident. Use checkout/merge/reset on the target branch instead, or run update-ref by hand if you genuinely need this."
 
   # ============================================================
   # HIGH: VCS destructive operations
