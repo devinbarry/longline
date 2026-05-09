@@ -133,6 +133,21 @@ rules:
     decision: deny
     reason: "Direct write to a git admin file (config / HEAD / refs / packed-refs / hooks) can corrupt the repo or arm a malicious hook. Edit by hand if you genuinely need this."
 
+  - id: copy-overwrite-git-admin
+    level: critical
+    match:
+      command:
+        any_of: ["cp", "install", "ditto", "rsync", "mv", "ln"]
+      args:
+        any_of:
+          - "**/.git/config"
+          - "**/.git/HEAD"
+          - "**/.git/refs/**"
+          - "**/.git/packed-refs"
+          - "**/.git/hooks/**"
+    decision: deny
+    reason: "Overwriting a git admin file (config / HEAD / refs / packed-refs / hooks) via cp/install/ditto/rsync/mv/ln corrupts the repo or arms a malicious hook. Edit by hand if you genuinely need this."
+
   - id: git-filter-branch
     level: critical
     match:

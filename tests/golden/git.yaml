@@ -484,6 +484,39 @@ tests:
       decision: deny
       rule_id: redirect-write-git-admin
 
+  # --- cp/install/ditto/rsync/mv/ln writes to git admin files ---
+  - id: cp-overwrite-git-config-deny
+    command: "cp /tmp/evil .git/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+    # cp is allowlisted at minimal trust; without this rule it would silently allow
+  - id: cp-overwrite-git-hook-deny
+    command: "cp /tmp/evil .git/hooks/post-commit"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: install-overwrite-git-config-deny
+    command: "install -m 644 /tmp/evil .git/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: rsync-overwrite-git-refs-deny
+    command: "rsync /tmp/evil .git/refs/heads/master"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: ln-symlink-git-config-deny
+    command: "ln -sf /tmp/evil .git/config"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: cp-not-git-admin-allow
+    command: "cp /tmp/evil mygit/config"
+    expected:
+      decision: allow
+    # Glob is `**/.git/config` (literal `.git`); this should not false-positive
+
   # --- Protected-ref update-ref (the incident pattern) ---
   - id: git-update-ref-master-deny
     command: "git update-ref refs/heads/master HEAD"
