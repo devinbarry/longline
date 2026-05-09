@@ -130,8 +130,11 @@ rules:
             - "**/.git/refs/**"
             - "**/.git/packed-refs"
             - "**/.git/hooks/**"
+            - "**/.git/index"
+            - "**/.git/info/**"
+            - "**/.git/objects/info/**"
     decision: deny
-    reason: "Direct write to a git admin file (config / HEAD / refs / packed-refs / hooks) can corrupt the repo or arm a malicious hook. Edit by hand if you genuinely need this."
+    reason: "Direct write to a git admin file (config / HEAD / refs / packed-refs / hooks / index / info / objects/info) can corrupt the repo, arm a malicious hook, or redirect git at an attacker-controlled object store. Edit by hand if you genuinely need this."
 
   - id: copy-overwrite-git-admin
     level: critical
@@ -146,6 +149,9 @@ rules:
           - "**/.git/refs/**"
           - "**/.git/packed-refs"
           - "**/.git/hooks/**"
+          - "**/.git/index"
+          - "**/.git/info/**"
+          - "**/.git/objects/info/**"
           # Directory destinations (cp <src> .git, tar -C .git/, etc.)
           - ".git"
           - ".git/"
@@ -163,6 +169,14 @@ rules:
           - "--output-dir=.git/hooks"
           - "--output-dir=.git/hooks/"
           - "--output-dir=./.git/**"
+          # wget --directory-prefix= joined-flag form
+          - "--directory-prefix=.git"
+          - "--directory-prefix=.git/"
+          - "--directory-prefix=.git/**"
+          # tar --directory= joined-flag form
+          - "--directory=.git"
+          - "--directory=.git/"
+          - "--directory=.git/**"
     decision: deny
     reason: "Overwriting or extracting into a git admin path (config / HEAD / refs / packed-refs / hooks, or the .git directory itself) corrupts the repo or arms a malicious hook. Covers cp/install/ditto/rsync/mv/ln/scp/curl/wget/tar/bsdtar. Edit by hand if you genuinely need this."
 
