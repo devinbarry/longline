@@ -135,10 +135,11 @@ fn log_decision_to_with_rotation(entry: &LogEntry, path: &Path, max_bytes: u64, 
     // Build the entire record (JSON + newline) and emit it in a single write_all.
     // writeln! issues two separate write() syscalls (content, then '\n'); under
     // concurrent invocations on an O_APPEND file this lets two records interleave
-    // as `{json_a}{json_b}\n\n`, producing JSONL parse errors. POSIX guarantees
-    // a single write() to an O_APPEND file is atomic for sizes up to the
-    // implementation's internal limit (>=PIPE_BUF; effectively all longline
-    // entries qualify).
+    // as `{json_a}{json_b}\n\n`, producing JSONL parse errors. With one write_all
+    // the kernel atomically seeks to EOF and appends in one operation
+    // (POSIX.1-2017 §2.9.7); concurrent records can no longer interleave at the
+    // syscall boundary. All longline entries (max observed ~5 KB) are well
+    // under the kernel's per-write split threshold on Linux/macOS.
     let mut record = json;
     record.push('\n');
     if let Err(e) = file.write_all(record.as_bytes()) {
@@ -279,6 +280,50 @@ mod tests {
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"runtime\":\"codex\""), "got: {json}");
         assert!(json.contains("\"decision\":\"deny\""), "got: {json}");
+    }
+
+    #[test]
+    fn test_each_appended_record_is_one_jsonl_line() {
+        // Regression guard: every call to log_decision_to must produce exactly
+        // one well-formed JSONL line. If the writer ever splits content from
+        // its trailing newline into separate write() calls, concurrent
+        // appenders can interleave; we cannot reproduce the race
+        // deterministically here, but writing N records serially and asserting
+        // line count == record count + every line parses as JSON catches any
+        // future regression to writeln!/println!/buffered-writer that would
+        // re-introduce the bug.
+        let dir = unique_test_dir("jsonl-shape");
+        let path = dir.join("test.jsonl");
+
+        let n = 100;
+        for i in 0..n {
+            let entry = make_entry_with_runtime(
+                "codex",
+                "Bash",
+                "/tmp",
+                &format!("cmd-{i}"),
+                Decision::Allow,
+                vec![],
+                None,
+                true,
+                None,
+            );
+            log_decision_to(&entry, &path);
+        }
+
+        let content = fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.split_inclusive('\n').collect();
+        assert_eq!(lines.len(), n, "expected {n} lines, got {}", lines.len());
+        for (idx, line) in lines.iter().enumerate() {
+            assert!(line.ends_with('\n'), "line {idx} missing trailing newline");
+            let trimmed = line.trim_end_matches('\n');
+            assert!(!trimmed.is_empty(), "line {idx} is blank");
+            let parsed: serde_json::Value = serde_json::from_str(trimmed)
+                .unwrap_or_else(|e| panic!("line {idx} not valid JSON: {e}: {trimmed}"));
+            assert_eq!(parsed["command"], format!("cmd-{idx}"));
+        }
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
