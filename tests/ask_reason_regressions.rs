@@ -394,6 +394,34 @@ fn bare_assignment_substitution_reason_names_inner_command() {
 }
 
 #[test]
+fn find_exec_inner_unknown_uses_inner_command_prefix() {
+    // find -exec extracts the inner via a different path than transparent
+    // wrapper unwrap (nohup, env, …). Lock that the extras-bucket reason
+    // still surfaces with "Unrecognized inner command:".
+    let result = evaluate("find . -exec unknown_cmd_xyz {} \\;");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(
+        result.reason, "Unrecognized inner command: unknown_cmd_xyz",
+        "find -exec inner uncovered should surface as inner command: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn process_substitution_in_redirect_target_names_inner() {
+    // `cat > >(unknown_cmd_xyz)` puts the unknown inside a process-substitution
+    // redirect target. The substitution leaf must be collected and the reason
+    // must name it as a command substitution.
+    let result = evaluate("cat > >(unknown_cmd_xyz)");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(
+        result.reason, "Unrecognized command substitution: unknown_cmd_xyz",
+        "<() in redirect target should surface as command substitution: {}",
+        result.reason
+    );
+}
+
+#[test]
 fn outer_and_inner_both_unknown_surfaces_outer_first() {
     // When BOTH an outer and an inner substitution are uncovered, the
     // priority-walker surfaces the outer (originals > extras > substitutions).
