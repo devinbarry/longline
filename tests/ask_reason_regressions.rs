@@ -375,3 +375,40 @@ fn wrapper_extra_leaf_reason_names_inner_command() {
         result.reason
     );
 }
+
+#[test]
+fn bare_assignment_substitution_reason_names_inner_command() {
+    // Bare assignment with embedded substitution: `VAR=$(unknown_cmd)`. The
+    // original SimpleCommand leaf has cmd.name = None (bare assignment), so
+    // the priority-walker would naively format "Unrecognized command" with
+    // no name. The deciding leaf is actually the substitution; the walker
+    // must skip the nameless original and surface the substitution leaf.
+    // Flagged by Codex review of the initial fix.
+    let result = evaluate("VAR=$(unknown_cmd_xyz)");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        result.reason.contains("unknown_cmd_xyz"),
+        "reason must name the inner substitution, not the nameless outer: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn outer_and_inner_both_unknown_surfaces_outer_first() {
+    // When BOTH an outer and an inner substitution are uncovered, the
+    // priority-walker surfaces the outer (originals > extras > substitutions).
+    // Locks the bucket-priority decision in. Codex review suggested this
+    // explicit regression test.
+    let result = evaluate("unknown_outer_xyz \"$(unknown_inner_xyz)\"");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        result.reason.contains("unknown_outer_xyz"),
+        "originals bucket has priority — outer must be surfaced: {}",
+        result.reason
+    );
+    assert!(
+        !result.reason.contains("unknown_inner_xyz"),
+        "inner substitution must NOT bleed in when an outer is also uncovered: {}",
+        result.reason
+    );
+}

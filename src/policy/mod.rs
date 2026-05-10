@@ -353,6 +353,16 @@ fn allow_rule_covers(config: &RulesConfig, leaf: &Statement) -> bool {
 /// uncovered leaf in priority order: original leaves > wrapper-extracted
 /// extras > command/process substitutions.
 ///
+/// Walks in two passes. Pass 1 returns the first uncovered leaf that has a
+/// usable identification (a `cmd.name` or a trust-filtered allowlist reason
+/// of its own). Pass 2 falls back to the bucket prefix on the first
+/// uncovered leaf regardless of name. The two-pass shape exists so a bare
+/// assignment with an unknown substitution (`VAR=$(unknown)`) doesn't
+/// short-circuit on the nameless original — its real deciding leaf is the
+/// substitution, which pass 1 surfaces. Without two passes the walker would
+/// stop at the nameless bare-assignment leaf and emit a useless
+/// "Unrecognized command".
+///
 /// Within each bucket, the deciding leaf's *own* trust-filtered allowlist
 /// reason takes precedence over the bucket-prefixed fallback so a leaf that
 /// matches an entry the current trust level couldn't grant still hints at
@@ -369,60 +379,82 @@ fn first_uncovered_leaf_reason(
     extra_stmts: &[Statement],
     subst_leaves: &[&Statement],
 ) -> Option<String> {
-    for leaf in leaves.iter().copied() {
-        if !is_allowlisted(config, leaf)
+    let original_uncovered = |leaf: &Statement| {
+        !is_allowlisted(config, leaf)
             && !shell_c_covered_via_extras(leaf, extra_stmts)
             && !classifier_covers(leaf, false)
             && !allow_rule_covers(config, leaf)
-        {
-            return Some(reason_for_uncovered_leaf(
-                config,
-                "Unrecognized command",
-                leaf,
-            ));
-        }
-    }
-    for leaf in extra_leaves.iter().copied() {
-        if !is_allowlisted(config, leaf)
+    };
+    let extra_uncovered = |leaf: &Statement| {
+        !is_allowlisted(config, leaf)
             && !is_covered_by_wrapper_entry(config, leaves, leaf)
             && !shell_c_covered_via_extras(leaf, extra_stmts)
             && !classifier_covers(leaf, true)
             && !allow_rule_covers(config, leaf)
-        {
-            return Some(reason_for_uncovered_leaf(
-                config,
-                "Unrecognized inner command",
-                leaf,
-            ));
+    };
+    let subst_uncovered = |leaf: &Statement| {
+        !is_allowlisted(config, leaf)
+            && !classifier_covers(leaf, true)
+            && !allow_rule_covers(config, leaf)
+    };
+
+    // Pass 1: prefer leaves we can actually name.
+    for leaf in leaves.iter().copied() {
+        if original_uncovered(leaf) {
+            if let Some(r) = named_reason(config, "Unrecognized command", leaf) {
+                return Some(r);
+            }
+        }
+    }
+    for leaf in extra_leaves.iter().copied() {
+        if extra_uncovered(leaf) {
+            if let Some(r) = named_reason(config, "Unrecognized inner command", leaf) {
+                return Some(r);
+            }
         }
     }
     for leaf in subst_leaves.iter().copied() {
-        if !is_allowlisted(config, leaf)
-            && !classifier_covers(leaf, true)
-            && !allow_rule_covers(config, leaf)
-        {
-            return Some(reason_for_uncovered_leaf(
-                config,
-                "Unrecognized command substitution",
-                leaf,
-            ));
+        if subst_uncovered(leaf) {
+            if let Some(r) = named_reason(config, "Unrecognized command substitution", leaf) {
+                return Some(r);
+            }
+        }
+    }
+
+    // Pass 2: nothing nameable found — fall back to the bucket prefix on
+    // the first uncovered leaf. Reached when the only uncovered leaves are
+    // nameless (bare assignment with no inner substitution, or non-
+    // SimpleCommand variants).
+    for leaf in leaves.iter().copied() {
+        if original_uncovered(leaf) {
+            return Some("Unrecognized command".to_string());
+        }
+    }
+    for leaf in extra_leaves.iter().copied() {
+        if extra_uncovered(leaf) {
+            return Some("Unrecognized inner command".to_string());
+        }
+    }
+    for leaf in subst_leaves.iter().copied() {
+        if subst_uncovered(leaf) {
+            return Some("Unrecognized command substitution".to_string());
         }
     }
     None
 }
 
-fn reason_for_uncovered_leaf(config: &RulesConfig, prefix: &str, leaf: &Statement) -> String {
+fn named_reason(config: &RulesConfig, prefix: &str, leaf: &Statement) -> Option<String> {
     if let Statement::SimpleCommand(cmd) = leaf {
         if let Some(reason) = find_allowlist_reason(config, cmd) {
-            return reason;
+            return Some(reason);
         }
         if let Some(name) = &cmd.name {
             if !name.is_empty() {
-                return format!("{prefix}: {name}");
+                return Some(format!("{prefix}: {name}"));
             }
         }
     }
-    prefix.to_string()
+    None
 }
 
 /// Evaluate a single leaf node (SimpleCommand, Opaque, or Empty).
