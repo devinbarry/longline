@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.7] - 2026-05-10
+
+### Fixed
+
+- JSONL audit log corruption under concurrent invocations. `writeln!`
+  emitted two `write()` syscalls per entry (content, then newline);
+  on an `O_APPEND` file each was atomic individually but the pair was
+  not, so two parallel longline subprocesses (typical when a Codex
+  turn fans out multiple Bash tool calls) could interleave records
+  as `{json_a}{json_b}\n\n`. Production analysis of
+  `~/.codex/hooks-logs/longline.jsonl` showed ~2% of lines affected.
+  Fix collapses the append to a single `write_all` over a pre-joined
+  buffer, so each entry hits the kernel as one atomic append.
+  Stress test: 2048 invocations × 256-way concurrency now produce
+  zero torn lines (vs ~0.4–2% before).
+
 ## [0.16.6] - 2026-05-09
 
 ### Added
