@@ -170,6 +170,37 @@ rules:
           # Cover the full URL-base form via `url.*://**` which has `**`
           # at end-of-pattern and can freely match through the URL path.
           - "url.*://**"
+          # man.<viewer>.{cmd,path} + browser.<browser>.{cmd,path} are
+          # shell-evaluated by `git help`. Running `git help <topic>` with
+          # these set executes the path/cmd as the man-viewer / browser.
+          - "man.*.cmd=**"
+          - "man.*.path=**"
+          - "browser.*.cmd=**"
+          - "browser.*.path=**"
+          # Attribute-driven exec channels: diff.<driver>.{command,textconv}
+          # and merge.<driver>.driver run external programs against files
+          # matched in .gitattributes; interactive.diffFilter runs on add -p
+          # / stash; trailer.<alias>.{cmd,command} runs on commit --trailer.
+          - "diff.*.command=**"
+          - "diff.*.textconv=**"
+          - "merge.*.driver=**"
+          - "interactive.difffilter=**"
+          - "trailer.*.cmd=**"
+          - "trailer.*.command=**"
+          # init.templateDir installs hooks copied to .git/hooks on
+          # init/clone — same channel as core.hooksPath but via init.
+          - "init.templatedir=**"
+          # Git LFS custom transfer agents + extensions run external programs
+          - "lfs.standalonetransferagent=**"
+          - "lfs.customtransfer.*.path=**"
+          - "lfs.extension.*.clean=**"
+          - "lfs.extension.*.smudge=**"
+          # send-email setters that run external programs
+          - "sendemail.sendmailcmd=**"
+          - "sendemail.cccmd=**"
+          - "sendemail.tocmd=**"
+          - "sendemail.headercmd=**"
+          - "imap.tunnel=**"
           - "http.sslverify=**"
           - "http.sslcainfo=**"
           - "http.sslcapath=**"
@@ -188,6 +219,15 @@ rules:
         # Git config section / variable names are case-insensitive
         # (`core.sshCommand` ≡ `CORE.SSHCOMMAND`); match without case folding.
         case_insensitive: true
+        # Don't fire on `git config <key>` reads — the broad URL-base
+        # pattern (`url.*://**`) and per-URL http patterns
+        # (`http.{http,https}://**`) intentionally omit `=` because
+        # `**` cannot cross `/` in mid-pattern positions to anchor to a
+        # trailing `=value`. The persistent form has dedicated rules
+        # (git-config-rce-keys-{spaceform,joinedform}) with proper
+        # min_args + read-flag carve-outs.
+        none_of:
+          - "config"
         any_of:
           # core.* keys that substitute the program git invokes
           - "core.sshcommand=**"
@@ -260,7 +300,36 @@ rules:
           # `*` in `url.*.insteadof` cannot match the base segment).
           # Cover the full URL-base form via `url.*://**` which has `**`
           # at end-of-pattern and can freely match through the URL path.
+          # The `none_of: ["config"]` above keeps this from firing on
+          # `git config <key>` reads.
           - "url.*://**"
+          # man.<viewer>.{cmd,path} + browser.<browser>.{cmd,path} are
+          # shell-evaluated by `git help`.
+          - "man.*.cmd=**"
+          - "man.*.path=**"
+          - "browser.*.cmd=**"
+          - "browser.*.path=**"
+          # Attribute-driven exec channels.
+          - "diff.*.command=**"
+          - "diff.*.textconv=**"
+          - "merge.*.driver=**"
+          - "interactive.difffilter=**"
+          - "trailer.*.cmd=**"
+          - "trailer.*.command=**"
+          # init.templateDir installs hooks copied to .git/hooks on
+          # init/clone — same channel as core.hooksPath but via init.
+          - "init.templatedir=**"
+          # Git LFS custom transfer agents + extensions run external programs
+          - "lfs.standalonetransferagent=**"
+          - "lfs.customtransfer.*.path=**"
+          - "lfs.extension.*.clean=**"
+          - "lfs.extension.*.smudge=**"
+          # send-email / imap setters that run external programs
+          - "sendemail.sendmailcmd=**"
+          - "sendemail.cccmd=**"
+          - "sendemail.tocmd=**"
+          - "sendemail.headercmd=**"
+          - "imap.tunnel=**"
           # --config-env=KEY=ENVVAR variants of all of the above
           - "--config-env=core.sshcommand=**"
           - "--config-env=core.editor=**"
@@ -296,6 +365,33 @@ rules:
           # `--config-env=alias.X=ENVVAR` reads the alias body from an env var
           # we can't introspect; deny any alias set via this channel.
           - "--config-env=alias.*=**"
+          # R3 keys via --config-env joined form
+          - "--config-env=remote.*.uploadpack=**"
+          - "--config-env=remote.*.receivepack=**"
+          - "--config-env=remote.*.url=**"
+          - "--config-env=url.*.insteadof=**"
+          - "--config-env=url.*.pushinsteadof=**"
+          - "--config-env=url.*://**"
+          - "--config-env=man.*.cmd=**"
+          - "--config-env=man.*.path=**"
+          - "--config-env=browser.*.cmd=**"
+          - "--config-env=browser.*.path=**"
+          - "--config-env=diff.*.command=**"
+          - "--config-env=diff.*.textconv=**"
+          - "--config-env=merge.*.driver=**"
+          - "--config-env=interactive.difffilter=**"
+          - "--config-env=trailer.*.cmd=**"
+          - "--config-env=trailer.*.command=**"
+          - "--config-env=init.templatedir=**"
+          - "--config-env=lfs.standalonetransferagent=**"
+          - "--config-env=lfs.customtransfer.*.path=**"
+          - "--config-env=lfs.extension.*.clean=**"
+          - "--config-env=lfs.extension.*.smudge=**"
+          - "--config-env=sendemail.sendmailcmd=**"
+          - "--config-env=sendemail.cccmd=**"
+          - "--config-env=sendemail.tocmd=**"
+          - "--config-env=sendemail.headercmd=**"
+          - "--config-env=imap.tunnel=**"
     decision: deny
     reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / credential helper / ext protocol / pager.<cmd>), sources an attacker-controlled include file, or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
 
@@ -356,6 +452,47 @@ rules:
           - "url.*.insteadof=**"
           - "url.*.pushinsteadof"
           - "url.*.pushinsteadof=**"
+          # R3 Codex additions
+          - "man.*.cmd"
+          - "man.*.cmd=**"
+          - "man.*.path"
+          - "man.*.path=**"
+          - "browser.*.cmd"
+          - "browser.*.cmd=**"
+          - "browser.*.path"
+          - "browser.*.path=**"
+          - "diff.*.command"
+          - "diff.*.command=**"
+          - "diff.*.textconv"
+          - "diff.*.textconv=**"
+          - "merge.*.driver"
+          - "merge.*.driver=**"
+          - "interactive.difffilter"
+          - "interactive.difffilter=**"
+          - "trailer.*.cmd"
+          - "trailer.*.cmd=**"
+          - "trailer.*.command"
+          - "trailer.*.command=**"
+          - "init.templatedir"
+          - "init.templatedir=**"
+          - "lfs.standalonetransferagent"
+          - "lfs.standalonetransferagent=**"
+          - "lfs.customtransfer.*.path"
+          - "lfs.customtransfer.*.path=**"
+          - "lfs.extension.*.clean"
+          - "lfs.extension.*.clean=**"
+          - "lfs.extension.*.smudge"
+          - "lfs.extension.*.smudge=**"
+          - "sendemail.sendmailcmd"
+          - "sendemail.sendmailcmd=**"
+          - "sendemail.cccmd"
+          - "sendemail.cccmd=**"
+          - "sendemail.tocmd"
+          - "sendemail.tocmd=**"
+          - "sendemail.headercmd"
+          - "sendemail.headercmd=**"
+          - "imap.tunnel"
+          - "imap.tunnel=**"
       flags:
         # Reads and unsets must remain allowed.
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
@@ -397,6 +534,31 @@ rules:
           - "safe.directory=**"
           - "uploadpack.packobjectshook=**"
           - "pager.*=**"
+          - "remote.*.uploadpack=**"
+          - "remote.*.receivepack=**"
+          - "remote.*.url=ext::**"
+          - "url.*.insteadof=**"
+          - "url.*.pushinsteadof=**"
+          - "man.*.cmd=**"
+          - "man.*.path=**"
+          - "browser.*.cmd=**"
+          - "browser.*.path=**"
+          - "diff.*.command=**"
+          - "diff.*.textconv=**"
+          - "merge.*.driver=**"
+          - "interactive.difffilter=**"
+          - "trailer.*.cmd=**"
+          - "trailer.*.command=**"
+          - "init.templatedir=**"
+          - "lfs.standalonetransferagent=**"
+          - "lfs.customtransfer.*.path=**"
+          - "lfs.extension.*.clean=**"
+          - "lfs.extension.*.smudge=**"
+          - "sendemail.sendmailcmd=**"
+          - "sendemail.cccmd=**"
+          - "sendemail.tocmd=**"
+          - "sendemail.headercmd=**"
+          - "imap.tunnel=**"
       flags:
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
     decision: deny
@@ -510,6 +672,8 @@ rules:
           - "GIT_SSL_NO_VERIFY"
           # Run-time exec path redirection
           - "GIT_EXEC_PATH"
+          # GIT_TEMPLATE_DIR installs attacker-controlled hooks on init/clone
+          - "GIT_TEMPLATE_DIR"
     decision: deny
     reason: "Setting these GIT_* env vars on a git invocation substitutes the program git invokes (ssh / editor / pager / askpass / external-diff / proxy-command), reroutes git at attacker-controlled config files (GIT_CONFIG{,_GLOBAL,_SYSTEM}), or injects ad-hoc config (GIT_CONFIG_COUNT/KEY_n/VALUE_n). Set the safe equivalent in .git/config by hand if you genuinely need this."
 
@@ -548,6 +712,11 @@ rules:
       command: git
       args:
         case_insensitive: true
+        # Same scoping as git-c-rce-keys: don't fire on `git config ...`
+        # (the persistent form has dedicated git-config-tls-downgrade with
+        # min_args + read-flag carve-outs).
+        none_of:
+          - "config"
         any_of:
           # Disabling TLS verification opens MITM. Per-URL forms covered.
           - "http.sslverify=false"

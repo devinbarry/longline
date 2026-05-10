@@ -155,6 +155,15 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         return false;
                     }
                 }
+                if !args_matcher.none_of.is_empty() {
+                    let has_excluded = args_matcher
+                        .none_of
+                        .iter()
+                        .any(|pattern| cmd.argv.iter().any(|a| arg_match(pattern, a.as_ref())));
+                    if has_excluded {
+                        return false;
+                    }
+                }
             }
             if let Some(env_matcher) = env {
                 if !env_matches(env_matcher, &cmd.assignments) {

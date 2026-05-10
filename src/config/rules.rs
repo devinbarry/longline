@@ -213,6 +213,13 @@ pub struct ArgsMatcher {
     /// e.g. require `config` AND any of the corrupting flag names.
     #[serde(default)]
     pub all_of: Vec<String>,
+    /// None of these patterns may match any argument. Used to exclude a
+    /// rule from firing in unrelated contexts — e.g. the `-c` RCE rules
+    /// should NOT fire on `git config <key>` invocations (the persistent
+    /// form has its own spaceform/joinedform rules with proper read
+    /// carve-outs).
+    #[serde(default)]
+    pub none_of: Vec<String>,
     /// When true, lowercase both pattern and argument before matching.
     /// Used for git config keys whose section / variable names are
     /// case-insensitive (e.g. `core.sshCommand` ≡ `CORE.SSHCOMMAND`).
