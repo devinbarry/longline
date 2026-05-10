@@ -132,7 +132,16 @@ fn log_decision_to_with_rotation(entry: &LogEntry, path: &Path, max_bytes: u64, 
         }
     };
 
-    if let Err(e) = writeln!(file, "{json}") {
+    // Build the entire record (JSON + newline) and emit it in a single write_all.
+    // writeln! issues two separate write() syscalls (content, then '\n'); under
+    // concurrent invocations on an O_APPEND file this lets two records interleave
+    // as `{json_a}{json_b}\n\n`, producing JSONL parse errors. POSIX guarantees
+    // a single write() to an O_APPEND file is atomic for sizes up to the
+    // implementation's internal limit (>=PIPE_BUF; effectively all longline
+    // entries qualify).
+    let mut record = json;
+    record.push('\n');
+    if let Err(e) = file.write_all(record.as_bytes()) {
         eprintln!("longline: failed to write log entry: {e}");
     }
 }
