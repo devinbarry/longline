@@ -9,6 +9,68 @@ pub fn node_text<'a>(node: Node, source: &'a str) -> &'a str {
     &source[node.byte_range()]
 }
 
+/// Decode a bash ANSI-C `$'...'` quoted string. Returns None if the input
+/// is not a well-formed `$'...'` token. Processes the common backslash
+/// escapes (\n \t \r \\ \' \" \a \b \f \v \e) and `\xHH` hex escapes.
+/// Other obscure escapes (\nnn octal, \uHHHH unicode, \cx control) are
+/// passed through as the raw escape sequence — sufficient for policy
+/// matching against the keys we deny.
+fn decode_ansi_c_string(text: &str) -> Option<String> {
+    let inner = text.strip_prefix("$'")?.strip_suffix('\'')?;
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            out.push('\\');
+            break;
+        };
+        match next {
+            'n' => out.push('\n'),
+            't' => out.push('\t'),
+            'r' => out.push('\r'),
+            '\\' => out.push('\\'),
+            '\'' => out.push('\''),
+            '"' => out.push('"'),
+            'a' => out.push('\x07'),
+            'b' => out.push('\x08'),
+            'f' => out.push('\x0c'),
+            'v' => out.push('\x0b'),
+            'e' | 'E' => out.push('\x1b'),
+            '0' => out.push('\0'),
+            'x' => {
+                // Up to two hex digits
+                let mut hex = String::new();
+                for _ in 0..2 {
+                    if let Some(&h) = chars.peek() {
+                        if h.is_ascii_hexdigit() {
+                            hex.push(h);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                if let Ok(n) = u8::from_str_radix(&hex, 16) {
+                    out.push(n as char);
+                } else {
+                    out.push('\\');
+                    out.push('x');
+                    out.push_str(&hex);
+                }
+            }
+            other => {
+                out.push('\\');
+                out.push(other);
+            }
+        }
+    }
+    Some(out)
+}
+
 /// Resolve node text, stripping quotes from strings and recursing into command_name.
 pub fn resolve_node_text(node: Node, source: &str) -> String {
     match node.kind() {
@@ -27,6 +89,16 @@ pub fn resolve_node_text(node: Node, source: &str) -> String {
             } else {
                 text.to_string()
             }
+        }
+        "ansi_c_string" => {
+            // Bash ANSI-C `$'...'` quoting: strip the `$'` prefix and trailing
+            // `'`, then process the common backslash escapes. Without this,
+            // `git -c $'core.sshCommand=evil' fetch` slipped past the
+            // git-c-rce-keys rule because arg.text was the literal
+            // `$'core.sshCommand=evil'` (with the wrapper) and the rule's
+            // `core.sshcommand=**` pattern could not match.
+            let text = node_text(node, source);
+            decode_ansi_c_string(text).unwrap_or_else(|| text.to_string())
         }
         "command_name" => {
             // Recurse into the child

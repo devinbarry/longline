@@ -8,7 +8,7 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use super::{Arg, SimpleCommand, Statement};
+use super::{Arg, Assignment, SimpleCommand, Statement};
 
 /// Maximum recursion depth for chained wrappers.
 /// If exceeded, evaluation falls back to ask via an Opaque node.
@@ -233,17 +233,39 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
         break;
     }
 
-    // Phase 2: Apply skip rule
+    // Phase 2: Apply skip rule. Collect any `VAR=val` argv tokens consumed
+    // along the way as inline assignments on the inner command — bash
+    // semantics treat `wrapper [opts] VAR=val ... inner_cmd args` the same
+    // as `VAR=val inner_cmd args` for the inner exec, so the inner leaf
+    // must see the assignments via cmd.assignments. Without this the
+    // env matcher (and any other assignment-aware policy) cannot see env
+    // vars passed through `env`, `timeout`, `nice`, `nohup`, etc.
+    let mut collected_assignments: Vec<Assignment> = Vec::new();
     match wrapper.skip {
         ArgSkip::Positional(n) => {
             i += n;
         }
         ArgSkip::Assignments => {
             while i < argv.len() && is_env_assignment(argv[i].text.as_str()) {
+                if let Some(a) = parse_assignment_token(argv[i].text.as_str()) {
+                    collected_assignments.push(a);
+                }
                 i += 1;
             }
         }
         ArgSkip::None => {}
+    }
+
+    // Phase 2b (universal): after the wrapper's natural skip, also consume
+    // any trailing `VAR=val` argv tokens. Bash treats these as inline
+    // assignments on the wrapped command regardless of which wrapper sits
+    // in front. Without this `timeout 30 GIT_SSH_COMMAND=evil git fetch`
+    // would treat `GIT_SSH_COMMAND=evil` as the inner command name.
+    while i < argv.len() && is_env_assignment(argv[i].text.as_str()) {
+        if let Some(a) = parse_assignment_token(argv[i].text.as_str()) {
+            collected_assignments.push(a);
+        }
+        i += 1;
     }
 
     // Phase 3: Construct inner command
@@ -262,12 +284,27 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     // (e.g. classify_gh_api's empty-assignments precondition) is bypassed
     // by `PATH=/tmp command gh api ...`, `LD_PRELOAD=evil nice gh api ...`
     // and similar.
+    let mut merged_assignments = cmd.assignments.clone();
+    merged_assignments.extend(collected_assignments);
     Some(SimpleCommand {
         name: Some(inner_name),
         argv: inner_argv,
         redirects: cmd.redirects.clone(),
-        assignments: cmd.assignments.clone(),
+        assignments: merged_assignments,
         embedded_substitutions: cmd.embedded_substitutions.clone(),
+    })
+}
+
+/// Parse a `NAME=VALUE` token into an Assignment. Returns None if the token
+/// is not a valid env-style assignment (per `is_env_assignment`).
+fn parse_assignment_token(token: &str) -> Option<Assignment> {
+    if !is_env_assignment(token) {
+        return None;
+    }
+    let eq_pos = token.find('=')?;
+    Some(Assignment {
+        name: token[..eq_pos].to_string(),
+        value: token[eq_pos + 1..].to_string(),
     })
 }
 

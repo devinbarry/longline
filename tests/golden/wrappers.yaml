@@ -150,11 +150,15 @@ tests:
     expected:
       decision: ask
       rule_id: printenv
-  - id: env-git-status-ask
+  - id: env-git-pager-deny
     command: "env GIT_PAGER=cat git status"
     expected:
-      decision: ask
-      rule_id: printenv
+      decision: deny
+      rule_id: git-env-rce-vars
+    # Pre-v0.16.9 this asked because the env wrapper did not propagate
+    # VAR=val into the inner cmd's assignments, so git-env-rce-vars never
+    # saw GIT_PAGER. Post-fix the env-var deny fires regardless of value
+    # (we cannot distinguish `cat` from `evil` at policy time).
   - id: env-grep-ask
     command: "env LANG=C grep -r pattern src/"
     expected:

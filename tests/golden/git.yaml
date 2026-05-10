@@ -928,6 +928,141 @@ tests:
       decision: allow
     # Re-enabling verify is not a downgrade; allow
 
+  # ============================================================
+  # R2 (Opus) findings — env-wrapper, ANSI-C, --receive-pack space form,
+  # TLS trust-anchor keys
+  # ============================================================
+
+  # --- env wrapper must propagate VAR=val into the inner command's
+  # assignments so git-env-rce-vars fires (R2 P0-1). ---
+  - id: env-wrapper-git-ssh-command-deny
+    command: "env GIT_SSH_COMMAND=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+    # Pre-fix: `env GIT_SSH_COMMAND=evil git fetch` → ask (printenv) because
+    # ArgSkip::Assignments stripped the env var without propagating it onto
+    # the synthesized inner SimpleCommand's assignments. The env matcher then
+    # had nothing to match. Fix: wrappers.rs unwrap_transparent() now
+    # collects skipped VAR=val tokens and merges them into inner.assignments.
+  - id: env-wrapper-multiple-assignments-deny
+    command: "env -i GIT_SSH=foo GIT_PAGER=evil git log"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: env-wrapper-config-count-deny
+    command: "env GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+
+  # --- timeout / nice / nohup wrappers must also propagate trailing
+  # VAR=val tokens (R2 P1-1). Pre-fix: `timeout 30 GIT_SSH_COMMAND=evil git
+  # fetch` → ask (mis-parsed, GIT_SSH_COMMAND=evil treated as inner cmd
+  # name). Fix: universal phase-2b in unwrap_transparent. ---
+  - id: timeout-wrapper-git-ssh-command-deny
+    command: "timeout 30 GIT_SSH_COMMAND=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: nice-wrapper-git-ssh-command-deny
+    command: "nice GIT_SSH_COMMAND=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: nohup-wrapper-git-ssh-command-deny
+    command: "nohup GIT_SSH_COMMAND=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+
+  # --- `git push --receive-pack PROG` (space form) must deny (R2 P0-3).
+  # Pre-fix: only the joined `--receive-pack=PROG` denied; the space form
+  # fell through to ask via the trust-gated git push. ---
+  - id: git-push-receive-pack-spaceform-deny
+    command: "git push --receive-pack evil origin master"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags-spaceform
+  - id: git-fetch-upload-pack-spaceform-deny
+    command: "git fetch --upload-pack evil origin"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags-spaceform
+
+  # --- TLS trust-anchor keys missed in R1 (R2 P0-4) ---
+  - id: git-c-http-sslcainfo-deny
+    command: "git -c http.sslCAInfo=/tmp/evil.pem clone https://example.com/r"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-http-sslcapath-deny
+    command: "git -c http.sslCAPath=/tmp/evil clone https://example.com/r"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-http-sslversion-deny
+    command: "git -c http.sslVersion=tlsv1.0 clone https://example.com/r"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-http-sslbackend-deny
+    command: "git -c http.sslBackend=foo fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-config-http-sslcainfo-deny
+    command: "git config http.sslCAInfo /tmp/evil.pem"
+    expected:
+      decision: deny
+      rule_id: git-config-tls-downgrade
+  - id: git-config-http-sslversion-deny
+    command: "git config http.sslVersion tlsv1.0"
+    expected:
+      decision: deny
+      rule_id: git-config-tls-downgrade
+
+  # --- `git rebase --exec "cmd"` must NOT be denied by transport-flag rule.
+  # `--exec` (space form) is a legitimate (already-trust-gated) rebase flow.
+  # Confirms we did not over-broaden the transport-program-flags rule. ---
+  - id: git-rebase-exec-spaceform-still-asks
+    command: "git rebase --exec \"make test\" main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+    # git rebase already ask-gated; --exec doesn't override that to deny
+
+  # --- ANSI-C `$'...'` quoting must not bypass the rule (R2 P0-2). ---
+  # NOTE: pre-fix this allows because tree-sitter preserves `$'...'`
+  # literal text. After parser fix, this should deny via git-c-rce-keys.
+  - id: git-c-ansic-sshcommand-deny
+    command: "git -c $'core.sshCommand=/tmp/evil' fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Negative regression: case-sensitive default. An existing
+  # case-sensitive rule must NOT match an uppercase pattern, proving
+  # case_insensitive: false is the default and the new flag is opt-in. ---
+  - id: cargo-uppercase-test-not-allowlisted
+    command: "cargo TEST"
+    expected:
+      decision: ask
+    # The `cargo test` allowlist entry is case-sensitive and `TEST` should
+    # not match it. If a future refactor makes the allowlist or args
+    # match case-insensitive globally, this test catches it.
+
+  # --- Negative regression: case-sensitive default applies to existing
+  # rules. `rm -RF` (uppercase) does not match the `rm -rf` deny pattern
+  # since flag-matching is case-sensitive. The command falls through to
+  # the rm-generic ask rule. If this ever flips to deny, an unintended
+  # global case-insensitivity change has crept in. ---
+  - id: rm-uppercase-rf-stays-ask
+    command: "rm -RF /tmp/foo"
+    expected:
+      decision: ask
+      rule_id: rm-generic
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"

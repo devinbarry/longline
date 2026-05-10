@@ -377,13 +377,17 @@ rules:
     match:
       command: git
       args:
-        # Space form `git fetch --upload-pack PROG`. Require argv >= 4
-        # ([git-subcommand-or-c-pair, --upload-pack, PROG]) to avoid matching
-        # bare `--upload-pack` with no value (rare and benign).
+        # Space form `git fetch --upload-pack PROG` / `git push --receive-pack PROG`.
+        # Require argv >= 3 to avoid matching the bare flag with no value.
+        # NOTE: `--exec` (space form) intentionally not denied here — `git rebase
+        # --exec "cmd"` is a legitimate (already-trust-gated) interactive flow,
+        # while `git fetch --exec=PROG` joined-form is caught above.
         min_args: 3
-        all_of: ["--upload-pack"]
+        any_of:
+          - "--upload-pack"
+          - "--receive-pack"
     decision: deny
-    reason: "git --upload-pack <prog> specifies the program git runs at the remote during fetch. Arbitrary-program channel."
+    reason: "git --upload-pack / --receive-pack <prog> (space form) specifies the program git runs at the remote during fetch / push. Arbitrary-program channel."
 
   - id: git-c-tls-downgrade
     level: critical
@@ -397,6 +401,12 @@ rules:
           - "http.sslverify=0"
           - "http.sslverify=no"
           - "http.sslverify=off"
+          # Trust-anchor substitution (attacker pins their own CA / lowers
+          # TLS version → MITM with valid-looking cert).
+          - "http.sslcainfo=**"
+          - "http.sslcapath=**"
+          - "http.sslversion=**"
+          - "http.sslbackend=**"
           # Per-URL http config: glob_match's `**` does not cross `/` in the
           # middle of a pattern, so we cannot pinpoint `.sslverify=false` after
           # an `http.<URL>.` prefix that contains `://` and `/`. Take the
@@ -406,6 +416,10 @@ rules:
           - "http.http://**"
           - "http.https://**"
           - "--config-env=http.sslverify=**"
+          - "--config-env=http.sslcainfo=**"
+          - "--config-env=http.sslcapath=**"
+          - "--config-env=http.sslversion=**"
+          - "--config-env=http.sslbackend=**"
           - "--config-env=http.http://**"
           - "--config-env=http.https://**"
     decision: deny
@@ -421,6 +435,14 @@ rules:
         all_of: ["config"]
         any_of:
           - "http.sslverify"
+          - "http.sslcainfo"
+          - "http.sslcainfo=**"
+          - "http.sslcapath"
+          - "http.sslcapath=**"
+          - "http.sslversion"
+          - "http.sslversion=**"
+          - "http.sslbackend"
+          - "http.sslbackend=**"
           # Per-URL persistent set: same broad posture as the -c rule.
           - "http.http://**"
           - "http.https://**"
