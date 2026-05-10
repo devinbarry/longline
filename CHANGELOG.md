@@ -36,7 +36,7 @@ All notable changes to this project will be documented in this file.
   `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`,
   `GIT_PROXY_COMMAND`, `GIT_EXTERNAL_DIFF`,
   `GIT_CONFIG_{COUNT,KEY_*,VALUE_*,PARAMETERS,GLOBAL,SYSTEM}`, `GIT_CONFIG`,
-  `GIT_SSL_NO_VERIFY`, `GIT_EXEC_PATH`.
+  `GIT_SSL_NO_VERIFY`, `GIT_EXEC_PATH`, `GIT_TEMPLATE_DIR`.
 - **`git-transport-program-flags{,spaceform}`** deny `--upload-pack`,
   `--receive-pack`, `--exec` (joined form) and `--upload-pack` /
   `--receive-pack` (space form).
@@ -87,9 +87,11 @@ All notable changes to this project will be documented in this file.
 
 ### Schema
 
-- `ArgsMatcher` gains `case_insensitive: bool`, `min_args: usize`, and
+- `ArgsMatcher` gains `case_insensitive: bool`, `min_args: usize`,
   `none_of: Vec<String>` (exclude rule from firing when any argv token
-  matches the listed patterns).
+  matches the listed patterns), and `argv_first_not: Vec<String>`
+  (exact-match exclusion against argv[0] only — the subcommand
+  position).
 - New `EnvMatcher` (with `any_of` and `case_insensitive`) added to the
   `command` matcher's `env:` field.
 - `ArgsMatcher` and `EnvMatcher` use `deny_unknown_fields` so typos in

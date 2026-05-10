@@ -132,6 +132,11 @@ pub struct Rule {
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
+// Matchers are constructed at rules-load time and live for the life of the
+// process; the size difference between the Command variant (with its
+// `Option<ArgsMatcher>` containing several Vec<String>) and the smaller
+// Pipeline/Redirect variants is not a hot-path concern.
+#[allow(clippy::large_enum_variant)]
 pub enum Matcher {
     Pipeline {
         pipeline: PipelineMatcher,
@@ -220,6 +225,14 @@ pub struct ArgsMatcher {
     /// carve-outs).
     #[serde(default)]
     pub none_of: Vec<String>,
+    /// Like `none_of` but checks ONLY the first argv token (the
+    /// subcommand position for `<wrapper> <subcommand> <args...>`
+    /// invocations). Use this when you want to scope a rule away from a
+    /// specific subcommand without accidentally suppressing the rule on
+    /// invocations where the same word appears as a positional argument
+    /// later in argv. Patterns are literal exact-match (no glob).
+    #[serde(default)]
+    pub argv_first_not: Vec<String>,
     /// When true, lowercase both pattern and argument before matching.
     /// Used for git config keys whose section / variable names are
     /// case-insensitive (e.g. `core.sshCommand` ≡ `CORE.SSHCOMMAND`).

@@ -130,6 +130,7 @@ rules:
           - "core.fsmonitor=**"
           - "core.gitproxy=**"
           - "core.askpass=**"
+          - "core.alternaterefscommand=**"
           - "core.hookspath=**"
           - "core.bare=**"
           - "core.worktree=**"
@@ -163,6 +164,8 @@ rules:
           - "remote.*.uploadpack=**"
           - "remote.*.receivepack=**"
           - "remote.*.url=ext::**"
+          - "remote.*.vcs=**"
+          - "remote.*.proxy=**"
           - "url.*.insteadof=**"
           - "url.*.pushinsteadof=**"
           # URL-form base (`url.<scheme>://...` contains `/`, so the
@@ -225,8 +228,11 @@ rules:
         # `**` cannot cross `/` in mid-pattern positions to anchor to a
         # trailing `=value`. The persistent form has dedicated rules
         # (git-config-rce-keys-{spaceform,joinedform}) with proper
-        # min_args + read-flag carve-outs.
-        none_of:
+        # min_args + read-flag carve-outs. Use argv_first_not (which
+        # checks ONLY argv[0]) instead of none_of so positional `config`
+        # arguments later in argv — e.g. `git fetch config` where
+        # `config` is a refspec/remote name — don't suppress the rule.
+        argv_first_not:
           - "config"
         any_of:
           # core.* keys that substitute the program git invokes
@@ -236,6 +242,7 @@ rules:
           - "core.fsmonitor=**"
           - "core.gitproxy=**"
           - "core.askpass=**"
+          - "core.alternaterefscommand=**"
           - "sequence.editor=**"
           # filter.<driver>.{clean,smudge,process} run on attribute-driven
           # files at add/checkout/normalize time
@@ -291,6 +298,8 @@ rules:
           # remote.<name>.url=ext::<cmd> is the documented RCE clone-URL
           # form (git protocol "ext" runs the value as a shell command)
           - "remote.*.url=ext::**"
+          - "remote.*.vcs=**"
+          - "remote.*.proxy=**"
           # url.<X>.{insteadOf,pushInsteadOf} silently rewrite URLs in
           # subsequent transport commands → can redirect the agent to an
           # attacker-controlled host
@@ -369,6 +378,9 @@ rules:
           - "--config-env=remote.*.uploadpack=**"
           - "--config-env=remote.*.receivepack=**"
           - "--config-env=remote.*.url=**"
+          - "--config-env=remote.*.vcs=**"
+          - "--config-env=remote.*.proxy=**"
+          - "--config-env=core.alternaterefscommand=**"
           - "--config-env=url.*.insteadof=**"
           - "--config-env=url.*.pushinsteadof=**"
           - "--config-env=url.*://**"
@@ -448,6 +460,14 @@ rules:
           - "remote.*.receivepack=**"
           - "remote.*.url"
           - "remote.*.url=ext::**"
+          - "remote.*.vcs"
+          - "remote.*.vcs=**"
+          - "remote.*.proxy"
+          - "remote.*.proxy=**"
+          - "core.alternaterefscommand"
+          - "core.alternaterefscommand=**"
+          - "remote.*.vcs=**"
+          - "remote.*.proxy=**"
           - "url.*.insteadof"
           - "url.*.insteadof=**"
           - "url.*.pushinsteadof"
@@ -511,6 +531,7 @@ rules:
           - "core.editor=**"
           - "core.pager=**"
           - "core.fsmonitor=**"
+          - "core.alternaterefscommand=**"
           - "core.gitproxy=**"
           - "core.askpass=**"
           - "sequence.editor=**"
@@ -537,6 +558,8 @@ rules:
           - "remote.*.uploadpack=**"
           - "remote.*.receivepack=**"
           - "remote.*.url=ext::**"
+          - "remote.*.vcs=**"
+          - "remote.*.proxy=**"
           - "url.*.insteadof=**"
           - "url.*.pushinsteadof=**"
           - "man.*.cmd=**"
@@ -714,8 +737,10 @@ rules:
         case_insensitive: true
         # Same scoping as git-c-rce-keys: don't fire on `git config ...`
         # (the persistent form has dedicated git-config-tls-downgrade with
-        # min_args + read-flag carve-outs).
-        none_of:
+        # min_args + read-flag carve-outs). Use argv_first_not so a
+        # positional `config` arg later in argv (e.g. `git fetch config`)
+        # doesn't suppress the rule.
+        argv_first_not:
           - "config"
         any_of:
           # Disabling TLS verification opens MITM. Per-URL forms covered.

