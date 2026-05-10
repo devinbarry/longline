@@ -443,6 +443,132 @@ tests:
       rule_id: git-c-corrupting-core-flags
     # `--config-env=key=ENVVAR` is the env-var injection cousin of `-c key=value`
 
+  # --- `git -c key=value` for SAFE keys must allow the underlying subcommand ---
+  # Pre-fix these landed as ASK with reason "Unrecognized command: git" because
+  # the `-c key=value` pair confused the allowlist's flag-skip logic.
+  - id: git-c-commit-gpgsign-allow
+    command: "git -c commit.gpgsign=false commit -m x"
+    expected:
+      decision: allow
+    # The signing-toggle override is identical to a plain `git commit` for safety
+  - id: git-c-user-email-commit-allow
+    command: "git -c user.email=a@b commit -m x"
+    expected:
+      decision: allow
+  - id: git-c-color-ui-log-allow
+    command: "git -c color.ui=false log --oneline"
+    expected:
+      decision: allow
+  - id: git-c-combined-uppercase-and-lowercase-allow
+    command: "git -C /tmp/x -c commit.gpgsign=false commit -m foo"
+    expected:
+      decision: allow
+    # `-C <path>` and `-c <key>=<value>` strip together
+  - id: git-c-commit-gpgsign-push-still-asks
+    command: "git -c commit.gpgsign=false push origin main"
+    expected:
+      decision: ask
+    # The trust-gated git-push reason still surfaces; -c doesn't lift trust
+
+  # --- `git -c key=value` RCE channels: substituted-program keys must deny ---
+  - id: git-c-core-sshcommand-deny
+    command: "git -c core.sshCommand=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-editor-commit-deny
+    command: "git -c core.editor=/tmp/evil commit"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-pager-log-deny
+    command: "git -c core.pager=/tmp/evil log"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-fsmonitor-deny
+    command: "git -c core.fsmonitor=/tmp/evil status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-gitproxy-deny
+    command: "git -c core.gitProxy=/tmp/evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-gpg-program-deny
+    command: "git -c gpg.program=/tmp/evil commit -S -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-gpg-ssh-program-deny
+    command: "git -c gpg.ssh.program=/tmp/evil commit -S -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-safe-directory-deny
+    command: "git -c safe.directory=/tmp commit -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # safe.directory bypasses CVE-2022-24765 ownership-mismatch protection
+  - id: git-c-protocol-ext-deny
+    command: "git -c protocol.ext.allow=always clone ext::sh"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-protocol-file-deny
+    command: "git -c protocol.file.allow=always clone file:///tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-uploadpack-hook-deny
+    command: "git -c uploadpack.packObjectsHook=/tmp/evil push origin main"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-pager-log-deny
+    command: "git -c pager.log=/tmp/evil log"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # pager.<cmd> sets a per-subcommand pager program
+
+  # --- `--config-env` env-injection variants of the RCE channels ---
+  - id: git-config-env-sshcommand-deny
+    command: "GIT_SSH=evil git --config-env=core.sshCommand=GIT_SSH fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-env-gpg-deny
+    command: "GIT_GPG=evil git --config-env=gpg.program=GIT_GPG commit -S -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- `git --git-dir` / `--work-tree` / `--namespace` space forms ---
+  # Pre-fix these likely tripped the same flag-skip bug for some shapes.
+  - id: git-git-dir-space-form-status-allow
+    command: "git --git-dir /tmp/g status"
+    expected:
+      decision: allow
+  - id: git-work-tree-space-form-status-allow
+    command: "git --work-tree /tmp/w status"
+    expected:
+      decision: allow
+  - id: git-namespace-space-form-log-allow
+    command: "git --namespace ns log --oneline"
+    expected:
+      decision: allow
+
+  # --- `git log --grep` must NOT false-positive on RCE-key strings ---
+  - id: git-log-grep-sshcommand-allow
+    command: "git log --grep=core.sshCommand"
+    expected:
+      decision: allow
+    # The `--grep=PATTERN` form is one token starting with `--`; the joined
+    # value is the pattern, not a config key, and must not trip the deny rule
+
   # --- git config --edit (silent rewrite via editor) ---
   - id: git-config-edit-deny
     command: "git config --edit"
@@ -1087,11 +1213,12 @@ tests:
     expected:
       decision: ask
     # Runs an arbitrary command per-submodule; should never be allowlisted
-  - id: git-alias-shell-ask
+  - id: git-alias-shell-deny
     command: "git -c alias.x='!rm -rf /' x"
     expected:
-      decision: ask
-    # Git aliases with '!' execute a shell command
+      decision: deny
+      rule_id: git-c-rce-keys
+    # Git aliases with `!` execute a shell command per-invocation
   - id: git-update-ref-delete-main-deny
     command: "git update-ref -d refs/heads/main"
     expected:

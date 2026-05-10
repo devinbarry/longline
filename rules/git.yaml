@@ -106,6 +106,57 @@ rules:
     decision: deny
     reason: "Setting core.* flags via `git -c key=value` or `git --config-env=key=ENVVAR` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
 
+  - id: git-c-rce-keys
+    level: critical
+    match:
+      command: git
+      args:
+        any_of:
+          # core.* keys that substitute the program git invokes
+          - "core.sshCommand=**"
+          - "core.editor=**"
+          - "core.pager=**"
+          - "core.fsmonitor=**"
+          - "core.gitProxy=**"
+          # gpg.* keys forge the signing program
+          - "gpg.program=**"
+          - "gpg.openpgp.program=**"
+          - "gpg.ssh.program=**"
+          - "gpg.x509.program=**"
+          # protocol.{ext,file}.allow re-enables RCE clone protocols
+          - "protocol.ext.allow=**"
+          - "protocol.file.allow=**"
+          # safe.directory bypasses CVE-2022-24765 ownership-mismatch protection
+          - "safe.directory=**"
+          # server-side hook with arbitrary command
+          - "uploadpack.packObjectsHook=**"
+          # pager.<cmd> runs an arbitrary command for that subcommand's output
+          - "pager.*=**"
+          # bang-aliases run a shell command (cover unquoted/single-/double-quoted)
+          - "alias.*=!**"
+          - "alias.*='!**"
+          - "alias.*=\"!**"
+          # --config-env=KEY=ENVVAR variants of all of the above
+          - "--config-env=core.sshCommand=**"
+          - "--config-env=core.editor=**"
+          - "--config-env=core.pager=**"
+          - "--config-env=core.fsmonitor=**"
+          - "--config-env=core.gitProxy=**"
+          - "--config-env=gpg.program=**"
+          - "--config-env=gpg.openpgp.program=**"
+          - "--config-env=gpg.ssh.program=**"
+          - "--config-env=gpg.x509.program=**"
+          - "--config-env=protocol.ext.allow=**"
+          - "--config-env=protocol.file.allow=**"
+          - "--config-env=safe.directory=**"
+          - "--config-env=uploadpack.packObjectsHook=**"
+          - "--config-env=pager.*=**"
+          # `--config-env=alias.X=ENVVAR` reads the alias body from an env var
+          # we can't introspect; deny any alias set via this channel.
+          - "--config-env=alias.*=**"
+    decision: deny
+    reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / ext-protocol / pager.<cmd>) or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
+
   - id: git-config-edit
     level: critical
     match:

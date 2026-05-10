@@ -59,9 +59,33 @@ fn strip_wrapper_value_flag_pairs(argv: &[Arg], value_flags: &[&str]) -> Vec<Arg
     out
 }
 
-/// Git supports global options like `-C <path>` that appear before the subcommand.
-/// Strip those so allowlist entries like `git status` still match `git -C /tmp status`.
-fn strip_git_global_c_flag(argv: &[Arg]) -> Vec<Arg> {
+/// Git supports global options that appear before the subcommand. Strip those
+/// so allowlist entries like `git commit` still match `git -c commit.gpgsign=false commit`
+/// or `git -C /tmp status`.
+///
+/// Two shapes need stripping:
+/// - `-FLAG VALUE` pairs where VALUE is a separate token that doesn't start
+///   with `-` (so the existing flag-skip in `args_match_prefix` can't see past it).
+///   Examples: `-C <path>`, `-c <key>=<value>`, `--git-dir <path>`,
+///   `--work-tree <path>`, `--namespace <name>`, `--config-env <name>=<envvar>`.
+/// - Joined `--FLAG=VALUE` tokens are already single tokens starting with `-`
+///   so the existing flag-skip handles them — no strip needed.
+///
+/// Dangerous `-c key=value` keys (`core.sshCommand`, `core.editor`, `gpg.program`,
+/// `safe.directory`, etc.) are caught by deny rules in `git.yaml` BEFORE this
+/// strip ever runs — rules evaluate against the original argv. The strip only
+/// affects allowlist matching, not rule matching.
+fn strip_git_global_options(argv: &[Arg]) -> Vec<Arg> {
+    const VALUE_FLAGS: &[&str] = &[
+        "-C",
+        "-c",
+        "--git-dir",
+        "--work-tree",
+        "--namespace",
+        "--config-env",
+        "--super-prefix",
+    ];
+
     let mut out = Vec::with_capacity(argv.len());
     let mut i = 0;
     let mut in_global_opts = true;
@@ -78,8 +102,8 @@ fn strip_git_global_c_flag(argv: &[Arg]) -> Vec<Arg> {
                 continue;
             }
 
-            if arg.text == "-C" {
-                // Skip `-C` and its path argument (if present).
+            if VALUE_FLAGS.contains(&arg.text.as_str()) {
+                // Skip the flag and its separate value token (if present).
                 i += 1;
                 if i < argv.len() {
                     i += 1;
@@ -207,8 +231,19 @@ fn find_matching_entry<'a>(
         None => return None,
     };
 
-    let argv: Cow<[Arg]> = if cmd_name == "git" && cmd.argv.iter().any(|a| a.text == "-C") {
-        Cow::Owned(strip_git_global_c_flag(&cmd.argv))
+    let argv: Cow<[Arg]> = if cmd_name == "git"
+        && cmd.argv.iter().any(|a| {
+            matches!(
+                a.text.as_str(),
+                "-C" | "-c"
+                    | "--git-dir"
+                    | "--work-tree"
+                    | "--namespace"
+                    | "--config-env"
+                    | "--super-prefix"
+            )
+        }) {
+        Cow::Owned(strip_git_global_options(&cmd.argv))
     } else if cmd_name == "codex"
         && cmd.argv.iter().any(|a| {
             matches!(
@@ -459,19 +494,116 @@ mod tests {
     }
 
     // ================================================================
-    // strip_git_global_c_flag tests
+    // strip_git_global_options tests
     // ================================================================
 
     #[test]
-    fn test_strip_git_global_c_flag_basic() {
+    fn test_strip_git_global_options_dash_c_path() {
         let argv = make_argv(&["-C", "/tmp", "status"]);
-        assert_eq!(strip_git_global_c_flag(&argv), make_argv(&["status"]));
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
     }
 
     #[test]
-    fn test_strip_git_global_c_flag_multiple() {
+    fn test_strip_git_global_options_multiple_dash_c() {
         let argv = make_argv(&["-C", "/tmp", "-C", "/other", "status"]);
-        assert_eq!(strip_git_global_c_flag(&argv), make_argv(&["status"]));
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
+    }
+
+    #[test]
+    fn test_strip_git_global_options_lowercase_c_keyvalue() {
+        let argv = make_argv(&["-c", "commit.gpgsign=false", "commit", "-m", "x"]);
+        assert_eq!(
+            strip_git_global_options(&argv),
+            make_argv(&["commit", "-m", "x"])
+        );
+    }
+
+    #[test]
+    fn test_strip_git_global_options_combined_uppercase_and_lowercase_c() {
+        let argv = make_argv(&["-C", "/tmp", "-c", "user.email=x@y", "commit", "-m", "x"]);
+        assert_eq!(
+            strip_git_global_options(&argv),
+            make_argv(&["commit", "-m", "x"])
+        );
+    }
+
+    #[test]
+    fn test_strip_git_global_options_git_dir_space_form() {
+        let argv = make_argv(&["--git-dir", "/tmp/g", "status"]);
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
+    }
+
+    #[test]
+    fn test_strip_git_global_options_work_tree_space_form() {
+        let argv = make_argv(&["--work-tree", "/tmp/w", "status"]);
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
+    }
+
+    #[test]
+    fn test_strip_git_global_options_namespace_space_form() {
+        let argv = make_argv(&["--namespace", "ns", "log"]);
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["log"]));
+    }
+
+    #[test]
+    fn test_strip_git_global_options_config_env_space_form() {
+        let argv = make_argv(&["--config-env", "user.name=GIT_USER", "commit"]);
+        assert_eq!(strip_git_global_options(&argv), make_argv(&["commit"]));
+    }
+
+    #[test]
+    fn test_strip_git_global_options_joined_form_passes_through() {
+        // Joined --FLAG=VALUE is a single token starting with `-`; the existing
+        // args_match_prefix flag-skip handles it. Strip leaves it alone.
+        let argv = make_argv(&["--git-dir=/tmp/g", "status"]);
+        assert_eq!(
+            strip_git_global_options(&argv),
+            make_argv(&["--git-dir=/tmp/g", "status"])
+        );
+    }
+
+    #[test]
+    fn test_strip_git_global_options_double_dash_terminates() {
+        // After `--`, nothing is treated as a global option.
+        let argv = make_argv(&["--", "-c", "commit.gpgsign=false", "commit"]);
+        assert_eq!(
+            strip_git_global_options(&argv),
+            make_argv(&["--", "-c", "commit.gpgsign=false", "commit"])
+        );
+    }
+
+    #[test]
+    fn test_strip_git_global_options_stops_at_subcommand() {
+        // `-c` after the subcommand is a subcommand argument, not a git
+        // global option, so it is preserved.
+        let argv = make_argv(&["log", "-c", "key=val"]);
+        assert_eq!(
+            strip_git_global_options(&argv),
+            make_argv(&["log", "-c", "key=val"])
+        );
+    }
+
+    #[test]
+    fn test_find_allowlist_match_dash_c_keyvalue_commit_matches_git_commit() {
+        let config = RulesConfig {
+            version: 1,
+            default_decision: crate::domain::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::default(),
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: "git commit".to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let cmd = test_git_cmd(vec!["-c", "commit.gpgsign=false", "commit", "-m", "x"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("git commit"));
     }
 
     #[test]
