@@ -828,13 +828,29 @@ rules:
         # Require argv >= 3 to avoid matching the bare flag with no value.
         # NOTE: `--exec` (space form) intentionally not denied here — `git rebase
         # --exec "cmd"` is a legitimate (already-trust-gated) interactive flow,
-        # while `git fetch --exec=PROG` joined-form is caught above.
+        # while `git fetch --exec=PROG` joined-form is caught above. The
+        # `git archive --exec` space-form RCE is caught by git-archive-exec-spaceform.
         min_args: 3
         any_of:
           - "--upload-pack"
           - "--receive-pack"
     decision: deny
     reason: "git --upload-pack / --receive-pack <prog> (space form) specifies the program git runs at the remote during fetch / push. Arbitrary-program channel."
+
+  - id: git-archive-exec-spaceform
+    level: critical
+    match:
+      command: git
+      args:
+        # `git archive --remote=<repo> --exec <cmd>` runs <cmd> locally as
+        # the upload-archive side. Cannot reuse the general space-form
+        # rule because `git rebase --exec "cmd"` is a legitimate
+        # already-ask-gated flow with the same flag shape.
+        all_of:
+          - "archive"
+          - "--exec"
+    decision: deny
+    reason: "git archive --exec <cmd> (space form) runs <cmd> locally during upload-archive. Arbitrary-program channel. Use the underlying tool directly if you genuinely need this."
 
   - id: git-c-tls-downgrade
     level: critical

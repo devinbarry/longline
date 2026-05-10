@@ -1602,6 +1602,36 @@ tests:
       decision: deny
       rule_id: git-c-exfil-keys
 
+  # ============================================================
+  # R6 (Codex) findings — git archive --exec (space form) RCE
+  # ============================================================
+
+  # --- `git archive --remote=<repo> --exec <cmd>` runs <cmd> locally as
+  # the upload-archive side. Documented RCE channel. The joined form
+  # --exec=<cmd> was already denied; the space form was intentionally
+  # excluded from git-transport-program-flags-spaceform because
+  # `git rebase --exec "cmd"` is a legitimate (already-ask-gated) flow.
+  # New rule scopes the space-form --exec deny to `git archive`. ---
+  - id: git-archive-exec-spaceform-deny
+    command: "git archive --remote=. --exec sh HEAD"
+    expected:
+      decision: deny
+      rule_id: git-archive-exec-spaceform
+  - id: git-archive-exec-joinedform-deny
+    command: "git archive --remote=. --exec=sh HEAD"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags
+
+  # --- Negative regression: `git rebase --exec "cmd"` must NOT deny
+  # via the new archive rule — already covered by an earlier R2 golden
+  # but kept as a guard. ---
+  - id: git-rebase-exec-spaceform-still-asks-r6
+    command: "git rebase --exec \"make test\" main"
+    expected:
+      decision: ask
+      rule_id: git-rebase
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"
