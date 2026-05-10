@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.8] - 2026-05-10
+
+### Fixed
+
+- Misleading `permissionDecisionReason` when an inner uncovered leaf
+  caused an ask. When a command had an allowlisted outer (e.g.
+  `afterhours`, `mkdir`, `nohup`) but flipped to ask because of an
+  uncovered inner leaf — typically a command substitution `$(unknown)` /
+  `` `unknown` `` / `<(unknown)`, or a wrapper-extracted inner from
+  `find -exec` / `nohup` / `env` / etc. — the surfaced reason walked the
+  whole leaf set and returned the first allowlist description it found.
+  That meant
+  ``afterhours say target "...`_correlation.py`..."`` asked with reason
+  "Local tmux session supervisor" (the outer afterhours allowlist
+  description) and `mkdir -p "foo/$(unknown)/bar"` asked with "Creates
+  directories" — both technically accurate for the outer, but actively
+  misleading because the outer was not the deciding factor. Reason now
+  names the deciding leaf with a bucket-tagged prefix:
+  - `Unrecognized command: <name>` — uncovered top-level
+  - `Unrecognized inner command: <name>` — uncovered wrapper-extracted
+    (find -exec, xargs, nohup, env, timeout, …)
+  - `Unrecognized command substitution: <name>` — uncovered `$(…)`,
+    `` `…` ``, or `<(…)`
+  Trust-filtered allowlist hint behavior is preserved: a leaf excluded
+  only by trust-level filtering still surfaces its own would-be allowlist
+  description (e.g. `git push` at trust:full under trust:standard still
+  reads "Pushes local commits to a remote repository").
+- Bare assignment with embedded substitution (`VAR=$(unknown)`) now
+  surfaces the substitution's name. Previously the nameless bare-
+  assignment leaf short-circuited the walker and returned a bare
+  `Unrecognized command` with no name attached.
+
 ## [0.16.7] - 2026-05-10
 
 ### Fixed
