@@ -145,6 +145,11 @@ pub enum Matcher {
         flags: Option<FlagsMatcher>,
         #[serde(default)]
         args: Option<ArgsMatcher>,
+        /// Match against environment-variable assignments on the command
+        /// (`VAR=val cmd …`). Used by rules that deny RCE-channel git env
+        /// vars (`GIT_SSH_COMMAND`, `GIT_EDITOR`, `GIT_CONFIG_KEY_n`, …).
+        #[serde(default)]
+        env: Option<EnvMatcher>,
     },
 }
 
@@ -183,6 +188,23 @@ pub struct FlagsMatcher {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvMatcher {
+    /// Match if any env-var assignment's name matches one of these glob
+    /// patterns. Useful for blocking RCE-channel env vars like
+    /// `GIT_SSH_COMMAND`, `GIT_EDITOR`, `GIT_CONFIG_KEY_*`.
+    #[serde(default)]
+    pub any_of: Vec<String>,
+    /// When true, lowercase both pattern and env-var name before matching.
+    /// Defaults to false. Most env var names are conventionally uppercase
+    /// but some tools/users use mixed case so case-insensitive is usually
+    /// what you want.
+    #[serde(default)]
+    pub case_insensitive: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArgsMatcher {
     #[serde(default)]
     pub any_of: Vec<String>,
@@ -197,6 +219,11 @@ pub struct ArgsMatcher {
     /// Defaults to false to preserve existing case-sensitive semantics.
     #[serde(default)]
     pub case_insensitive: bool,
+    /// If set, the rule only matches when `cmd.argv.len() >= min_args`.
+    /// Used to distinguish `git config <key>` (a read, len=2) from
+    /// `git config <key> <value>` (a set, len=3).
+    #[serde(default)]
+    pub min_args: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]

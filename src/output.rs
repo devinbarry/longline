@@ -107,6 +107,7 @@ fn format_matcher(matcher: &policy::Matcher) -> (String, String) {
             command,
             flags,
             args,
+            env: _,
         } => {
             let mut parts = vec![format!("cmd={}", format_string_or_list(command))];
             if let Some(f) = flags {

@@ -2,7 +2,9 @@
 
 use crate::parser::{self, Arg, SimpleCommand, Statement};
 
-use super::config::{FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList};
+use super::config::{
+    EnvMatcher, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList,
+};
 
 /// Extract basename from a command path for matching.
 /// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
@@ -82,6 +84,23 @@ fn flags_match(flags_matcher: &FlagsMatcher, argv: &[Arg]) -> bool {
     true
 }
 
+/// Check if an EnvMatcher's any_of patterns match any env-var assignment
+/// on the command (i.e. `VAR=val cmd ...`). Returns true on match.
+fn env_matches(env_matcher: &EnvMatcher, assignments: &[crate::parser::Assignment]) -> bool {
+    if env_matcher.any_of.is_empty() {
+        return true;
+    }
+    env_matcher.any_of.iter().any(|pattern| {
+        assignments.iter().any(|a| {
+            if env_matcher.case_insensitive {
+                glob_match::glob_match(&pattern.to_lowercase(), &a.name.to_lowercase())
+            } else {
+                glob_match::glob_match(pattern, &a.name)
+            }
+        })
+    })
+}
+
 /// Check if a rule's matcher matches a given SimpleCommand.
 /// Pipeline matchers are handled separately in `evaluate` and are skipped here.
 pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
@@ -90,6 +109,7 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             command,
             flags,
             args,
+            env,
         } => {
             let cmd_name = match &cmd.name {
                 Some(n) => n.as_str(),
@@ -105,6 +125,11 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             }
             // Check args with glob matching
             if let Some(args_matcher) = args {
+                if let Some(min) = args_matcher.min_args {
+                    if cmd.argv.len() < min {
+                        return false;
+                    }
+                }
                 let arg_match = |pattern: &str, arg: &str| -> bool {
                     if args_matcher.case_insensitive {
                         glob_match::glob_match(&pattern.to_lowercase(), &arg.to_lowercase())
@@ -129,6 +154,11 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                     if !has_all {
                         return false;
                     }
+                }
+            }
+            if let Some(env_matcher) = env {
+                if !env_matches(env_matcher, &cmd.assignments) {
+                    return false;
                 }
             }
             true

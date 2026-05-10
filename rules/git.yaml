@@ -74,6 +74,8 @@ rules:
     match:
       command: git
       args:
+        # Git config keys are case-insensitive (`CORE.BARE` ≡ `core.bare`).
+        case_insensitive: true
         all_of: ["config"]
         any_of:
           - "core.bare"
@@ -82,8 +84,8 @@ rules:
           - "core.worktree=**"
           - "core.repositoryformatversion"
           - "core.repositoryformatversion=**"
-          - "core.hooksPath"
-          - "core.hooksPath=**"
+          - "core.hookspath"
+          - "core.hookspath=**"
       flags:
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all"]
     decision: deny
@@ -94,15 +96,16 @@ rules:
     match:
       command: git
       args:
+        case_insensitive: true
         any_of:
           - "core.bare=**"
           - "core.worktree=**"
           - "core.repositoryformatversion=**"
-          - "core.hooksPath=**"
+          - "core.hookspath=**"
           - "--config-env=core.bare=**"
           - "--config-env=core.worktree=**"
           - "--config-env=core.repositoryformatversion=**"
-          - "--config-env=core.hooksPath=**"
+          - "--config-env=core.hookspath=**"
     decision: deny
     reason: "Setting core.* flags via `git -c key=value` or `git --config-env=key=ENVVAR` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
 
@@ -121,6 +124,21 @@ rules:
           - "core.pager=**"
           - "core.fsmonitor=**"
           - "core.gitproxy=**"
+          - "core.askpass=**"
+          - "sequence.editor=**"
+          # filter.<driver>.{clean,smudge,process} run on attribute-driven
+          # files at add/checkout/normalize time
+          - "filter.*.clean=**"
+          - "filter.*.smudge=**"
+          - "filter.*.process=**"
+          # diff.external + difftool/mergetool cmd run on diff/merge
+          - "diff.external=**"
+          - "difftool.*.cmd=**"
+          - "mergetool.*.cmd=**"
+          # submodule.<name>.update=!shell-cmd runs on submodule update
+          - "submodule.*.update=!**"
+          - "submodule.*.update='!**"
+          - "submodule.*.update=\"!**"
           # gpg.* keys forge the signing program
           - "gpg.program=**"
           - "gpg.openpgp.program=**"
@@ -129,16 +147,10 @@ rules:
           - "gpg.x509.program=**"
           # credential.helper is the documented credential-helper RCE channel
           - "credential.helper=**"
-          # Per-URL credential helpers: enumerate common schemes since
-          # glob_match's `**` does not cross `/` in mid-pattern positions
-          # (so `credential.*.helper=**` cannot match `credential.https://x.helper=…`).
-          - "credential.http://**"
-          - "credential.https://**"
-          - "credential.git://**"
-          - "credential.ssh://**"
-          - "credential.file://**"
-          - "credential.ftp://**"
-          - "credential.ftps://**"
+          # Per-URL credential settings: cover any scheme via `*://` (the
+          # single-`*` matches the scheme name, which has no `/`; the trailing
+          # `**` is at end-of-pattern so it freely matches any `://path`).
+          - "credential.*://**"
           # include.path / includeIf.<cond>.path source an attacker-controlled
           # config file that can in turn set any of the keys above. Enumerate
           # the supported includeIf condition prefixes (same `**`-no-cross-`/`
@@ -167,19 +179,22 @@ rules:
           - "--config-env=core.pager=**"
           - "--config-env=core.fsmonitor=**"
           - "--config-env=core.gitproxy=**"
+          - "--config-env=core.askpass=**"
+          - "--config-env=sequence.editor=**"
+          - "--config-env=filter.*.clean=**"
+          - "--config-env=filter.*.smudge=**"
+          - "--config-env=filter.*.process=**"
+          - "--config-env=diff.external=**"
+          - "--config-env=difftool.*.cmd=**"
+          - "--config-env=mergetool.*.cmd=**"
+          - "--config-env=submodule.*.update=**"
           - "--config-env=gpg.program=**"
           - "--config-env=gpg.openpgp.program=**"
           - "--config-env=gpg.ssh.program=**"
           - "--config-env=gpg.ssh.defaultkeycommand=**"
           - "--config-env=gpg.x509.program=**"
           - "--config-env=credential.helper=**"
-          - "--config-env=credential.http://**"
-          - "--config-env=credential.https://**"
-          - "--config-env=credential.git://**"
-          - "--config-env=credential.ssh://**"
-          - "--config-env=credential.file://**"
-          - "--config-env=credential.ftp://**"
-          - "--config-env=credential.ftps://**"
+          - "--config-env=credential.*://**"
           - "--config-env=include.path=**"
           - "--config-env=includeif.gitdir:**"
           - "--config-env=includeif.gitdir/i:**"
@@ -196,69 +211,223 @@ rules:
     decision: deny
     reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / credential helper / ext protocol / pager.<cmd>), sources an attacker-controlled include file, or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
 
-  - id: git-config-rce-keys
+  # Split git config setters into two rules so the bare-key form
+  # (`git config <key>`, no value) — which is a READ — does not get denied
+  # while the space-set form (`git config <key> <value>`) and joined-set form
+  # (`git config <key>=<value>`) both deny.
+  - id: git-config-rce-keys-spaceform
     level: critical
     match:
       command: git
       args:
-        # Same case-insensitivity as git-c-rce-keys.
         case_insensitive: true
-        # Require both the `config` subcommand and one of the RCE keys.
+        # Require argv to have at least 3 tokens: [config, key, value]. This
+        # excludes the read form `git config <key>` (argv len = 2) which is
+        # how `git config <key>` (no value) is interpreted.
+        min_args: 3
         all_of: ["config"]
         any_of:
-          # Persistent-set form: `git config <key> <value>` (or `git config key=value`)
           - "core.sshcommand"
-          - "core.sshcommand=**"
           - "core.editor"
-          - "core.editor=**"
           - "core.pager"
-          - "core.pager=**"
           - "core.fsmonitor"
-          - "core.fsmonitor=**"
           - "core.gitproxy"
-          - "core.gitproxy=**"
+          - "core.askpass"
+          - "sequence.editor"
+          - "filter.*.clean"
+          - "filter.*.smudge"
+          - "filter.*.process"
+          - "diff.external"
+          - "difftool.*.cmd"
+          - "mergetool.*.cmd"
+          - "submodule.*.update"
           - "gpg.program"
-          - "gpg.program=**"
           - "gpg.openpgp.program"
-          - "gpg.openpgp.program=**"
           - "gpg.ssh.program"
-          - "gpg.ssh.program=**"
           - "gpg.ssh.defaultkeycommand"
-          - "gpg.ssh.defaultkeycommand=**"
           - "gpg.x509.program"
-          - "gpg.x509.program=**"
           - "credential.helper"
-          - "credential.helper=**"
-          - "credential.http://**"
-          - "credential.https://**"
-          - "credential.git://**"
-          - "credential.ssh://**"
-          - "credential.file://**"
-          - "credential.ftp://**"
-          - "credential.ftps://**"
+          - "credential.*://**"
           - "include.path"
-          - "include.path=**"
           - "includeif.gitdir:**"
           - "includeif.gitdir/i:**"
           - "includeif.onbranch:**"
           - "includeif.hasconfig:**"
           - "protocol.ext.allow"
-          - "protocol.ext.allow=**"
           - "protocol.file.allow"
-          - "protocol.file.allow=**"
           - "safe.directory"
-          - "safe.directory=**"
           - "uploadpack.packobjectshook"
-          - "uploadpack.packobjectshook=**"
           - "pager.*"
+      flags:
+        # Reads and unsets must remain allowed.
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
+    decision: deny
+    reason: "Persistently setting these git config keys substitutes the program git invokes (ssh / editor / pager / fsmonitor / askpass / gpg / filter / diff-external / submodule update / credential helper / ext protocol / pager.<cmd>), sources an attacker-controlled include file, or bypasses repo-safety checks. The persistent form survives across invocations. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-config-rce-keys-joinedform
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        all_of: ["config"]
+        any_of:
+          - "core.sshcommand=**"
+          - "core.editor=**"
+          - "core.pager=**"
+          - "core.fsmonitor=**"
+          - "core.gitproxy=**"
+          - "core.askpass=**"
+          - "sequence.editor=**"
+          - "filter.*.clean=**"
+          - "filter.*.smudge=**"
+          - "filter.*.process=**"
+          - "diff.external=**"
+          - "difftool.*.cmd=**"
+          - "mergetool.*.cmd=**"
+          - "submodule.*.update=**"
+          - "gpg.program=**"
+          - "gpg.openpgp.program=**"
+          - "gpg.ssh.program=**"
+          - "gpg.ssh.defaultkeycommand=**"
+          - "gpg.x509.program=**"
+          - "credential.helper=**"
+          - "credential.*://**"
+          - "include.path=**"
+          - "protocol.ext.allow=**"
+          - "protocol.file.allow=**"
+          - "safe.directory=**"
+          - "uploadpack.packobjectshook=**"
           - "pager.*=**"
       flags:
-        # Read forms must remain allowed (--get, --get-all, --get-regexp,
-        # --get-color, --list, -l, --unset, --unset-all are the inspection /
-        # repair paths and must not deny).
-        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all"]
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
     decision: deny
-    reason: "Persistently setting these git config keys substitutes the program git invokes or bypasses repo-safety checks; the persistent form is even worse than `-c key=value` because it survives across invocations. Edit .git/config by hand if you genuinely need this."
+    reason: "Persistently setting these git config keys via the joined `key=value` form substitutes the program git invokes or bypasses repo-safety checks. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-config-alias-bang
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        min_args: 3
+        all_of:
+          - "config"
+          - "alias.*"
+        # The bang prefix on the value (in a separate argv slot for the
+        # space form) is what makes the alias execute a shell command.
+        # Tree-sitter strips standalone shell quotes so the value comes
+        # through as `!cmd`. glob-match treats a leading `!` as negation,
+        # so escape it with a literal `\` (single-quoted in YAML so the
+        # backslash passes through unchanged).
+        any_of:
+          - '\!**'
+      flags:
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
+    decision: deny
+    reason: "`git config alias.<name> '!shell-cmd'` persists an alias that runs an arbitrary shell command when invoked. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-env-rce-vars
+    level: critical
+    match:
+      command: git
+      env:
+        case_insensitive: true
+        any_of:
+          # Direct program-substitution env vars
+          - "GIT_SSH"
+          - "GIT_SSH_COMMAND"
+          - "GIT_ASKPASS"
+          - "SSH_ASKPASS"
+          - "GIT_EDITOR"
+          - "GIT_SEQUENCE_EDITOR"
+          - "GIT_PAGER"
+          - "GIT_PROXY_COMMAND"
+          - "GIT_EXTERNAL_DIFF"
+          # GIT_CONFIG_COUNT/KEY_n/VALUE_n family is the env-var equivalent
+          # of `-c key=value`; deny the whole family
+          - "GIT_CONFIG_COUNT"
+          - "GIT_CONFIG_KEY_*"
+          - "GIT_CONFIG_VALUE_*"
+          # Pointing git at attacker-controlled config files
+          - "GIT_CONFIG_GLOBAL"
+          - "GIT_CONFIG_SYSTEM"
+          - "GIT_CONFIG"
+          # TLS verification disable
+          - "GIT_SSL_NO_VERIFY"
+          # Run-time exec path redirection
+          - "GIT_EXEC_PATH"
+    decision: deny
+    reason: "Setting these GIT_* env vars on a git invocation substitutes the program git invokes (ssh / editor / pager / askpass / external-diff / proxy-command), reroutes git at attacker-controlled config files (GIT_CONFIG{,_GLOBAL,_SYSTEM}), or injects ad-hoc config (GIT_CONFIG_COUNT/KEY_n/VALUE_n). Set the safe equivalent in .git/config by hand if you genuinely need this."
+
+  - id: git-transport-program-flags
+    level: critical
+    match:
+      command: git
+      args:
+        any_of:
+          - "--upload-pack=**"
+          - "--receive-pack=**"
+          - "--exec=**"
+    decision: deny
+    reason: "git --upload-pack/--receive-pack/--exec specify the program git runs (locally or on the remote for file:// / over fetch / over push). Arbitrary-program channel."
+
+  - id: git-transport-program-flags-spaceform
+    level: critical
+    match:
+      command: git
+      args:
+        # Space form `git fetch --upload-pack PROG`. Require argv >= 4
+        # ([git-subcommand-or-c-pair, --upload-pack, PROG]) to avoid matching
+        # bare `--upload-pack` with no value (rare and benign).
+        min_args: 3
+        all_of: ["--upload-pack"]
+    decision: deny
+    reason: "git --upload-pack <prog> specifies the program git runs at the remote during fetch. Arbitrary-program channel."
+
+  - id: git-c-tls-downgrade
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        any_of:
+          # Disabling TLS verification opens MITM. Per-URL forms covered.
+          - "http.sslverify=false"
+          - "http.sslverify=0"
+          - "http.sslverify=no"
+          - "http.sslverify=off"
+          # Per-URL http config: glob_match's `**` does not cross `/` in the
+          # middle of a pattern, so we cannot pinpoint `.sslverify=false` after
+          # an `http.<URL>.` prefix that contains `://` and `/`. Take the
+          # broader posture of denying any per-URL http config set via `-c`.
+          # An AI agent shouldn't be touching per-URL HTTP config unless the
+          # user explicitly asked.
+          - "http.http://**"
+          - "http.https://**"
+          - "--config-env=http.sslverify=**"
+          - "--config-env=http.http://**"
+          - "--config-env=http.https://**"
+    decision: deny
+    reason: "Disabling http.sslVerify enables a man-in-the-middle on git push/fetch/clone over HTTPS. Set the explicit cert via http.sslCAInfo or fix the cert chain."
+
+  - id: git-config-tls-downgrade
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        min_args: 3
+        all_of: ["config"]
+        any_of:
+          - "http.sslverify"
+          # Per-URL persistent set: same broad posture as the -c rule.
+          - "http.http://**"
+          - "http.https://**"
+      flags:
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
+    decision: deny
+    reason: "Persistently setting http.sslVerify=false (or per-URL) enables a man-in-the-middle on git over HTTPS. Set the explicit cert via http.sslCAInfo or fix the cert chain."
 
   - id: git-config-edit
     level: critical

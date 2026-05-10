@@ -346,7 +346,7 @@ tests:
     command: "git config --system core.editor vim"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
     # Persistent set of core.editor is on the RCE-key list; deny regardless
     # of value (vim today, /tmp/evil tomorrow). Was ASK pre-v0.16.9.
 
@@ -640,32 +640,32 @@ tests:
     command: "git config core.sshCommand /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-sshcommand-local-flag-deny
     command: "git config --local core.sshCommand /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-sshcommand-global-flag-deny
     command: "git config --global core.sshCommand /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-sshcommand-uppercase-deny
     command: "git config CORE.sshCommand /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-credential-helper-deny
     command: "git config credential.helper /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-include-path-deny
     command: "git config include.path /tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-rce-keys
+      rule_id: git-config-rce-keys-spaceform
   - id: git-config-set-keyvalue-form-deny
     command: "git config core.editor=/tmp/evil"
     expected:
@@ -687,6 +687,256 @@ tests:
     expected:
       decision: allow
     # Bare list never denies despite reading core.X strings
+
+  # --- Bare-key read form `git config <key>` (one arg, no value) must allow ---
+  - id: git-config-bare-key-read-sshcommand-allow
+    command: "git config core.sshCommand"
+    expected:
+      decision: allow
+    # git interprets `git config <key>` (one arg) as a get; not a set.
+    # Pre-fix this denied via the over-broad bare-key pattern; min_args=3
+    # carve-out fixes it.
+  - id: git-config-bare-key-read-credential-helper-allow
+    command: "git config credential.helper"
+    expected:
+      decision: allow
+  - id: git-config-get-regexp-allow
+    command: "git config --get-regexp core.*"
+    expected:
+      decision: allow
+  - id: git-config-remove-section-allow
+    command: "git config --remove-section core"
+    expected:
+      decision: allow
+
+  # --- Additional missed RCE keys (Codex R1) ---
+  - id: git-c-core-askpass-deny
+    command: "git -c core.askPass=/tmp/evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-sequence-editor-deny
+    command: "git -c sequence.editor=/tmp/evil rebase -i HEAD~1"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-diff-external-deny
+    command: "git -c diff.external=/tmp/evil diff"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-difftool-cmd-deny
+    command: "git -c difftool.foo.cmd=/tmp/evil difftool"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-mergetool-cmd-deny
+    command: "git -c mergetool.foo.cmd=/tmp/evil mergetool"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-filter-clean-deny
+    command: "git -c filter.foo.clean=/tmp/evil add file"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-filter-smudge-deny
+    command: "git -c filter.foo.smudge=/tmp/evil checkout file"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-filter-process-deny
+    command: "git -c filter.foo.process=/tmp/evil add file"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-submodule-update-bang-deny
+    command: "git -c submodule.foo.update=!cmd submodule update"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Persistent setter form must deny same keys ---
+  - id: git-config-set-askpass-deny
+    command: "git config core.askPass /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-diff-external-deny
+    command: "git config diff.external /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-filter-process-deny
+    command: "git config filter.foo.process /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-submodule-update-deny
+    command: "git config submodule.foo.update !cmd"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- Alias bang setter (separate value arg) ---
+  - id: git-config-alias-bang-single-quoted-deny
+    command: "git config alias.x '!rm -rf /'"
+    expected:
+      decision: deny
+      rule_id: git-config-alias-bang
+  - id: git-config-alias-bang-double-quoted-deny
+    command: "git config alias.x \"!rm -rf /\""
+    expected:
+      decision: deny
+      rule_id: git-config-alias-bang
+  - id: git-config-alias-non-bang-allow
+    command: "git config alias.co checkout"
+    expected:
+      decision: allow
+    # Non-bang alias is just a subcommand alias; not RCE
+  - id: git-config-alias-bare-key-allow
+    command: "git config alias.x"
+    expected:
+      decision: allow
+
+  # --- Older corrupting-core rules now case-insensitive (R2 fix) ---
+  - id: git-c-core-bare-uppercase-deny
+    command: "git -c CORE.BARE=true commit -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-corrupting-core-flags
+  - id: git-config-core-bare-uppercase-deny
+    command: "git config CORE.BARE true"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+
+  # --- GIT_* env-var bypasses (R2 fix) ---
+  - id: git-env-ssh-command-deny
+    command: "GIT_SSH_COMMAND=evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-editor-deny
+    command: "GIT_EDITOR=evil git commit -m x"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-pager-deny
+    command: "GIT_PAGER=evil git log"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-proxy-command-deny
+    command: "GIT_PROXY_COMMAND=evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-external-diff-deny
+    command: "GIT_EXTERNAL_DIFF=evil git diff"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-config-count-deny
+    command: "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.sshCommand GIT_CONFIG_VALUE_0=evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-config-global-deny
+    command: "GIT_CONFIG_GLOBAL=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-ssl-no-verify-deny
+    command: "GIT_SSL_NO_VERIFY=1 git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-ssh-deny
+    command: "GIT_SSH=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-askpass-deny
+    command: "GIT_ASKPASS=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-exec-path-deny
+    command: "GIT_EXEC_PATH=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-lowercase-deny
+    command: "git_ssh_command=evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+    # Env var name case-insensitivity per the rule's case_insensitive: true
+  - id: git-env-non-rce-allow
+    command: "GIT_AUTHOR_NAME=foo git commit -m x"
+    expected:
+      decision: allow
+    # GIT_AUTHOR_NAME is not on the deny list
+
+  # --- Transport program flags (R2 fix) ---
+  - id: git-fetch-upload-pack-joined-deny
+    command: "git fetch --upload-pack=evil origin"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags
+  - id: git-fetch-upload-pack-space-deny
+    command: "git fetch --upload-pack evil origin"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags-spaceform
+  - id: git-fetch-exec-deny
+    command: "git fetch --exec=evil origin"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags
+  - id: git-clone-receive-pack-deny
+    command: "git clone --receive-pack=evil http://example.com/x"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags
+
+  # --- TLS verification downgrade (R2 fix) ---
+  - id: git-c-http-sslverify-false-deny
+    command: "git -c http.sslVerify=false fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-http-sslverify-0-deny
+    command: "git -c http.sslVerify=0 fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-c-http-per-url-sslverify-deny
+    command: "git -c http.https://example.com/.sslVerify=false fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-tls-downgrade
+  - id: git-config-http-sslverify-deny
+    command: "git config http.sslVerify false"
+    expected:
+      decision: deny
+      rule_id: git-config-tls-downgrade
+  - id: git-c-http-sslverify-true-allow
+    command: "git -c http.sslVerify=true fetch"
+    expected:
+      decision: allow
+    # Re-enabling verify is not a downgrade; allow
+
+  # --- Credential URL: any scheme denies via `credential.*://**` ---
+  - id: git-c-credential-arbitrary-scheme-deny
+    command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # Pattern `credential.*://**` covers any scheme since `*` matches
+    # non-`/` chars (the scheme has no `/`) and the trailing `**` is at
+    # end-of-pattern (no mid-pattern `/`-cross issue).
 
   # --- git config --edit (silent rewrite via editor) ---
   - id: git-config-edit-deny
