@@ -1492,6 +1492,116 @@ tests:
       decision: deny
       rule_id: git-config-rce-keys-spaceform
 
+  # ============================================================
+  # R5 (Codex) findings — protocol.allow + GIT_ALLOW_PROTOCOL,
+  # trace2 env exfil, TLS env equivalents, missed exec keys,
+  # http.proxyAuthMethod persistent gap
+  # ============================================================
+
+  # --- protocol.allow (global default) and GIT_ALLOW_PROTOCOL override
+  # the per-protocol allow lists. Documented dangerous-protocol channel. ---
+  - id: git-c-protocol-allow-deny
+    command: "git -c protocol.allow=always clone ext::sh"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-protocol-allow-deny
+    command: "git config protocol.allow always"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-env-allow-protocol-deny
+    command: "GIT_ALLOW_PROTOCOL=ext git clone ext::sh"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+
+  # --- Trace2 env-var family exfiltrates config / env values to a target.
+  # Documented credential / secret exfil channel. ---
+  - id: git-env-trace2-config-params-deny
+    command: "GIT_TRACE2_CONFIG_PARAMS=* GIT_TRACE2_EVENT=/tmp/leak git status"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-trace2-env-vars-deny
+    command: "GIT_TRACE2_ENV_VARS=AWS_SECRET git status"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-c-trace2-envvars-deny
+    command: "git -c trace2.envVars=AWS_SECRET -c trace2.eventTarget=/tmp/leak status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- TLS env-var equivalents of http.ssl* keys ---
+  - id: git-env-ssl-cainfo-deny
+    command: "GIT_SSL_CAINFO=/tmp/evil.pem git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-ssl-capath-deny
+    command: "GIT_SSL_CAPATH=/tmp/evil git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+  - id: git-env-ssl-version-deny
+    command: "GIT_SSL_VERSION=tlsv1 git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+
+  # --- tar.<format>.command runs an external program for git archive. ---
+  - id: git-c-tar-format-command-deny
+    command: "git -c tar.foo.command=/tmp/evil archive --format=foo HEAD"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-tar-format-command-deny
+    command: "git config tar.foo.command /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- difftool/mergetool .path setters (analogue of .cmd, also shell-exec) ---
+  - id: git-config-set-difftool-path-deny
+    command: "git config difftool.foo.path /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-mergetool-path-deny
+    command: "git config mergetool.foo.path /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- gc.recentObjectsHook runs an external command during gc ---
+  - id: git-config-set-gc-recentobjectshook-deny
+    command: "git config gc.recentObjectsHook /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- sendemail.smtpServer can be a path to a sendmail-like binary ---
+  - id: git-config-set-sendemail-smtpserver-deny
+    command: "git config sendemail.smtpServer /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- http.proxyAuthMethod was claimed in CHANGELOG but missing from
+  # persistent / --config-env coverage (R5 Codex P2). ---
+  - id: git-config-set-http-proxyauthmethod-deny
+    command: "git config http.proxyAuthMethod basic"
+    expected:
+      decision: deny
+      rule_id: git-config-exfil-keys
+  - id: git-config-env-http-proxyauthmethod-deny
+    command: "git --config-env=http.proxyAuthMethod=BASIC fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-exfil-keys
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"
