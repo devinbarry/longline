@@ -1432,6 +1432,66 @@ tests:
       decision: deny
       rule_id: git-config-rce-keys-spaceform
 
+  # ============================================================
+  # R5 (Opus) findings — safe.bareRepository, help.browser/web.browser,
+  # trace2.configParams
+  # ============================================================
+
+  # --- safe.bareRepository is the analogue of safe.directory: bypasses
+  # post-CVE-2022 repo-safety guards by letting git execute hooks/config
+  # from a bare-repo cwd. ---
+  - id: git-c-safe-barerepository-deny
+    command: "git -c safe.bareRepository=explicit status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-safe-barerepository-deny
+    command: "git config safe.bareRepository explicit"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-env-safe-barerepository-deny
+    command: "git --config-env=safe.bareRepository=FOO status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- help.browser / web.browser are the top-level keys selecting which
+  # browser entry to use; `git help -w` / `git instaweb` invoke the
+  # configured browser. Same channel as core.pager / core.editor. ---
+  - id: git-c-help-browser-deny
+    command: "git -c help.browser=evil help -w config"
+    expected:
+      decision: deny
+  - id: git-config-set-help-browser-deny
+    command: "git config help.browser evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-c-web-browser-deny
+    command: "git -c web.browser=evil help -w config"
+    expected:
+      decision: deny
+  - id: git-config-set-web-browser-deny
+    command: "git config web.browser evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
+  # --- trace2.configParams exfiltrates selected config values (matching
+  # the glob) to the trace target. Less severe than RCE but documented
+  # credential / GPG-key exfil channel. ---
+  - id: git-c-trace2-configparams-deny
+    command: "git -c trace2.configParams=* status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-config-set-trace2-configparams-deny
+    command: "git config trace2.configParams foo"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"
