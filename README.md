@@ -203,6 +203,16 @@ Rules are defined in YAML with three matcher types:
 - **pipeline**: Match command sequences (e.g., `curl | sh`)
 - **redirect**: Match output redirection targets
 
+A `command` matcher can pin four sub-matchers — `command`, `flags`, `args`, `env`:
+
+| Sub-matcher | Fields |
+| --- | --- |
+| `flags` | `any_of` / `all_of` / `none_of` / `starts_with` against argv flag tokens. Supports combined short-flag forms (`-xvf` matches `-f`). |
+| `args` | `any_of` / `all_of` glob patterns against argv tokens. `case_insensitive: bool` lowercases pattern + arg before matching. `min_args: usize` requires `argv.len() >= min_args` (useful to distinguish `git config <key>` reads from `git config <key> <value>` sets). |
+| `env` | `any_of` glob patterns against env-var assignment NAMES on the command (e.g. `VAR=val cmd`). `case_insensitive: bool` available. Used by `git-env-rce-vars` to deny `GIT_SSH_COMMAND` / `GIT_EDITOR` / `GIT_CONFIG_KEY_*` etc. |
+
+Glob semantics (from the `glob-match` crate): `*` matches non-`/` chars; `**` matches all chars **but does not cross `/` in mid-pattern positions** — only at end-of-pattern is the cross-`/` semantic active.
+
 Example rules:
 ```yaml
 # Command matcher: name + flags + args
@@ -216,6 +226,16 @@ Example rules:
       any_of: ["/", "/*"]
   decision: deny
   reason: "Recursive delete targeting root filesystem"
+
+# Env matcher: deny GIT_SSH_COMMAND / GIT_EDITOR / etc. as env vars
+- id: git-env-rce-vars
+  level: critical
+  match:
+    command: git
+    env:
+      case_insensitive: true
+      any_of: ["GIT_SSH_COMMAND", "GIT_EDITOR", "GIT_CONFIG_KEY_*"]
+  decision: deny
 
 # Redirect matcher: operator + target glob
 - id: redirect-write-etc

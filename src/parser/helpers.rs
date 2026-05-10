@@ -11,10 +11,10 @@ pub fn node_text<'a>(node: Node, source: &'a str) -> &'a str {
 
 /// Decode a bash ANSI-C `$'...'` quoted string. Returns None if the input
 /// is not a well-formed `$'...'` token. Processes the common backslash
-/// escapes (\n \t \r \\ \' \" \a \b \f \v \e) and `\xHH` hex escapes.
-/// Other obscure escapes (\nnn octal, \uHHHH unicode, \cx control) are
-/// passed through as the raw escape sequence — sufficient for policy
-/// matching against the keys we deny.
+/// escapes (\n \t \r \\ \' \" \a \b \f \v \e), `\xHH` hex, `\nnn` octal,
+/// and `\uHHHH` / `\UHHHHHHHH` unicode escapes. Other obscure escapes
+/// (`\cx` control) are passed through as the raw escape sequence —
+/// sufficient for policy matching against the keys we deny.
 fn decode_ansi_c_string(text: &str) -> Option<String> {
     let inner = text.strip_prefix("$'")?.strip_suffix('\'')?;
     let mut out = String::with_capacity(inner.len());
@@ -40,7 +40,6 @@ fn decode_ansi_c_string(text: &str) -> Option<String> {
             'f' => out.push('\x0c'),
             'v' => out.push('\x0b'),
             'e' | 'E' => out.push('\x1b'),
-            '0' => out.push('\0'),
             'x' => {
                 // Up to two hex digits
                 let mut hex = String::new();
@@ -54,13 +53,65 @@ fn decode_ansi_c_string(text: &str) -> Option<String> {
                         }
                     }
                 }
-                if let Ok(n) = u8::from_str_radix(&hex, 16) {
-                    out.push(n as char);
-                } else {
-                    out.push('\\');
-                    out.push('x');
-                    out.push_str(&hex);
+                if !hex.is_empty() {
+                    if let Ok(n) = u32::from_str_radix(&hex, 16) {
+                        if let Some(ch) = char::from_u32(n) {
+                            out.push(ch);
+                            continue;
+                        }
+                    }
                 }
+                out.push('\\');
+                out.push('x');
+                out.push_str(&hex);
+            }
+            'u' | 'U' => {
+                // Unicode escape: \uHHHH (4 digits) / \UHHHHHHHH (8 digits)
+                let max = if next == 'u' { 4 } else { 8 };
+                let mut hex = String::new();
+                for _ in 0..max {
+                    if let Some(&h) = chars.peek() {
+                        if h.is_ascii_hexdigit() {
+                            hex.push(h);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                if !hex.is_empty() {
+                    if let Ok(n) = u32::from_str_radix(&hex, 16) {
+                        if let Some(ch) = char::from_u32(n) {
+                            out.push(ch);
+                            continue;
+                        }
+                    }
+                }
+                out.push('\\');
+                out.push(next);
+                out.push_str(&hex);
+            }
+            d if d.is_ascii_digit() => {
+                // Octal escape: \nnn (1-3 octal digits, with leading char d)
+                let mut oct = String::from(d);
+                for _ in 0..2 {
+                    if let Some(&h) = chars.peek() {
+                        if ('0'..='7').contains(&h) {
+                            oct.push(h);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                if let Ok(n) = u32::from_str_radix(&oct, 8) {
+                    if let Some(ch) = char::from_u32(n) {
+                        out.push(ch);
+                        continue;
+                    }
+                }
+                out.push('\\');
+                out.push_str(&oct);
             }
             other => {
                 out.push('\\');
@@ -69,6 +120,32 @@ fn decode_ansi_c_string(text: &str) -> Option<String> {
         }
     }
     Some(out)
+}
+
+/// Unescape backslash escapes in a bareword. Bash's rule outside quotes:
+/// a backslash makes the next character literal (with `\<newline>` acting
+/// as line continuation). For policy matching we treat `\c` as `c` for
+/// any non-special character — this stops `git -c \core.sshCommand=evil
+/// fetch` (where `\c` is a no-op shell-side) from bypassing the rule
+/// patterns. We preserve the original text when the input has no
+/// backslashes to avoid unnecessary allocations.
+fn unescape_bareword(text: &str) -> String {
+    if !text.contains('\\') {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some(next) => out.push(next),
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// Resolve node text, stripping quotes from strings and recursing into command_name.
@@ -99,6 +176,28 @@ pub fn resolve_node_text(node: Node, source: &str) -> String {
             // `core.sshcommand=**` pattern could not match.
             let text = node_text(node, source);
             decode_ansi_c_string(text).unwrap_or_else(|| text.to_string())
+        }
+        "concatenation" => {
+            // `"core."$'sshCommand=evil'` and similar shell-side concats
+            // are exposed as a single `concatenation` node with children
+            // that are themselves words / strings / ansi_c_strings. Bash
+            // semantics: the resolved value is the concatenation of each
+            // child's resolved text. Without recursive resolution the
+            // raw source text leaks through (including the quote
+            // characters) and rule patterns miss.
+            let mut cursor = node.walk();
+            let mut out = String::new();
+            for child in node.named_children(&mut cursor) {
+                out.push_str(&resolve_node_text(child, source));
+            }
+            out
+        }
+        "word" => {
+            // Bareword can contain literal backslash-escapes like `\c` →
+            // `c`. Without unescaping the rule patterns miss when the
+            // attacker prefixes a key with a meaningless backslash
+            // (e.g. `\core.sshCommand=evil`).
+            unescape_bareword(node_text(node, source))
         }
         "command_name" => {
             // Recurse into the child

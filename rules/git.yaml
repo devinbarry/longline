@@ -109,6 +109,67 @@ rules:
     decision: deny
     reason: "Setting core.* flags via `git -c key=value` or `git --config-env=key=ENVVAR` is the silent-mutation channel that motivated this rule. Edit .git/config by hand if you genuinely need this."
 
+  # `git --config-env <KEY>=<ENVVAR> ...` (space form). The joined form is
+  # caught by the per-rule `--config-env=KEY=...` patterns; the space form
+  # is a separate argv shape ([config-env-flag, KEY=ENVVAR, ...]).
+  - id: git-config-env-spaceform
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        all_of: ["--config-env"]
+        # Match the KEY=ENVVAR pair against the same RCE-key list as the
+        # joined form. Patterns intentionally elided to avoid duplication;
+        # any `--config-env <key>=...` reaches this rule when key is on
+        # the bypass list.
+        any_of:
+          - "core.sshcommand=**"
+          - "core.editor=**"
+          - "core.pager=**"
+          - "core.fsmonitor=**"
+          - "core.gitproxy=**"
+          - "core.askpass=**"
+          - "core.hookspath=**"
+          - "core.bare=**"
+          - "core.worktree=**"
+          - "core.repositoryformatversion=**"
+          - "sequence.editor=**"
+          - "filter.*.clean=**"
+          - "filter.*.smudge=**"
+          - "filter.*.process=**"
+          - "diff.external=**"
+          - "difftool.*.cmd=**"
+          - "mergetool.*.cmd=**"
+          - "submodule.*.update=**"
+          - "gpg.program=**"
+          - "gpg.openpgp.program=**"
+          - "gpg.ssh.program=**"
+          - "gpg.ssh.defaultkeycommand=**"
+          - "gpg.x509.program=**"
+          - "credential.helper=**"
+          - "credential.*://**"
+          - "include.path=**"
+          - "includeif.gitdir:**"
+          - "includeif.gitdir/i:**"
+          - "includeif.onbranch:**"
+          - "includeif.hasconfig:**"
+          - "protocol.ext.allow=**"
+          - "protocol.file.allow=**"
+          - "safe.directory=**"
+          - "uploadpack.packobjectshook=**"
+          - "pager.*=**"
+          - "alias.*=**"
+          - "http.sslverify=**"
+          - "http.sslcainfo=**"
+          - "http.sslcapath=**"
+          - "http.sslversion=**"
+          - "http.sslbackend=**"
+          - "http.http://**"
+          - "http.https://**"
+    decision: deny
+    reason: "git --config-env <KEY>=<ENVVAR> (space form) reads the value of <ENVVAR> and applies <KEY>=<value> for the invocation. Same channel as `-c key=value` and the joined `--config-env=key=ENVVAR` form. Deny when KEY is one of the documented program-substitution / repo-safety-bypass keys. Edit .git/config by hand if you genuinely need this."
+
   - id: git-c-rce-keys
     level: critical
     match:
@@ -349,6 +410,8 @@ rules:
           - "GIT_CONFIG_COUNT"
           - "GIT_CONFIG_KEY_*"
           - "GIT_CONFIG_VALUE_*"
+          # GIT_CONFIG_PARAMETERS is the same key=value channel via env
+          - "GIT_CONFIG_PARAMETERS"
           # Pointing git at attacker-controlled config files
           - "GIT_CONFIG_GLOBAL"
           - "GIT_CONFIG_SYSTEM"
@@ -423,7 +486,7 @@ rules:
           - "--config-env=http.http://**"
           - "--config-env=http.https://**"
     decision: deny
-    reason: "Disabling http.sslVerify enables a man-in-the-middle on git push/fetch/clone over HTTPS. Set the explicit cert via http.sslCAInfo or fix the cert chain."
+    reason: "Disabling TLS verification (http.sslVerify=false / sslCAInfo / sslCAPath / sslVersion / sslBackend) — or pinning an attacker-controlled CA — enables MITM on git over HTTPS. Fix the cert chain rather than disabling verification."
 
   - id: git-config-tls-downgrade
     level: critical
@@ -449,7 +512,7 @@ rules:
       flags:
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
     decision: deny
-    reason: "Persistently setting http.sslVerify=false (or per-URL) enables a man-in-the-middle on git over HTTPS. Set the explicit cert via http.sslCAInfo or fix the cert chain."
+    reason: "Persistently disabling TLS verification (http.sslVerify / sslCAInfo / sslCAPath / sslVersion / sslBackend) — or pinning an attacker-controlled CA — enables MITM on git over HTTPS. Fix the cert chain rather than disabling verification."
 
   - id: git-config-edit
     level: critical

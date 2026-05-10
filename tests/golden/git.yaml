@@ -1063,6 +1063,110 @@ tests:
       decision: ask
       rule_id: rm-generic
 
+  # ============================================================
+  # R2 (Codex) findings — GIT_CONFIG_PARAMETERS, concatenation /
+  # escape bypasses, dynamic $VAR strip, --config-env space form
+  # ============================================================
+
+  # --- GIT_CONFIG_PARAMETERS env var (R2 Codex P1-1) ---
+  - id: git-env-config-parameters-deny
+    command: "GIT_CONFIG_PARAMETERS=foo git fetch"
+    expected:
+      decision: deny
+      rule_id: git-env-rce-vars
+    # GIT_CONFIG_PARAMETERS accepts the same key=value syntax as -c, so it's
+    # equivalent to the -c channel. Pre-fix: allowed via the value field
+    # being present in the env. Post-fix: GIT_CONFIG_PARAMETERS is in the
+    # deny list and the env matcher fires regardless of value.
+
+  # --- Concatenation forms (R2 Codex P1-2) ---
+  - id: git-c-concat-bareword-quoted-deny
+    command: "git -c \"core.ssh\"Command=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # Concat of double-quoted "core.ssh" + bareword Command=evil. Without
+    # parser concat-resolution this slipped past the rule because arg.text
+    # was the literal source `"core.ssh"Command=evil` (with quotes).
+  - id: git-c-concat-quoted-equals-quoted-deny
+    command: "git -c \"core.sshCommand\"=\"evil\" fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-concat-empty-raw-string-deny
+    command: "git -c core.ssh''Command=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # The empty raw_string `''` in the middle is a no-op shell concat;
+    # the resolved value should still be `core.sshCommand=evil`.
+  - id: git-c-concat-escaped-backslash-deny
+    command: "git -c \\core.sshCommand=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # Leading `\c` in shell is just `c` (backslash-escape on a normal char
+    # has no effect). Pre-fix: arg.text retained the leading `\`.
+  - id: git-c-concat-string-and-ansic-deny
+    command: "git -c \"core.\"$'sshCommand=evil' fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- ANSI-C octal / unicode escapes (R2 Codex P1-2 cont.) ---
+  - id: git-c-ansic-octal-escape-deny
+    command: "git -c $'\\143ore.sshCommand=evil' fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # `\143` octal = 0x63 = 'c'. After decoding the ANSI-C string is
+    # `core.sshCommand=evil`.
+  - id: git-c-ansic-unicode-escape-deny
+    command: "git -c $'\\u0063ore.sshCommand=evil' fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+    # `c` = 'c'
+
+  # --- Dynamic / shell-expanded values must NOT be transparently
+  # stripped from allowlist matching (R2 Codex P1-3). ---
+  - id: git-c-dollar-var-value-not-allowed
+    command: "git -c $VAR fetch"
+    expected:
+      decision: ask
+    # Pre-fix: strip_git_global_options stripped `-c $VAR` regardless of
+    # ArgMeta, leaving just `git fetch` which matched the allowlist
+    # → allow. The `$VAR` value is unknown at policy time and could
+    # contain `core.sshCommand=evil`. Now strip leaves UnsafeString
+    # values in argv so the allowlist doesn't blindly clear them; outcome
+    # falls to the default ask (no rule matches the unknown).
+  - id: git-c-dollar-braced-var-value-not-allowed
+    command: "git -c ${VAR} fetch"
+    expected:
+      decision: ask
+  - id: git-c-shell-substituted-value-asks
+    command: "EVIL=false git -c http.sslVerify=$EVIL fetch"
+    expected:
+      decision: ask
+    # The KEY (http.sslVerify) is on the TLS-downgrade rule but only with
+    # specific disabling values (=false / =0 / =no / =off); we cannot
+    # statically prove $EVIL resolves to one of those. Pre-fix the strip
+    # cleared the value and allowed `git fetch`. Post-fix the value is
+    # preserved (UnsafeString) and no deny rule's specific value pattern
+    # matches `$EVIL`, so the outcome is the default ask. This is the
+    # intended posture for unknowable values.
+
+  # --- `--config-env <KEY>=<ENVVAR>` space form (R2 Codex P1-4) ---
+  - id: git-config-env-space-form-sslverify-deny
+    command: "git --config-env http.sslVerify=EVIL fetch"
+    expected:
+      decision: deny
+    # Joined `--config-env=KEY=ENVVAR` already denies; space form was a gap.
+  - id: git-config-env-space-form-sshcommand-deny
+    command: "git --config-env core.sshCommand=EVIL fetch"
+    expected:
+      decision: deny
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"

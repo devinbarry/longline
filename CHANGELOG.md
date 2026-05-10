@@ -2,6 +2,85 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- `git -c <key>=<value> <subcommand>` invocations with a safe `<key>` (e.g.
+  `git -c commit.gpgsign=false commit`) no longer ask with "Unrecognized
+  command: git". The allowlist matcher now strips the `git` global option
+  pairs (`-c`, `-C`, `--git-dir`, `--work-tree`, `--namespace`,
+  `--config-env`, `--super-prefix`) before matching, so the invocation
+  resolves to the underlying subcommand allowlist entry. Strip only
+  affects allowlist matching; rule matching still sees the original argv.
+
+### Added
+
+- **`git-c-rce-keys`** and **`git-config-rce-keys-{spaceform,joinedform}`**
+  deny rules cover the documented git program-substitution channels for
+  both `-c key=value` and persistent `git config <key> <value>` forms:
+  `core.{sshCommand,editor,pager,fsmonitor,gitProxy,askPass,hooksPath}`,
+  `sequence.editor`, `filter.<driver>.{clean,smudge,process}`,
+  `diff.external`, `difftool.<name>.cmd`, `mergetool.<name>.cmd`,
+  `submodule.<name>.update=!`, `gpg.{program,openpgp.program,
+  ssh.program,ssh.defaultKeyCommand,x509.program}`, `credential.helper`,
+  `credential.<scheme>://**`, `include.path`,
+  `includeIf.{gitdir,gitdir/i,onbranch,hasconfig}:**`,
+  `protocol.{ext,file}.allow`, `safe.directory`,
+  `uploadpack.packObjectsHook`, `pager.<cmd>`, `alias.<name>=!`.
+- **`git-config-env-spaceform`** covers the `--config-env <KEY>=<ENVVAR>`
+  space form (the joined form `--config-env=KEY=ENVVAR` was already
+  caught).
+- **`git-env-rce-vars`** denies the env-var equivalents:
+  `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS`,
+  `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_PAGER`,
+  `GIT_PROXY_COMMAND`, `GIT_EXTERNAL_DIFF`,
+  `GIT_CONFIG_{COUNT,KEY_*,VALUE_*,PARAMETERS,GLOBAL,SYSTEM}`, `GIT_CONFIG`,
+  `GIT_SSL_NO_VERIFY`, `GIT_EXEC_PATH`.
+- **`git-transport-program-flags{,spaceform}`** deny `--upload-pack`,
+  `--receive-pack`, `--exec` (joined form) and `--upload-pack` /
+  `--receive-pack` (space form).
+- **`git-c-tls-downgrade`** / **`git-config-tls-downgrade`** deny TLS
+  verification disable and trust-anchor substitution:
+  `http.{sslVerify=false,sslCAInfo,sslCAPath,sslVersion,sslBackend}`,
+  plus broad per-URL `http.{http,https}://**` settings.
+- **`git-config-alias-bang`** denies `git config alias.<name> !<cmd>`
+  setters (the persistent form that runs an arbitrary shell command
+  when the alias is invoked).
+
+### Hardened
+
+- `git-c-corrupting-core-flags` and `git-config-corrupting-core-flags`
+  are now case-insensitive — `git -c CORE.BARE=true commit` and
+  `git config CORE.BARE true` no longer slip past via case-folding.
+- Wrappers (`env`, `timeout`, `nice`, `nohup`, `strace`, `time`, …) now
+  propagate `VAR=val` argv-position tokens onto the synthesized inner
+  command's `assignments`, so `env GIT_SSH_COMMAND=evil git fetch` and
+  `timeout 30 GIT_SSH_COMMAND=evil git fetch` correctly deny via
+  `git-env-rce-vars`.
+- ANSI-C `$'...'` quoting is now decoded at parse time (handles
+  `\n`, `\t`, `\r`, `\\`, `\'`, `\"`, `\a`, `\b`, `\f`, `\v`, `\e`,
+  `\xHH`, `\nnn` octal, `\uHHHH` / `\UHHHHHHHH` unicode escapes), so
+  `git -c $'core.sshCommand=evil' fetch` and its escape-encoded
+  variants resolve to the same canonical token rule patterns match.
+- Tree-sitter `concatenation` nodes (`"core."$'sshCommand=evil'`,
+  `"core.ssh"Command=evil`, `core.ssh''Command=evil`) now resolve to
+  the concatenated value at parse time.
+- Bareword backslash escapes (`\core.sshCommand=evil`) are now stripped
+  at parse time per bash semantics.
+- `strip_git_global_options` no longer strips `-c <VALUE>` when
+  `<VALUE>` is shell-expanded (`$VAR`, `${VAR}`, `$(cmd)`, …). The
+  unknown content is preserved in argv so the allowlist cannot silently
+  bless the rest of the invocation.
+
+### Schema
+
+- `ArgsMatcher` gains `case_insensitive: bool` and `min_args: usize`.
+- New `EnvMatcher` (with `any_of` and `case_insensitive`) added to the
+  `command` matcher's `env:` field.
+- `ArgsMatcher` and `EnvMatcher` use `deny_unknown_fields` so typos in
+  YAML produce a clear error.
+
 ## [0.16.8] - 2026-05-10
 
 ### Fixed

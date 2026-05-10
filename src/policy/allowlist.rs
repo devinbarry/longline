@@ -103,7 +103,25 @@ fn strip_git_global_options(argv: &[Arg]) -> Vec<Arg> {
             }
 
             if VALUE_FLAGS.contains(&arg.text.as_str()) {
-                // Skip the flag and its separate value token (if present).
+                // Skip the flag and its separate value token. Important:
+                // when the value is shell-expanded (`$VAR`, `${VAR}`,
+                // `$(cmd)`, etc.) tree-sitter classifies the arg as
+                // `UnsafeString`. Stripping such values would clear the
+                // unknown content from the allowlist's view of argv and
+                // let `git fetch` (or whatever subcommand follows) match
+                // the safe allowlist by accident. Refuse to strip
+                // unknowable values; the rule path will still see them
+                // and the allowlist will fall through to the default ask.
+                if let Some(value) = argv.get(i + 1) {
+                    if matches!(value.meta, crate::parser::ArgMeta::UnsafeString) {
+                        // Keep the flag + value in argv so allowlist
+                        // matching does not silently bless the rest.
+                        out.push(arg.clone());
+                        out.push(value.clone());
+                        i += 2;
+                        continue;
+                    }
+                }
                 i += 1;
                 if i < argv.len() {
                     i += 1;
