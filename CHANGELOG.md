@@ -47,6 +47,18 @@ All notable changes to this project will be documented in this file.
 - **`git-config-alias-bang`** denies `git config alias.<name> !<cmd>`
   setters (the persistent form that runs an arbitrary shell command
   when the alias is invoked).
+- **`git-c-exfil-keys`** and **`git-config-exfil-keys`** deny global
+  `http.{cookieFile,proxy,proxySSLCAInfo,proxyAuthMethod,extraHeader,
+  userAgent,followRedirects}` set via `-c`, `--config-env`, or
+  persistent `git config`. These reroute git through an attacker-
+  controlled proxy, inject headers, follow attacker redirects, or
+  leak cookies.
+- **`git-c-rce-keys`** and **`git-config-rce-keys-{spaceform,joinedform}`**
+  also cover `remote.<name>.uploadpack`, `remote.<name>.receivepack`,
+  `remote.<name>.url=ext::*` (config-key equivalents of `--upload-pack=`
+  / `--receive-pack=` and the documented `ext::` clone-URL RCE form),
+  and `url.<base>.{insteadOf,pushInsteadOf}` (silent URL rewrites that
+  redirect transport to an attacker-controlled host).
 
 ### Hardened
 
