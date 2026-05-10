@@ -201,17 +201,24 @@ fn evaluate_with_extras(
                 || allow_rule_covers(config, leaf)
         });
         if !all_covered {
-            // Try to find a descriptive reason from trust-filtered allowlist entries
-            let reason = leaves
-                .iter()
-                .copied()
-                .chain(extra_leaves.iter().copied())
-                .filter_map(|leaf| match leaf {
-                    Statement::SimpleCommand(cmd) => find_allowlist_reason(config, cmd),
-                    _ => None,
-                })
-                .next()
-                .unwrap_or_else(|| "No matching rule; using default decision".to_string());
+            // Surface the *deciding* leaf rather than reporting an unrelated
+            // outer allowlist description. The previous behavior walked
+            // leaves+extra_leaves looking for any allowlist reason, so
+            // `mkdir -p "foo/$(unknown)/bar"` asked with reason "Creates
+            // directories" — accurate for the outer mkdir but actively
+            // misleading because the flip was caused by the unknown
+            // substitution. We instead name the first uncovered leaf in
+            // priority order: original leaves > wrapper-extracted > command
+            // substitutions, prefixed with the bucket so users can tell
+            // why an allowlisted-looking command asked.
+            let reason = first_uncovered_leaf_reason(
+                config,
+                leaves,
+                &extra_leaves,
+                extra_stmts,
+                subst_leaves,
+            )
+            .unwrap_or_else(|| "No matching rule; using default decision".to_string());
 
             return PolicyResult {
                 decision: config.default_decision,
@@ -340,6 +347,82 @@ fn allow_rule_covers(config: &RulesConfig, leaf: &Statement) -> bool {
             && rule.decision == Decision::Allow
             && matches_rule(&rule.matcher, cmd)
     })
+}
+
+/// When the all-covered gate fails, return a reason naming the first
+/// uncovered leaf in priority order: original leaves > wrapper-extracted
+/// extras > command/process substitutions.
+///
+/// Within each bucket, the deciding leaf's *own* trust-filtered allowlist
+/// reason takes precedence over the bucket-prefixed fallback so a leaf that
+/// matches an entry the current trust level couldn't grant still hints at
+/// the would-be allowlist description (e.g. `git push` at trust:full under
+/// trust:standard surfaces "Pushes local commits to a remote repository").
+/// This is the documented purpose of `find_allowlist_reason`. Pre-fix the
+/// reason was picked from any allowlist-matched leaf in the request, so an
+/// unrelated outer leaf's description bled into asks caused by inner
+/// substitution or wrapper-extracted leaves.
+fn first_uncovered_leaf_reason(
+    config: &RulesConfig,
+    leaves: &[&Statement],
+    extra_leaves: &[&Statement],
+    extra_stmts: &[Statement],
+    subst_leaves: &[&Statement],
+) -> Option<String> {
+    for leaf in leaves.iter().copied() {
+        if !is_allowlisted(config, leaf)
+            && !shell_c_covered_via_extras(leaf, extra_stmts)
+            && !classifier_covers(leaf, false)
+            && !allow_rule_covers(config, leaf)
+        {
+            return Some(reason_for_uncovered_leaf(
+                config,
+                "Unrecognized command",
+                leaf,
+            ));
+        }
+    }
+    for leaf in extra_leaves.iter().copied() {
+        if !is_allowlisted(config, leaf)
+            && !is_covered_by_wrapper_entry(config, leaves, leaf)
+            && !shell_c_covered_via_extras(leaf, extra_stmts)
+            && !classifier_covers(leaf, true)
+            && !allow_rule_covers(config, leaf)
+        {
+            return Some(reason_for_uncovered_leaf(
+                config,
+                "Unrecognized inner command",
+                leaf,
+            ));
+        }
+    }
+    for leaf in subst_leaves.iter().copied() {
+        if !is_allowlisted(config, leaf)
+            && !classifier_covers(leaf, true)
+            && !allow_rule_covers(config, leaf)
+        {
+            return Some(reason_for_uncovered_leaf(
+                config,
+                "Unrecognized command substitution",
+                leaf,
+            ));
+        }
+    }
+    None
+}
+
+fn reason_for_uncovered_leaf(config: &RulesConfig, prefix: &str, leaf: &Statement) -> String {
+    if let Statement::SimpleCommand(cmd) = leaf {
+        if let Some(reason) = find_allowlist_reason(config, cmd) {
+            return reason;
+        }
+        if let Some(name) = &cmd.name {
+            if !name.is_empty() {
+                return format!("{prefix}: {name}");
+            }
+        }
+    }
+    prefix.to_string()
 }
 
 /// Evaluate a single leaf node (SimpleCommand, Opaque, or Empty).
@@ -1519,7 +1602,10 @@ rules: []
         let result = evaluate(&config, &stmt);
 
         assert_eq!(result.decision, Decision::Ask);
-        assert_eq!(result.reason, "No matching rule; using default decision",);
+        // No allowlist entry exists, so the reason names the uncovered leaf
+        // with the bucket prefix. Pre-fix this fell back to the generic
+        // "No matching rule; using default decision".
+        assert_eq!(result.reason, "Unrecognized command: unknown-tool");
     }
 
     #[test]

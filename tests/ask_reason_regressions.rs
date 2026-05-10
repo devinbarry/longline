@@ -305,3 +305,73 @@ fn opaque_shell_message_is_actionable() {
         "Shell syntax is too complex to analyze safely"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Reason attribution: when an inner leaf (substitution / wrapper-extracted)
+// causes the all-covered gate to flip to ask, the surfaced reason must name
+// the *deciding* leaf rather than report the outer allowlisted command's
+// description. The misleading-reason bug was reported on
+// `afterhours say target "...\`_correlation.py\`..."` where the surfaced
+// reason was "Local tmux session supervisor" (the afterhours allowlist
+// description) even though the actual flip was caused by the unknown
+// _correlation.py command-substitution leaf.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn substitution_leaf_reason_names_inner_command() {
+    // mkdir is allowlisted with reason "Creates directories"; the embedded
+    // $(unknown_cmd_xyz) is an unknown command-substitution leaf that flips
+    // the decision to ask. The reason must name unknown_cmd_xyz, not surface
+    // the outer mkdir reason.
+    let result = evaluate("mkdir -p \"foo/$(unknown_cmd_xyz)/bar\"");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        !result.reason.contains("Creates directories"),
+        "reason must not surface outer allowlist description: {}",
+        result.reason
+    );
+    assert!(
+        result.reason.contains("unknown_cmd_xyz"),
+        "reason must name the uncovered substitution leaf: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn substitution_leaf_reason_names_inner_command_backtick() {
+    // Same shape as the original bug report: backticks inside a double-quoted
+    // argument trigger command substitution and the inner unknown command
+    // flips the decision.
+    let result = evaluate("mkdir -p \"foo/`unknown_cmd_xyz`/bar\"");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        !result.reason.contains("Creates directories"),
+        "reason must not surface outer allowlist description: {}",
+        result.reason
+    );
+    assert!(
+        result.reason.contains("unknown_cmd_xyz"),
+        "reason must name the uncovered substitution leaf: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn wrapper_extra_leaf_reason_names_inner_command() {
+    // nohup is allowlisted with reason "Runs a command immune to hangup
+    // signals" and is a transparent wrapper. The inner unknown_cmd_xyz is
+    // unwrapped into extra_leaves and is uncovered. The reason must name the
+    // inner command, not the wrapper's allowlist description.
+    let result = evaluate("nohup unknown_cmd_xyz");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        !result.reason.contains("immune to hangup signals"),
+        "reason must not surface wrapper allowlist description: {}",
+        result.reason
+    );
+    assert!(
+        result.reason.contains("unknown_cmd_xyz"),
+        "reason must name the uncovered inner leaf: {}",
+        result.reason
+    );
+}
