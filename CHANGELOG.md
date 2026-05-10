@@ -40,6 +40,11 @@ All notable changes to this project will be documented in this file.
 - **`git-transport-program-flags{,spaceform}`** deny `--upload-pack`,
   `--receive-pack`, `--exec` (joined form) and `--upload-pack` /
   `--receive-pack` (space form).
+- **`git-archive-exec-spaceform`** denies `git archive --exec <cmd>`
+  (space form). The general space-form transport rule intentionally
+  excludes `--exec` because `git rebase --exec "cmd"` is a legitimate
+  ask-gated flow; this archive-scoped rule closes the remaining
+  upload-archive RCE channel without breaking rebase.
 - **`git-c-tls-downgrade`** / **`git-config-tls-downgrade`** deny TLS
   verification disable and trust-anchor substitution:
   `http.{sslVerify=false,sslCAInfo,sslCAPath,sslVersion,sslBackend}`,
