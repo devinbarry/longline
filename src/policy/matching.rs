@@ -105,22 +105,27 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             }
             // Check args with glob matching
             if let Some(args_matcher) = args {
+                let arg_match = |pattern: &str, arg: &str| -> bool {
+                    if args_matcher.case_insensitive {
+                        glob_match::glob_match(&pattern.to_lowercase(), &arg.to_lowercase())
+                    } else {
+                        glob_match::glob_match(pattern, arg)
+                    }
+                };
                 if !args_matcher.any_of.is_empty() {
-                    let has_any = args_matcher.any_of.iter().any(|pattern| {
-                        cmd.argv
-                            .iter()
-                            .any(|a| glob_match::glob_match(pattern, a.as_ref()))
-                    });
+                    let has_any = args_matcher
+                        .any_of
+                        .iter()
+                        .any(|pattern| cmd.argv.iter().any(|a| arg_match(pattern, a.as_ref())));
                     if !has_any {
                         return false;
                     }
                 }
                 if !args_matcher.all_of.is_empty() {
-                    let has_all = args_matcher.all_of.iter().all(|pattern| {
-                        cmd.argv
-                            .iter()
-                            .any(|a| glob_match::glob_match(pattern, a.as_ref()))
-                    });
+                    let has_all = args_matcher
+                        .all_of
+                        .iter()
+                        .all(|pattern| cmd.argv.iter().any(|a| arg_match(pattern, a.as_ref())));
                     if !has_all {
                         return false;
                     }

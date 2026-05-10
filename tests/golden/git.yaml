@@ -345,8 +345,10 @@ tests:
   - id: git-config-system-dangerous
     command: "git config --system core.editor vim"
     expected:
-      decision: ask
-    # Modifies system-wide config
+      decision: deny
+      rule_id: git-config-rce-keys
+    # Persistent set of core.editor is on the RCE-key list; deny regardless
+    # of value (vim today, /tmp/evil tomorrow). Was ASK pre-v0.16.9.
 
   # --- Repo-corrupting core flags (deny) ---
   - id: git-config-core-bare-deny
@@ -568,6 +570,123 @@ tests:
       decision: allow
     # The `--grep=PATTERN` form is one token starting with `--`; the joined
     # value is the pattern, not a config key, and must not trip the deny rule
+
+  # --- Case-folding bypass coverage (git config keys are case-insensitive) ---
+  - id: git-c-core-sshcommand-lowercase-deny
+    command: "git -c core.sshcommand=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-sshcommand-uppercase-section-deny
+    command: "git -c CORE.sshCommand=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-core-sshcommand-all-uppercase-deny
+    command: "git -c core.SSHCOMMAND=evil fetch"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-safe-directory-uppercase-deny
+    command: "git -c safe.DIRECTORY=/tmp commit -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-protocol-ext-uppercase-deny
+    command: "git -c PROTOCOL.ext.allow=always clone ext::sh"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-gpg-uppercase-deny
+    command: "git -c GPG.program=/tmp/evil commit -S -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Missed RCE keys: gpg.ssh.defaultKeyCommand, credential.helper, include.path ---
+  - id: git-c-gpg-ssh-defaultkeycommand-deny
+    command: "git -c gpg.ssh.defaultKeyCommand=/tmp/evil commit -S -m x"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-credential-helper-deny
+    command: "git -c credential.helper=/tmp/evil push origin main"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-credential-per-url-helper-deny
+    command: "git -c credential.https://x.com.helper=/tmp/evil push origin main"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-include-path-deny
+    command: "git -c include.path=/tmp/evil status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-includeif-gitdir-deny
+    command: "git -c includeIf.gitdir:/tmp.path=/tmp/evil status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+  - id: git-c-includeif-onbranch-deny
+    command: "git -c includeIf.onbranch:main.path=/tmp/evil status"
+    expected:
+      decision: deny
+      rule_id: git-c-rce-keys
+
+  # --- Persistent `git config <key> <value>` form must deny the same RCE keys ---
+  - id: git-config-set-sshcommand-deny
+    command: "git config core.sshCommand /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-sshcommand-local-flag-deny
+    command: "git config --local core.sshCommand /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-sshcommand-global-flag-deny
+    command: "git config --global core.sshCommand /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-sshcommand-uppercase-deny
+    command: "git config CORE.sshCommand /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-credential-helper-deny
+    command: "git config credential.helper /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-include-path-deny
+    command: "git config include.path /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys
+  - id: git-config-set-keyvalue-form-deny
+    command: "git config core.editor=/tmp/evil"
+    expected:
+      decision: deny
+    # Joined form `git config key=value` (no separate value arg)
+
+  # --- Persistent reads / unsets must NOT deny ---
+  - id: git-config-get-sshcommand-allow
+    command: "git config --get core.sshCommand"
+    expected:
+      decision: allow
+  - id: git-config-unset-sshcommand-allow
+    command: "git config --unset core.sshCommand"
+    expected:
+      decision: allow
+    # Unset is the repair path after corruption; must not deny
+  - id: git-config-list-allow
+    command: "git config --list"
+    expected:
+      decision: allow
+    # Bare list never denies despite reading core.X strings
 
   # --- git config --edit (silent rewrite via editor) ---
   - id: git-config-edit-deny

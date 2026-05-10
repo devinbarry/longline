@@ -191,6 +191,12 @@ pub struct ArgsMatcher {
     /// e.g. require `config` AND any of the corrupting flag names.
     #[serde(default)]
     pub all_of: Vec<String>,
+    /// When true, lowercase both pattern and argument before matching.
+    /// Used for git config keys whose section / variable names are
+    /// case-insensitive (e.g. `core.sshCommand` ≡ `CORE.SSHCOMMAND`).
+    /// Defaults to false to preserve existing case-sensitive semantics.
+    #[serde(default)]
+    pub case_insensitive: bool,
 }
 
 #[derive(Debug, Deserialize)]

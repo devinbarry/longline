@@ -111,25 +111,50 @@ rules:
     match:
       command: git
       args:
+        # Git config section / variable names are case-insensitive
+        # (`core.sshCommand` ≡ `CORE.SSHCOMMAND`); match without case folding.
+        case_insensitive: true
         any_of:
           # core.* keys that substitute the program git invokes
-          - "core.sshCommand=**"
+          - "core.sshcommand=**"
           - "core.editor=**"
           - "core.pager=**"
           - "core.fsmonitor=**"
-          - "core.gitProxy=**"
+          - "core.gitproxy=**"
           # gpg.* keys forge the signing program
           - "gpg.program=**"
           - "gpg.openpgp.program=**"
           - "gpg.ssh.program=**"
+          - "gpg.ssh.defaultkeycommand=**"
           - "gpg.x509.program=**"
+          # credential.helper is the documented credential-helper RCE channel
+          - "credential.helper=**"
+          # Per-URL credential helpers: enumerate common schemes since
+          # glob_match's `**` does not cross `/` in mid-pattern positions
+          # (so `credential.*.helper=**` cannot match `credential.https://x.helper=…`).
+          - "credential.http://**"
+          - "credential.https://**"
+          - "credential.git://**"
+          - "credential.ssh://**"
+          - "credential.file://**"
+          - "credential.ftp://**"
+          - "credential.ftps://**"
+          # include.path / includeIf.<cond>.path source an attacker-controlled
+          # config file that can in turn set any of the keys above. Enumerate
+          # the supported includeIf condition prefixes (same `**`-no-cross-`/`
+          # caveat).
+          - "include.path=**"
+          - "includeif.gitdir:**"
+          - "includeif.gitdir/i:**"
+          - "includeif.onbranch:**"
+          - "includeif.hasconfig:**"
           # protocol.{ext,file}.allow re-enables RCE clone protocols
           - "protocol.ext.allow=**"
           - "protocol.file.allow=**"
           # safe.directory bypasses CVE-2022-24765 ownership-mismatch protection
           - "safe.directory=**"
           # server-side hook with arbitrary command
-          - "uploadpack.packObjectsHook=**"
+          - "uploadpack.packobjectshook=**"
           # pager.<cmd> runs an arbitrary command for that subcommand's output
           - "pager.*=**"
           # bang-aliases run a shell command (cover unquoted/single-/double-quoted)
@@ -137,25 +162,103 @@ rules:
           - "alias.*='!**"
           - "alias.*=\"!**"
           # --config-env=KEY=ENVVAR variants of all of the above
-          - "--config-env=core.sshCommand=**"
+          - "--config-env=core.sshcommand=**"
           - "--config-env=core.editor=**"
           - "--config-env=core.pager=**"
           - "--config-env=core.fsmonitor=**"
-          - "--config-env=core.gitProxy=**"
+          - "--config-env=core.gitproxy=**"
           - "--config-env=gpg.program=**"
           - "--config-env=gpg.openpgp.program=**"
           - "--config-env=gpg.ssh.program=**"
+          - "--config-env=gpg.ssh.defaultkeycommand=**"
           - "--config-env=gpg.x509.program=**"
+          - "--config-env=credential.helper=**"
+          - "--config-env=credential.http://**"
+          - "--config-env=credential.https://**"
+          - "--config-env=credential.git://**"
+          - "--config-env=credential.ssh://**"
+          - "--config-env=credential.file://**"
+          - "--config-env=credential.ftp://**"
+          - "--config-env=credential.ftps://**"
+          - "--config-env=include.path=**"
+          - "--config-env=includeif.gitdir:**"
+          - "--config-env=includeif.gitdir/i:**"
+          - "--config-env=includeif.onbranch:**"
+          - "--config-env=includeif.hasconfig:**"
           - "--config-env=protocol.ext.allow=**"
           - "--config-env=protocol.file.allow=**"
           - "--config-env=safe.directory=**"
-          - "--config-env=uploadpack.packObjectsHook=**"
+          - "--config-env=uploadpack.packobjectshook=**"
           - "--config-env=pager.*=**"
           # `--config-env=alias.X=ENVVAR` reads the alias body from an env var
           # we can't introspect; deny any alias set via this channel.
           - "--config-env=alias.*=**"
     decision: deny
-    reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / ext-protocol / pager.<cmd>) or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
+    reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / credential helper / ext protocol / pager.<cmd>), sources an attacker-controlled include file, or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
+
+  - id: git-config-rce-keys
+    level: critical
+    match:
+      command: git
+      args:
+        # Same case-insensitivity as git-c-rce-keys.
+        case_insensitive: true
+        # Require both the `config` subcommand and one of the RCE keys.
+        all_of: ["config"]
+        any_of:
+          # Persistent-set form: `git config <key> <value>` (or `git config key=value`)
+          - "core.sshcommand"
+          - "core.sshcommand=**"
+          - "core.editor"
+          - "core.editor=**"
+          - "core.pager"
+          - "core.pager=**"
+          - "core.fsmonitor"
+          - "core.fsmonitor=**"
+          - "core.gitproxy"
+          - "core.gitproxy=**"
+          - "gpg.program"
+          - "gpg.program=**"
+          - "gpg.openpgp.program"
+          - "gpg.openpgp.program=**"
+          - "gpg.ssh.program"
+          - "gpg.ssh.program=**"
+          - "gpg.ssh.defaultkeycommand"
+          - "gpg.ssh.defaultkeycommand=**"
+          - "gpg.x509.program"
+          - "gpg.x509.program=**"
+          - "credential.helper"
+          - "credential.helper=**"
+          - "credential.http://**"
+          - "credential.https://**"
+          - "credential.git://**"
+          - "credential.ssh://**"
+          - "credential.file://**"
+          - "credential.ftp://**"
+          - "credential.ftps://**"
+          - "include.path"
+          - "include.path=**"
+          - "includeif.gitdir:**"
+          - "includeif.gitdir/i:**"
+          - "includeif.onbranch:**"
+          - "includeif.hasconfig:**"
+          - "protocol.ext.allow"
+          - "protocol.ext.allow=**"
+          - "protocol.file.allow"
+          - "protocol.file.allow=**"
+          - "safe.directory"
+          - "safe.directory=**"
+          - "uploadpack.packobjectshook"
+          - "uploadpack.packobjectshook=**"
+          - "pager.*"
+          - "pager.*=**"
+      flags:
+        # Read forms must remain allowed (--get, --get-all, --get-regexp,
+        # --get-color, --list, -l, --unset, --unset-all are the inspection /
+        # repair paths and must not deny).
+        none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all"]
+    decision: deny
+    reason: "Persistently setting these git config keys substitutes the program git invokes or bypasses repo-safety checks; the persistent form is even worse than `-c key=value` because it survives across invocations. Edit .git/config by hand if you genuinely need this."
 
   - id: git-config-edit
     level: critical
