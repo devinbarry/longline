@@ -132,14 +132,16 @@ fn log_decision_to_with_rotation(entry: &LogEntry, path: &Path, max_bytes: u64, 
         }
     };
 
-    // Build the entire record (JSON + newline) and emit it in a single write_all.
+    // Build the entire record (JSON + newline) and emit it via a single write_all.
     // writeln! issues two separate write() syscalls (content, then '\n'); under
     // concurrent invocations on an O_APPEND file this lets two records interleave
-    // as `{json_a}{json_b}\n\n`, producing JSONL parse errors. With one write_all
-    // the kernel atomically seeks to EOF and appends in one operation
-    // (POSIX.1-2017 §2.9.7); concurrent records can no longer interleave at the
-    // syscall boundary. All longline entries (max observed ~5 KB) are well
-    // under the kernel's per-write split threshold on Linux/macOS.
+    // as `{json_a}{json_b}\n\n`, producing JSONL parse errors. write_all over a
+    // pre-joined buffer is expected to complete as a single OS write for these
+    // small regular-file appends on Linux/macOS, in which case POSIX.1-2017 §2.9.7
+    // guarantees the kernel atomically seeks to EOF and appends in one operation.
+    // write_all may still loop after a short write under exceptional conditions
+    // (quota/ENOSPC/RLIMIT_FSIZE/signal-after-progress), but those are outside the
+    // observed corruption mode and would produce a different failure signature.
     let mut record = json;
     record.push('\n');
     if let Err(e) = file.write_all(record.as_bytes()) {
@@ -284,14 +286,14 @@ mod tests {
 
     #[test]
     fn test_each_appended_record_is_one_jsonl_line() {
-        // Regression guard: every call to log_decision_to must produce exactly
-        // one well-formed JSONL line. If the writer ever splits content from
-        // its trailing newline into separate write() calls, concurrent
-        // appenders can interleave; we cannot reproduce the race
-        // deterministically here, but writing N records serially and asserting
-        // line count == record count + every line parses as JSON catches any
-        // future regression to writeln!/println!/buffered-writer that would
-        // re-introduce the bug.
+        // Line-shape guard: every call to log_decision_to must produce exactly
+        // one newline-terminated, well-formed JSON line. This does NOT catch
+        // the original concurrent-append regression — a serial writeln! on an
+        // unbuffered File would still yield well-shaped lines because there is
+        // no interleaving to observe — but it does pin the per-record output
+        // contract (one record == one line, no stray blank lines, no truncated
+        // tail, valid JSON), so unrelated changes that drop the trailing
+        // newline or emit empty records still fail loudly.
         let dir = unique_test_dir("jsonl-shape");
         let path = dir.join("test.jsonl");
 
