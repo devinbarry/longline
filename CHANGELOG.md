@@ -87,7 +87,9 @@ All notable changes to this project will be documented in this file.
 
 ### Schema
 
-- `ArgsMatcher` gains `case_insensitive: bool` and `min_args: usize`.
+- `ArgsMatcher` gains `case_insensitive: bool`, `min_args: usize`, and
+  `none_of: Vec<String>` (exclude rule from firing when any argv token
+  matches the listed patterns).
 - New `EnvMatcher` (with `any_of` and `case_insensitive`) added to the
   `command` matcher's `env:` field.
 - `ArgsMatcher` and `EnvMatcher` use `deny_unknown_fields` so typos in
