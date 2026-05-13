@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::config::overlays::{Allowlists, ProjectAiJudgeConfig};
 use crate::config::rules::{Rule, SafetyLevel};
@@ -255,12 +255,12 @@ pub fn validate_profiles(profiles: &Profiles, defaults: Option<&Defaults>) -> Re
         ));
     }
     for (name, entry) in profiles {
-        // NEW: reject duplicate rule ids within a single profile entry.
+        // Reject duplicate rule ids within a single profile entry.
         // apply_profile_overlay_full retain-removes same-id rules from the
         // accumulator; within one entry, the second push silently wins.
         // Catch this at load time so it doesn't surprise at hook time.
         if let Some(rules) = entry.rules.as_ref() {
-            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            let mut seen: HashSet<&str> = HashSet::new();
             for rule in rules {
                 if !seen.insert(rule.id.as_str()) {
                     return Err(format!(
@@ -806,9 +806,6 @@ rules:
         // (e.g. rules.windows(2).any(...)) would pass this test even though it
         // would let the duplicate slip through in a real config. The 3-rule
         // shape forces a set-based check.
-        //
-        // Currently silent (apply_profile_overlay_full's retain-remove makes the
-        // last push win); after the fix, validate_profiles errors at config load.
         use crate::config::overlays::RuleSource;
         use crate::config::rules::{Matcher, Rule, SafetyLevel, StringOrList};
         use crate::domain::Decision;

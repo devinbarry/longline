@@ -490,11 +490,7 @@ profiles:
         reason: "second"
 "#;
     let env = TestEnv::new().with_global_config(global).build();
-    let result = run_longline(
-        &["hook", "codex"],
-        env.home_path(),
-        Some(&codex_input("PreToolUse", "Bash", "ls")),
-    );
+    let result = run_codex(&env, &codex_input("PreToolUse", "Bash", "ls"));
     assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
     assert_eq!(result.stdout, "");
     let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
