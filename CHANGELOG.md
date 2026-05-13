@@ -2,6 +2,121 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-05-13
+
+### Added
+
+- **Named profiles.** The same longline binary can now apply different
+  policies depending on which AI runtime invokes it, which project the
+  user is in, or which session context is active. Configured via two
+  new top-level keys in `~/.config/longline/longline.yaml` and
+  `<repo>/.claude/longline.yaml`:
+
+  ```yaml
+  defaults:
+    claude: <profile-name>     # used when --profile not passed on hook claude
+    codex: <profile-name>      # used when --profile not passed on hook codex
+
+  profiles:
+    <profile-name>:
+      extends: <parent-name>   # default: "default"; single-parent inheritance
+      safety_level: ...        # critical | high | strict
+      rules: [...]             # standard rule entries; same Rule schema
+      allowlists:
+        commands: [...]
+      ai_judge:
+        prompt: |
+          ...                  # replaces inherited prompt
+  ```
+
+  Profile name resolution at hook time, highest precedence first:
+  `--profile` CLI flag → project `defaults.<runtime>` → global
+  `defaults.<runtime>` → built-in `default`. See README §Profiles for
+  the full schema reference, worked merge example, and field-precedence
+  ladder.
+
+- **`--profile <name>`** (alias `-p`) on `hook claude`, `hook codex`,
+  `check`, `rules`, `files`, and the bare-form back-compat dispatch.
+
+- **`longline profiles` subcommand** lists merged profiles with
+  `NAME / EXTENDS / SAFETY / RULES / ALLOWLIST / AI_JUDGE_SOURCE /
+  SOURCE` columns. `--runtime <name>` reports which profile that runtime
+  resolves to and from which overlay layer. `--json` emits a stable
+  schema (field names and types stable across patch releases within a
+  minor version; consumers must tolerate unknown fields).
+
+- **`longline rules --profile <name>` annotates replaced builtins.**
+  When a profile rule shares an `id` with a builtin rule it replaces,
+  the rules output tags the profile rule with `[overrides id 'foo'
+  from builtin]`. Makes weakening visible.
+
+- **Audit log gains a `profile` field** on every JSONL entry in both
+  `~/.claude/hooks-logs/longline.jsonl` and
+  `~/.codex/hooks-logs/longline.jsonl`. Always populated; for users
+  with no profile config, every entry carries `"profile": "default"`.
+
+### Changed
+
+- **Asymmetric id-collision semantics for profile rules.** When a
+  profile-layer rule has the same `id` as a rule from a prior layer
+  (builtin, global top-level, project top-level), the profile rule
+  **replaces** the prior rule in the rule set. This is the weakening
+  mechanism — a profile can soften a builtin deny to an allow by
+  reusing the same `id`. Top-level overlay rules (no profile) continue
+  to use append-only semantics; **nothing changes for users without
+  profile config**.
+
+- **Cross-overlay `extends:` redeclaration is a hard error.** A project
+  overlay may add rules/allowlist/safety_level to a globally-defined
+  profile but may not declare `extends:` once a global overlay has
+  declared it. Error message names both overlay file paths plus both
+  `extends:` targets (treating omitted `extends:` as the implicit
+  `default`).
+
+- **CLI flags beat profile contributions.** `longline check
+  --safety-level critical --profile lenient` resolves to `critical`
+  because `--safety-level` applies last. Field-precedence ladder
+  (highest first): CLI flag > project profile contribution > global
+  profile contribution > extends chain > top-level overlay > built-in.
+
+### Codex fail-open posture preserved
+
+- **Phased panic guards.** The Codex adapter now installs two
+  `catch_unwind` regions: Phase 1 wraps `finalize_config` (on panic
+  or error, exit 0 with `profile: "unresolved"`); Phase 2 wraps the
+  evaluator (on panic, exit 0 with the resolved profile name). All
+  three pre-resolution fail-open call sites — Codex-hook rules-manifest
+  load failure, stdin-read failure, malformed-input failure — write
+  `profile: "unresolved"`.
+
+- **`"unresolved"` is a reserved sentinel.** User-defined profiles
+  cannot be named `unresolved`. Passing `--profile unresolved` errors
+  as an unknown profile.
+
+### Weakening note
+
+Profile rules can override embedded denies (including the v0.16.6
+repo-corruption rules) by reusing the same rule `id` with a different
+decision. This is intentional per longline's threat model (operator-
+trusted; optimize for false-positive elimination), but it means a
+poorly-authored profile can silently disable safety rails. After
+defining or modifying a profile, run:
+
+```bash
+longline rules --profile <name>
+```
+
+to confirm the resolved rule set. The `[overrides id 'foo' from
+builtin]` annotations highlight every builtin that the profile
+neutralizes.
+
+### Migration
+
+If you have no `profiles:` block and no `--profile` flag, longline
+behaves byte-identically to v0.17. The single observable change in
+audit logs is a new `profile: "default"` field on every entry — any
+JSONL consumer must tolerate unknown fields.
+
 ## [0.17.0] - 2026-05-10
 
 ### Fixed
