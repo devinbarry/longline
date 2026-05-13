@@ -249,6 +249,51 @@ fn test_claude_hook_unknown_profile_exits_2() {
 }
 
 #[test]
+fn test_claude_hook_profile_changes_outcome() {
+    let tmp = tempfile::tempdir().unwrap();
+    let config_dir = tmp.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"
+profiles:
+  strict:
+    rules:
+      - id: deny-myfictitioustool
+        level: high
+        match: { command: myfictitioustool }
+        decision: deny
+        reason: "strict denies myfictitioustool"
+"#,
+    )
+    .unwrap();
+
+    let stdin = r#"{"tool_name":"Bash","tool_input":{"command":"myfictitioustool --run"}}"#;
+
+    // Under no profile: myfictitioustool is unrecognized -> ask (not deny).
+    let r_default = run_raw_claude_hook(&["hook", "claude"], tmp.path(), stdin);
+    assert_eq!(r_default.exit_code, 0);
+    assert!(
+        !r_default.stdout.contains("\"deny\""),
+        "no profile must not deny myfictitioustool: {}",
+        r_default.stdout
+    );
+
+    // Under strict: the deny rule fires.
+    let r_strict = run_raw_claude_hook(
+        &["hook", "claude", "--profile", "strict"],
+        tmp.path(),
+        stdin,
+    );
+    assert_eq!(r_strict.exit_code, 0);
+    assert!(
+        r_strict.stdout.contains("\"deny\""),
+        "strict profile must deny myfictitioustool: {}",
+        r_strict.stdout
+    );
+}
+
+#[test]
 fn test_e2e_claude_log_entry_includes_runtime_field() {
     let env = TestEnv::new().build();
     let result = env.run_claude_hook("rm -rf /");

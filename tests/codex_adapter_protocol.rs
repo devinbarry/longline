@@ -467,6 +467,59 @@ fn codex_success_path_writes_resolved_profile_name() {
 }
 
 #[test]
+fn test_codex_hook_profile_changes_outcome_and_audit_carries_profile() {
+    let env = TestEnv::new()
+        .with_global_config(
+            r#"
+profiles:
+  strict:
+    rules:
+      - id: deny-myfictitioustool
+        level: high
+        match: { command: myfictitioustool }
+        decision: deny
+        reason: "strict denies myfictitioustool"
+"#,
+        )
+        .build();
+
+    let stdin = codex_input("PreToolUse", "Bash", "myfictitioustool --run");
+
+    // Without profile: myfictitioustool is unrecognized -> ask -> empty stdout (no deny).
+    let r_default = run_codex(&env, &stdin);
+    assert_eq!(r_default.exit_code, 0);
+    r_default.assert_codex_no_decision();
+
+    // With --profile strict: the deny rule fires.
+    let r_strict = run_longline(
+        &["hook", "codex", "--profile", "strict"],
+        env.home_path(),
+        Some(&stdin),
+    );
+    assert_eq!(r_strict.exit_code, 0);
+    assert_eq!(
+        r_strict.codex_pre_tool_use_decision().as_deref(),
+        Some("deny"),
+        "strict profile must deny myfictitioustool; stdout: {:?}",
+        r_strict.stdout
+    );
+
+    // Audit log must carry profile=strict and decision=deny.
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("codex audit log must exist");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(
+        entry["profile"], "strict",
+        "audit must carry profile=strict; entry={entry}"
+    );
+    assert_eq!(
+        entry["decision"], "deny",
+        "audit must carry decision=deny; entry={entry}"
+    );
+}
+
+#[test]
 fn fail_open_malformed_input_preserves_session_id() {
     let env = TestEnv::new().build();
     // Missing hook_event_name → Malformed action → fail-open with
