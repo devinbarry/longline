@@ -213,6 +213,63 @@ fn test_e2e_embedded_rules_deny_works() {
     );
 }
 
+// ── profiles subcommand ────────────────────────────────────────────────────
+
+#[test]
+fn test_profiles_subcommand_no_overlays_table() {
+    let tmp = tempfile::tempdir().unwrap();
+    let result = support::bin::run_longline(&["profiles"], tmp.path(), None);
+    assert_eq!(
+        result.exit_code, 0,
+        "exit code should be 0; stderr: {}",
+        result.stderr
+    );
+    assert!(
+        result.stdout.contains("default") && result.stdout.contains("builtin"),
+        "table must list default with builtin source: {}",
+        result.stdout
+    );
+}
+
+#[test]
+fn test_profiles_subcommand_no_overlays_json_canonical_shape() {
+    let tmp = tempfile::tempdir().unwrap();
+    let result = support::bin::run_longline(&["profiles", "--json"], tmp.path(), None);
+    assert_eq!(
+        result.exit_code, 0,
+        "exit code should be 0; stderr: {}",
+        result.stderr
+    );
+    let v: serde_json::Value =
+        serde_json::from_str(&result.stdout).expect("output must be valid JSON");
+    assert_eq!(v["profiles"].as_array().unwrap().len(), 1);
+    assert_eq!(v["profiles"][0]["name"], "default");
+    assert_eq!(v["profiles"][0]["extends"], serde_json::Value::Null);
+    assert_eq!(v["profiles"][0]["source"], "builtin");
+    assert_eq!(v["defaults"]["claude"]["name"], "default");
+    assert_eq!(v["defaults"]["claude"]["source"], "builtin");
+    assert_eq!(v["defaults"]["codex"]["name"], "default");
+    assert_eq!(v["defaults"]["codex"]["source"], "builtin");
+}
+
+#[test]
+fn test_profiles_subcommand_runtime_flag() {
+    let tmp = tempfile::tempdir().unwrap();
+    let result = support::bin::run_longline(&["profiles", "--runtime", "codex"], tmp.path(), None);
+    assert_eq!(
+        result.exit_code, 0,
+        "exit code should be 0; stderr: {}",
+        result.stderr
+    );
+    assert!(
+        result.stdout.contains("codex")
+            && result.stdout.contains("default")
+            && result.stdout.contains("builtin"),
+        "got: {}",
+        result.stdout
+    );
+}
+
 // ── Back-compat: bare `longline` ≡ `longline hook claude` ──────────────
 
 #[test]

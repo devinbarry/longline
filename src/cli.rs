@@ -140,6 +140,15 @@ enum Commands {
         #[arg(short = 'p', long)]
         profile: Option<String>,
     },
+    /// List defined profiles and their resolved attributes
+    Profiles {
+        /// Show the default profile for a specific runtime (claude or codex)
+        #[arg(short, long)]
+        runtime: Option<String>,
+        /// Emit stable JSON schema (spec §5)
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, clap::ValueEnum)]
@@ -355,6 +364,11 @@ pub fn run() -> i32 {
         return run_init(*force);
     }
 
+    // Handle Profiles command early (reads overlays independently, no rules config needed)
+    if let Some(Commands::Profiles { runtime, json }) = &cli.command {
+        return run_profiles(runtime.clone(), *json, cli.dir.as_ref());
+    }
+
     // Codex hook mode takes a fail-open posture on rules-manifest load
     // failures (empty stdout + stderr + exit 0 + best-effort fail-open
     // JSONL audit). Every other dispatch (Claude hook, bare longline,
@@ -469,6 +483,7 @@ pub fn run() -> i32 {
         ),
         Some(Commands::Files { .. }) => unreachable!(), // handled above
         Some(Commands::Init { .. }) => unreachable!(),  // handled above
+        Some(Commands::Profiles { .. }) => unreachable!(), // handled above
         Some(Commands::Hook {
             adapter: HookAdapter::Codex,
             profile,
@@ -855,6 +870,168 @@ fn run_init(force: bool) -> i32 {
     println!("Rules written to {}", target_dir.display());
     println!("Edit {} to customize.", rules_yaml_path.display());
 
+    0
+}
+
+fn run_profiles(runtime: Option<String>, json: bool, dir_override: Option<&PathBuf>) -> i32 {
+    let home = home_dir();
+
+    let global = match config::load_global_config(&home) {
+        Ok(g) => g,
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    };
+
+    let project_dir = resolve_dir(dir_override);
+    let project = match project_dir.as_deref().map(config::load_project_config) {
+        Some(Ok(p)) => p,
+        Some(Err(e)) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+        None => None,
+    };
+
+    let g_defaults = global.as_ref().and_then(|g| g.defaults.clone());
+    let p_defaults = project.as_ref().and_then(|p| p.defaults.clone());
+    let g_prof = global
+        .as_ref()
+        .and_then(|g| g.profiles.clone())
+        .unwrap_or_default();
+    let p_prof = project
+        .as_ref()
+        .and_then(|p| p.profiles.clone())
+        .unwrap_or_default();
+
+    // Resolve the active profile name + source label for a runtime.
+    let resolve_runtime = |rt: &str| -> (String, &'static str) {
+        let resolved = longline::config::profiles::resolve_profile_name(
+            rt,
+            None,
+            p_defaults.as_ref(),
+            g_defaults.as_ref(),
+        );
+        let source: &'static str = if p_defaults
+            .as_ref()
+            .and_then(|d| d.for_runtime(rt))
+            .is_some()
+        {
+            "project"
+        } else if g_defaults
+            .as_ref()
+            .and_then(|d| d.for_runtime(rt))
+            .is_some()
+        {
+            "global"
+        } else {
+            "builtin"
+        };
+        (resolved, source)
+    };
+
+    // --runtime <name>: single-line summary for one runtime.
+    if let Some(rt) = runtime {
+        let (resolved, source) = resolve_runtime(&rt);
+        if json {
+            let v = serde_json::json!({ rt: { "name": resolved, "source": source } });
+            println!("{}", serde_json::to_string_pretty(&v).unwrap());
+        } else {
+            crate::output::print_profile_default_for_runtime(&rt, &resolved, source);
+        }
+        return 0;
+    }
+
+    // Build the union map: global profiles first, project entries win on non-extends keys.
+    // For table display purposes, union = all profile names from both overlays.
+    let mut union = g_prof.clone();
+    for (k, v) in &p_prof {
+        union.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+
+    // Source label for a profile name.
+    let source_label = |name: &str| -> &'static str {
+        match (g_prof.contains_key(name), p_prof.contains_key(name)) {
+            (true, true) => "merged",
+            (false, true) => "project",
+            (true, false) => "global",
+            (false, false) => "builtin",
+        }
+    };
+
+    // AI judge source label for a profile name.
+    let ai_judge_source_label = |name: &str| -> &'static str {
+        let has_prompt = |m: &longline::config::profiles::Profiles| -> bool {
+            m.get(name)
+                .and_then(|e| e.ai_judge.as_ref())
+                .and_then(|a| a.prompt.as_deref())
+                .map(|s| !s.trim().is_empty())
+                .unwrap_or(false)
+        };
+        if has_prompt(&p_prof) {
+            "project"
+        } else if has_prompt(&g_prof) {
+            "global"
+        } else {
+            "builtin"
+        }
+    };
+
+    // Build profile rows: "default" always first, then remaining in sorted order.
+    let mut rows: Vec<crate::output::ProfileRow> = Vec::new();
+    rows.push(crate::output::ProfileRow {
+        name: "default".into(),
+        extends: union.get("default").and_then(|e| e.extends.clone()),
+        safety: union
+            .get("default")
+            .and_then(|e| e.safety_level.map(|s| s.to_string()))
+            .unwrap_or_else(|| "high".into()),
+        rule_count: union
+            .get("default")
+            .and_then(|e| e.rules.as_ref().map(|r| r.len()))
+            .unwrap_or(0),
+        allowlist_count: union
+            .get("default")
+            .and_then(|e| e.allowlists.as_ref().map(|a| a.commands.len()))
+            .unwrap_or(0),
+        ai_judge_source: ai_judge_source_label("default"),
+        source: source_label("default"),
+    });
+    for (name, entry) in &union {
+        if name == "default" {
+            continue;
+        }
+        rows.push(crate::output::ProfileRow {
+            name: name.clone(),
+            extends: entry.extends.clone(),
+            safety: entry
+                .safety_level
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "\u{2014}".into()),
+            rule_count: entry.rules.as_ref().map(|r| r.len()).unwrap_or(0),
+            allowlist_count: entry
+                .allowlists
+                .as_ref()
+                .map(|a| a.commands.len())
+                .unwrap_or(0),
+            ai_judge_source: ai_judge_source_label(name),
+            source: source_label(name),
+        });
+    }
+
+    if json {
+        let resolution: Vec<_> = ["claude", "codex"]
+            .iter()
+            .map(|rt| {
+                let (n, s) = resolve_runtime(rt);
+                ((*rt).to_string(), n, s.to_string())
+            })
+            .collect();
+        crate::output::print_profiles_json(&rows, &resolution);
+    } else {
+        crate::output::print_profiles_table(&rows);
+    }
     0
 }
 

@@ -289,3 +289,72 @@ pub fn print_rules_grouped_by_level(rules: &[&policy::Rule], verbose: bool) {
         }
     }
 }
+
+// ── profiles subcommand output ────────────────────────────────────────────────
+
+pub struct ProfileRow {
+    pub name: String,
+    pub extends: Option<String>,
+    pub safety: String,
+    pub rule_count: usize,
+    pub allowlist_count: usize,
+    pub ai_judge_source: &'static str,
+    pub source: &'static str,
+}
+
+pub fn print_profiles_table(rows: &[ProfileRow]) {
+    println!(
+        "{:<12} {:<10} {:<8} {:<7} {:<11} {:<17} SOURCE",
+        "NAME", "EXTENDS", "SAFETY", "RULES", "ALLOWLIST", "AI_JUDGE_SOURCE"
+    );
+    for r in rows {
+        println!(
+            "{:<12} {:<10} {:<8} {:<7} {:<11} {:<17} {}",
+            r.name,
+            r.extends.as_deref().unwrap_or("\u{2014}"),
+            r.safety,
+            r.rule_count,
+            r.allowlist_count,
+            r.ai_judge_source,
+            r.source
+        );
+    }
+}
+
+pub fn print_profile_default_for_runtime(runtime: &str, resolved: &str, source: &str) {
+    println!("Default profile for {runtime}: {resolved}  (source: {source})");
+}
+
+pub fn print_profiles_json(
+    rows: &[ProfileRow],
+    defaults_resolution: &[(String, String, String)], // (runtime, resolved_name, source)
+) {
+    let profiles_json: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "name": r.name,
+                "extends": r.extends,
+                "safety": r.safety,
+                "rule_count": r.rule_count,
+                "allowlist_count": r.allowlist_count,
+                "ai_judge_source": r.ai_judge_source,
+                "source": r.source,
+            })
+        })
+        .collect();
+    let defaults_json: serde_json::Map<String, serde_json::Value> = defaults_resolution
+        .iter()
+        .map(|(runtime, name, source)| {
+            (
+                runtime.clone(),
+                serde_json::json!({ "name": name, "source": source }),
+            )
+        })
+        .collect();
+    let out = serde_json::json!({
+        "profiles": profiles_json,
+        "defaults": defaults_json,
+    });
+    println!("{}", serde_json::to_string_pretty(&out).unwrap());
+}
