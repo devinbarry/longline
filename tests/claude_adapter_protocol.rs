@@ -229,6 +229,26 @@ fn test_e2e_allow_has_hook_event_name() {
 }
 
 #[test]
+fn test_claude_hook_unknown_profile_exits_2() {
+    let home = temp_home();
+    let result = run_raw_claude_hook(
+        &["hook", "claude", "--profile", "ghost-does-not-exist"],
+        home.path(),
+        r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#,
+    );
+    assert_eq!(
+        result.exit_code, 2,
+        "claude hook must exit 2 on unknown profile, got code {:?}\nstdout: {}\nstderr: {}",
+        result.exit_code, result.stdout, result.stderr
+    );
+    assert!(
+        result.stderr.contains("ghost-does-not-exist"),
+        "stderr must name the bad profile, got: {}",
+        result.stderr
+    );
+}
+
+#[test]
 fn test_e2e_claude_log_entry_includes_runtime_field() {
     let env = TestEnv::new().build();
     let result = env.run_claude_hook("rm -rf /");
