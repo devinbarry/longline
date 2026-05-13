@@ -458,6 +458,115 @@ ai_judge:
     }
 
     #[test]
+    fn test_apply_profile_overlay_removes_same_id_from_any_source() {
+        use crate::config::overlays::{Allowlists, RuleSource};
+        use crate::config::rules::{Matcher, RulesConfig, StringOrList, TrustLevel};
+        use crate::domain::Decision;
+
+        // Accumulator starts with two rules from different sources.
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
+            allowlists: Allowlists::default(),
+            rules: vec![
+                Rule {
+                    id: "shared".into(),
+                    level: SafetyLevel::High,
+                    matcher: Matcher::Command {
+                        command: StringOrList::Single("rm".into()),
+                        flags: None,
+                        args: None,
+                        env: None,
+                    },
+                    decision: Decision::Deny,
+                    reason: "builtin denies".into(),
+                    source: RuleSource::BuiltIn,
+                },
+                Rule {
+                    id: "global-only".into(),
+                    level: SafetyLevel::High,
+                    matcher: Matcher::Command {
+                        command: StringOrList::Single("chmod".into()),
+                        flags: None,
+                        args: None,
+                        env: None,
+                    },
+                    decision: Decision::Ask,
+                    reason: "global ask".into(),
+                    source: RuleSource::Global,
+                },
+            ],
+        };
+
+        let profile_yaml = r#"
+rules:
+  - id: shared
+    level: high
+    match: { command: rm }
+    decision: allow
+    reason: "profile allows rm"
+  - id: profile-new
+    level: high
+    match: { command: cargo, args: { any_of: ["publish"] } }
+    decision: deny
+    reason: "profile denies cargo publish"
+"#;
+        let profile: ProfileEntry = serde_norway::from_str(profile_yaml).unwrap();
+        let mut prompt: Option<String> = None;
+        apply_profile_overlay_full(&mut config, &profile, RuleSource::Project, &mut prompt);
+
+        // 'shared' was a builtin Deny; now it's a project Allow.
+        let shared = config.rules.iter().find(|r| r.id == "shared").unwrap();
+        assert_eq!(shared.decision, Decision::Allow);
+        assert_eq!(shared.source, RuleSource::Project);
+        assert_eq!(shared.reason, "profile allows rm");
+        // Exactly ONE rule with id=shared (replacement, not append).
+        assert_eq!(config.rules.iter().filter(|r| r.id == "shared").count(), 1);
+        // 'global-only' untouched.
+        assert!(config
+            .rules
+            .iter()
+            .any(|r| r.id == "global-only" && r.source == RuleSource::Global));
+        // 'profile-new' appended.
+        assert!(config
+            .rules
+            .iter()
+            .any(|r| r.id == "profile-new" && r.source == RuleSource::Project));
+    }
+
+    #[test]
+    fn test_apply_profile_overlay_applies_safety_level_and_ai_judge() {
+        use crate::config::overlays::{Allowlists, RuleSource};
+        use crate::config::rules::{RulesConfig, TrustLevel};
+        use crate::domain::Decision;
+
+        let mut config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::default(),
+            allowlists: Allowlists::default(),
+            rules: vec![],
+        };
+        let profile = ProfileEntry {
+            extends: None,
+            safety_level: Some(SafetyLevel::Strict),
+            rules: None,
+            allowlists: None,
+            ai_judge: Some(crate::config::overlays::ProjectAiJudgeConfig {
+                prompt: Some("{language} {code} {cwd} hi".into()),
+            }),
+        };
+        let mut prompt_out: Option<String> = None;
+        apply_profile_overlay_full(&mut config, &profile, RuleSource::Project, &mut prompt_out);
+
+        assert_eq!(config.safety_level, SafetyLevel::Strict);
+        assert!(prompt_out.unwrap().contains("hi"));
+    }
+
+    #[test]
     fn test_validate_ai_judge_prompt_placeholders_required() {
         let mut p: Profiles = Profiles::new();
         p.insert(
@@ -475,6 +584,61 @@ ai_judge:
         let err = validate_profiles(&p, None).unwrap_err();
         assert!(err.contains("placeholder"), "got: {err}");
     }
+}
+
+/// Apply a profile entry's contributions to `config` with asymmetric
+/// id-replacement: same-id rules are removed from the accumulator
+/// regardless of source layer before the profile's rule is pushed.
+///
+/// This is the structural surface that distinguishes profile-layer
+/// application (spec layers 4-5) from top-level overlay merge (layers
+/// 2-3). It is **not interchangeable** with `merge_overlay_config`.
+///
+/// Tracks `ai_judge.prompt` replacement into `project_ai_prompt` when
+/// the profile entry sets a non-empty prompt. The caller decides
+/// whether to consume that or discard it.
+pub fn apply_profile_overlay_full(
+    config: &mut crate::config::rules::RulesConfig,
+    entry: &ProfileEntry,
+    source: crate::config::overlays::RuleSource,
+    project_ai_prompt: &mut Option<String>,
+) {
+    if let Some(level) = entry.safety_level {
+        config.safety_level = level;
+    }
+    if let Some(rules) = entry.rules.as_ref() {
+        for rule in rules.iter().cloned() {
+            let mut rule = rule;
+            rule.source = source;
+            config.rules.retain(|r| r.id != rule.id);
+            config.rules.push(rule);
+        }
+    }
+    if let Some(allow) = entry.allowlists.as_ref() {
+        for ae in allow.commands.iter().cloned() {
+            let mut ae = ae;
+            ae.source = source;
+            config.allowlists.commands.push(ae);
+        }
+        config.allowlists.paths.extend(allow.paths.iter().cloned());
+    }
+    if let Some(aj) = entry.ai_judge.as_ref() {
+        if let Some(prompt) = aj.prompt.as_deref() {
+            if !prompt.trim().is_empty() {
+                *project_ai_prompt = Some(prompt.to_string());
+            }
+        }
+    }
+}
+
+/// Convenience wrapper when the caller doesn't need prompt tracking.
+pub fn apply_profile_overlay(
+    config: &mut crate::config::rules::RulesConfig,
+    entry: &ProfileEntry,
+    source: crate::config::overlays::RuleSource,
+) {
+    let mut discard: Option<String> = None;
+    apply_profile_overlay_full(config, entry, source, &mut discard);
 }
 
 /// Validate that no profile name has its `extends:` declared in both
