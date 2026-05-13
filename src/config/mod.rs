@@ -1,6 +1,7 @@
 pub mod discovery;
 pub mod finalize;
 pub mod overlays;
+pub mod profiles;
 pub mod prompt;
 pub mod rules;
 

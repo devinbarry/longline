@@ -21,7 +21,7 @@ pub struct AllowlistEntry {
     pub source: RuleSource,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 pub struct Allowlists {
     #[serde(default)]
     pub commands: Vec<AllowlistEntry>,
@@ -51,6 +51,10 @@ pub struct ProjectConfig {
     pub rules: Option<Vec<Rule>>,
     pub disable_rules: Option<Vec<String>>,
     pub ai_judge: Option<ProjectAiJudgeConfig>,
+    #[serde(default)]
+    pub defaults: Option<crate::config::profiles::Defaults>,
+    #[serde(default)]
+    pub profiles: Option<crate::config::profiles::Profiles>,
 }
 
 /// Merge a project config into a rules config (mutates in place).
@@ -163,6 +167,8 @@ disable_rules:
             rules: None,
             disable_rules: None,
             ai_judge: None,
+            defaults: None,
+            profiles: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.safety_level, SafetyLevel::Strict);
@@ -201,6 +207,8 @@ disable_rules:
             rules: None,
             disable_rules: None,
             ai_judge: None,
+            defaults: None,
+            profiles: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands.len(), 2);
@@ -256,6 +264,8 @@ disable_rules:
             rules: None,
             disable_rules: Some(vec!["rule-a".to_string()]),
             ai_judge: None,
+            defaults: None,
+            profiles: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.rules.len(), 1);
@@ -312,6 +322,8 @@ rules:
             rules: None,
             disable_rules: None,
             ai_judge: None,
+            defaults: None,
+            profiles: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.safety_level, SafetyLevel::High);
@@ -433,6 +445,8 @@ rules:
             rules: None,
             disable_rules: None,
             ai_judge: None,
+            defaults: None,
+            profiles: None,
         };
         merge_project_config(&mut config, project);
         assert_eq!(config.allowlists.commands[0].source, RuleSource::BuiltIn);

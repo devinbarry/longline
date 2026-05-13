@@ -118,7 +118,7 @@ impl std::fmt::Display for TrustLevel {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Rule {
     pub id: String,
     pub level: SafetyLevel,
@@ -130,7 +130,7 @@ pub struct Rule {
     pub source: RuleSource,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 // Matchers are constructed at rules-load time and live for the life of the
 // process; the size difference between the Command variant (with its
@@ -158,19 +158,19 @@ pub enum Matcher {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PipelineMatcher {
     pub stages: Vec<StageMatcher>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct StageMatcher {
     pub command: StringOrList,
     #[serde(default)]
     pub flags: Option<FlagsMatcher>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RedirectMatcher {
     #[serde(default)]
     pub op: Option<StringOrList>,
@@ -178,7 +178,7 @@ pub struct RedirectMatcher {
     pub target: Option<StringOrList>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct FlagsMatcher {
     #[serde(default)]
     pub any_of: Vec<String>,
@@ -192,7 +192,7 @@ pub struct FlagsMatcher {
     pub starts_with: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EnvMatcher {
     /// Match if any env-var assignment's name matches one of these glob
@@ -208,7 +208,7 @@ pub struct EnvMatcher {
     pub case_insensitive: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ArgsMatcher {
     #[serde(default)]
@@ -246,7 +246,7 @@ pub struct ArgsMatcher {
     pub min_args: Option<usize>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum StringOrList {
     Single(String),
