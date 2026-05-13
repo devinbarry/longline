@@ -90,6 +90,16 @@ pub fn finalize_config(
     // cartesian (global/project profiles × global/project defaults)
     // ensures every overlay's defaults entry is validated even when the
     // referenced profile lives in the other overlay.
+    //
+    // v0.18.1 spec §3 Item 3 Phase-1 boundary invariant:
+    // validate_profiles must run inside finalize_config, before
+    // FinalConfig is returned. The Codex adapter's "profile":"unresolved"
+    // fail-open audit entry is hardcoded at the finalize_config Err site
+    // (src/adapters/codex.rs:231-243); moving any validate_profiles call
+    // downstream of finalize_config's return makes the duplicate-id
+    // fail-open leak the resolved profile name instead of "unresolved".
+    // Reordering validate vs resolve inside this function is safe;
+    // moving validation OUT of this function is not.
     validate_profiles(&union, project_defaults.as_ref())?;
     validate_profiles(&union, global_defaults.as_ref())?;
     validate_profiles(&global_profiles, None)?;

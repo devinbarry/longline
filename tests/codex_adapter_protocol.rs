@@ -467,6 +467,123 @@ fn codex_success_path_writes_resolved_profile_name() {
 }
 
 #[test]
+fn codex_global_duplicate_id_in_profile_fails_open_with_unresolved() {
+    // Pre-resolution failure: a GLOBAL overlay declares profiles.strict
+    // with duplicate rule ids. The duplicate fires on the FIRST union
+    // validate_profiles call (finalize.rs call (1)) because union.strict
+    // came from global. Fail-open posture: exit 0, empty stdout, audit
+    // entry with profile="unresolved" and a `reason` that names the
+    // duplicate id and profile.
+    let global = r#"
+profiles:
+  strict:
+    rules:
+      - id: dup-id
+        level: high
+        match: { command: rm }
+        decision: deny
+        reason: "first"
+      - id: dup-id
+        level: high
+        match: { command: rm }
+        decision: deny
+        reason: "second"
+"#;
+    let env = TestEnv::new().with_global_config(global).build();
+    let result = run_longline(
+        &["hook", "codex"],
+        env.home_path(),
+        Some(&codex_input("PreToolUse", "Bash", "ls")),
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    assert_eq!(result.stdout, "");
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["profile"], "unresolved");
+    let reason = entry["reason"].as_str().unwrap_or("");
+    assert!(
+        reason.contains("config finalization failed"),
+        "reason must name the finalization boundary; got: {reason}"
+    );
+    assert!(
+        reason.contains("duplicate rule id"),
+        "reason must name the duplicate-id check; got: {reason}"
+    );
+    assert!(
+        reason.contains("strict") && reason.contains("dup-id"),
+        "reason must name profile and id; got: {reason}"
+    );
+}
+
+#[test]
+fn codex_project_duplicate_id_in_profile_fails_open_with_unresolved() {
+    // Pre-resolution failure: project overlay declares profiles.strict
+    // with duplicate rule ids, but global declares profiles.strict: {}
+    // (empty). union.strict resolves to the global empty entry (because
+    // or_insert_with does not overwrite), so finalize.rs calls (1)-(3)
+    // all pass; only call (4) validate_profiles(&project_profiles, None)
+    // sees the duplicate-id project entry and errors. This forces the
+    // test to exercise the per-overlay project validation path uniquely.
+    // Removing the empty global entry would let the duplicate fire on
+    // call (1) instead, making this test indistinguishable from the
+    // global-side fixture.
+    let global = "profiles:\n  strict: {}\n";
+    let project = r#"
+profiles:
+  strict:
+    rules:
+      - id: dup-id
+        level: high
+        match: { command: rm }
+        decision: deny
+        reason: "first"
+      - id: dup-id
+        level: high
+        match: { command: rm }
+        decision: deny
+        reason: "second"
+"#;
+    let env = TestEnv::new()
+        .with_global_config(global)
+        .with_project_config(project)
+        .build();
+    let project_path = env.project_path().to_string_lossy().to_string();
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "ls"},
+        "session_id": "test",
+        "cwd": project_path,
+    })
+    .to_string();
+    let result = run_longline(&["hook", "codex"], env.home_path(), Some(&input));
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    assert_eq!(result.stdout, "");
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["profile"], "unresolved");
+    let reason = entry["reason"].as_str().unwrap_or("");
+    assert!(
+        reason.contains("config finalization failed"),
+        "reason must name the finalization boundary; got: {reason}"
+    );
+    assert!(
+        reason.contains("duplicate rule id"),
+        "reason must name the duplicate-id check; got: {reason}"
+    );
+    assert!(
+        reason.contains("strict") && reason.contains("dup-id"),
+        "reason must name profile and id; got: {reason}"
+    );
+}
+
+#[test]
 fn test_codex_hook_profile_changes_outcome_and_audit_carries_profile() {
     let env = TestEnv::new()
         .with_global_config(

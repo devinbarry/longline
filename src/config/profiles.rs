@@ -255,6 +255,24 @@ pub fn validate_profiles(profiles: &Profiles, defaults: Option<&Defaults>) -> Re
         ));
     }
     for (name, entry) in profiles {
+        // NEW: reject duplicate rule ids within a single profile entry.
+        // apply_profile_overlay_full retain-removes same-id rules from the
+        // accumulator; within one entry, the second push silently wins.
+        // Catch this at load time so it doesn't surprise at hook time.
+        if let Some(rules) = entry.rules.as_ref() {
+            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            for rule in rules {
+                if !seen.insert(rule.id.as_str()) {
+                    return Err(format!(
+                        "profile '{name}' has duplicate rule id '{}' within its own rules: block. \
+                         Rule ids must be unique within a single profile entry. To replace a rule \
+                         defined elsewhere (base rules, allowlist, ancestor profile, or any \
+                         earlier-applied profile), define it once here.",
+                        rule.id
+                    ));
+                }
+            }
+        }
         if let Some(aj) = entry.ai_judge.as_ref() {
             if let Some(prompt) = aj.prompt.as_deref() {
                 if !prompt.trim().is_empty() {
@@ -779,6 +797,137 @@ rules:
         //
         //   let _swap: fn(_, ProfileEntry, _) = merge_overlay_config;
         //     // error[E0308]: expected ProjectConfig, found ProfileEntry
+    }
+
+    #[test]
+    fn validate_profiles_rejects_in_entry_duplicate_rule_ids() {
+        // Positive case: one profile entry with three rules in order [X, Y, X].
+        // The duplicate is NON-ADJACENT: an overly-narrow adjacent-pair check
+        // (e.g. rules.windows(2).any(...)) would pass this test even though it
+        // would let the duplicate slip through in a real config. The 3-rule
+        // shape forces a set-based check.
+        //
+        // Currently silent (apply_profile_overlay_full's retain-remove makes the
+        // last push win); after the fix, validate_profiles errors at config load.
+        use crate::config::overlays::RuleSource;
+        use crate::config::rules::{Matcher, Rule, SafetyLevel, StringOrList};
+        use crate::domain::Decision;
+
+        let mk_rule = |id: &str| Rule {
+            id: id.to_string(),
+            level: SafetyLevel::High,
+            matcher: Matcher::Command {
+                command: StringOrList::Single("rm".to_string()),
+                flags: None,
+                args: None,
+                env: None,
+            },
+            decision: Decision::Deny,
+            reason: "test".to_string(),
+            source: RuleSource::BuiltIn,
+        };
+        let entry = ProfileEntry {
+            extends: None,
+            safety_level: None,
+            rules: Some(vec![
+                mk_rule("dup-id"),
+                mk_rule("other-id"),
+                mk_rule("dup-id"),
+            ]),
+            allowlists: None,
+            ai_judge: None,
+        };
+        let mut p: Profiles = BTreeMap::new();
+        p.insert("strict".to_string(), entry);
+
+        let err = validate_profiles(&p, None).unwrap_err();
+        assert!(
+            err.contains("'strict'") && err.contains("'dup-id'"),
+            "error must name profile and duplicate id; got: {err}"
+        );
+        assert!(
+            err.contains("duplicate rule id"),
+            "error must say 'duplicate rule id'; got: {err}"
+        );
+    }
+
+    #[test]
+    fn validate_profiles_allows_distinct_ids_in_same_entry() {
+        // Negative case: one entry, two rules with distinct ids -> Ok.
+        // Falsifies a check that would error on rules.len() >= 2 within an entry.
+        use crate::config::overlays::RuleSource;
+        use crate::config::rules::{Matcher, Rule, SafetyLevel, StringOrList};
+        use crate::domain::Decision;
+
+        let mk_rule = |id: &str| Rule {
+            id: id.to_string(),
+            level: SafetyLevel::High,
+            matcher: Matcher::Command {
+                command: StringOrList::Single("rm".to_string()),
+                flags: None,
+                args: None,
+                env: None,
+            },
+            decision: Decision::Deny,
+            reason: "test".to_string(),
+            source: RuleSource::BuiltIn,
+        };
+        let entry = ProfileEntry {
+            extends: None,
+            safety_level: None,
+            rules: Some(vec![mk_rule("rule-a"), mk_rule("rule-b")]),
+            allowlists: None,
+            ai_judge: None,
+        };
+        let mut p: Profiles = BTreeMap::new();
+        p.insert("strict".to_string(), entry);
+
+        validate_profiles(&p, None).unwrap();
+    }
+
+    #[test]
+    fn validate_profiles_allows_same_id_across_different_entries() {
+        // Negative case: two entries, each with one rule, both ids equal "X" -> Ok.
+        // Falsifies a check that would error on duplicate ids across profiles
+        // (which would break the across-profiles id-replacement mechanism that
+        // apply_profile_overlay_full implements per the v0.18 design). This is
+        // the load-bearing negative test.
+        use crate::config::overlays::RuleSource;
+        use crate::config::rules::{Matcher, Rule, SafetyLevel, StringOrList};
+        use crate::domain::Decision;
+
+        let mk_rule = || Rule {
+            id: "shared-id".to_string(),
+            level: SafetyLevel::High,
+            matcher: Matcher::Command {
+                command: StringOrList::Single("rm".to_string()),
+                flags: None,
+                args: None,
+                env: None,
+            },
+            decision: Decision::Deny,
+            reason: "test".to_string(),
+            source: RuleSource::BuiltIn,
+        };
+        let entry_a = ProfileEntry {
+            extends: None,
+            safety_level: None,
+            rules: Some(vec![mk_rule()]),
+            allowlists: None,
+            ai_judge: None,
+        };
+        let entry_b = ProfileEntry {
+            extends: Some("strict".to_string()),
+            safety_level: None,
+            rules: Some(vec![mk_rule()]),
+            allowlists: None,
+            ai_judge: None,
+        };
+        let mut p: Profiles = BTreeMap::new();
+        p.insert("strict".to_string(), entry_a);
+        p.insert("paranoid".to_string(), entry_b);
+
+        validate_profiles(&p, None).unwrap();
     }
 
     #[test]
