@@ -306,6 +306,191 @@ These flags combine with the hook command in your settings:
 }
 ```
 
+## Profiles
+
+### Why profiles exist
+
+Different runtimes and session contexts need different rule sets. Codex tooling is materially sloppier than Claude tooling and benefits from tighter rules; a specialized context such as an afterhours daemon supervising Codex may need stricter rules still, while an interactive Claude session can be more permissive. Profiles let one binary serve all of these without duplicating `rules.yaml`. If you run only one runtime in one mode, you do not need profiles — the implicit `default` profile applies and behavior is byte-identical to v0.16.
+
+### Conceptual model
+
+A profile is a named overlay that layers on top of the full embedded/global/project rule stack. The resolution order from lowest to highest precedence is:
+
+```
+embedded defaults (rules/rules.yaml)
+  → global overlay top-level fields (~/.config/longline/longline.yaml)
+  → project overlay top-level fields (<repo>/.claude/longline.yaml)
+  → resolved profile (extends chain, root → leaf)
+  = final config
+```
+
+Profiles inherit from one another through a single-parent `extends:` chain. Every profile that omits `extends:` implicitly extends the built-in `default` profile (zero extra rules, no safety-level override). The `default` profile always exists; you do not need to declare it.
+
+Note: because every profile implicitly extends `default`, adding content to a user-defined `profiles.default` block silently affects every other profile in the merged map.
+
+### Schema reference
+
+Add `defaults:` and `profiles:` top-level keys to your global overlay (`~/.config/longline/longline.yaml`) or project overlay (`<repo>/.claude/longline.yaml`):
+
+```yaml
+defaults:
+  claude: <profile-name>     # used when --profile is not passed on hook claude
+  codex: <profile-name>      # used when --profile is not passed on hook codex
+
+profiles:
+  <profile-name>:
+    extends: <parent-name>   # parent profile to inherit from; default: "default"
+                             # may not be redeclared across overlays once set
+    safety_level: ...        # critical | high | strict; overrides inherited value
+    rules:                   # additional Rule entries; same schema as elsewhere
+      - id: ...              # required; used for id-collision replacement
+        level: ...           # critical | high | strict
+        match: { ... }       # command / pipeline / redirect matcher
+        decision: ...        # allow | ask | deny
+        reason: "..."        # required; shown in audit log and UI
+    allowlists:
+      commands:
+        - command: ...
+          trust: ...         # minimal | standard | full
+          reason: "..."      # optional
+    ai_judge:
+      prompt: |              # fully replaces inherited prompt (must include
+        ...                  # {language}, {code}, {cwd} placeholders)
+```
+
+**Per-field merge semantics (parent → child, and global → project within a profile):**
+
+- `extends:` — fixes the profile's parent; may not be redeclared once a profile name appears in any overlay. If a project needs a different inheritance chain, use a new profile name.
+- `safety_level:` — child overrides parent; omitted means inherit.
+- `rules:` — child appends; a rule with the same `id` as an existing rule **replaces** it (id-collision replacement). This is how you weaken: redefine a parent's `deny` rule as `allow` using the same `id`.
+- `allowlists:` — child appends; no removal mechanism. Because policy evaluates rules before the allowlist, use a `deny` rule to genuinely tighten rather than relying on allowlist ordering.
+- `ai_judge.prompt:` — child fully replaces parent; omitted means inherit.
+
+### Resolution precedence
+
+**Name resolution** — four-step ladder, first match wins:
+
+1. `--profile <name>` CLI flag
+2. Project overlay's `defaults.<runtime>`
+3. Global overlay's `defaults.<runtime>`
+4. Built-in fallback: `default`
+
+**Field precedence** within the resolved config — highest first:
+
+1. CLI flag (`--safety-level`)
+2. Project overlay's entry for the resolved profile name
+3. Global overlay's entry for the resolved profile name
+4. Profile `extends:` chain (root → leaf), ancestor contributions only
+5. Top-level overlay contributions (`override_safety_level`, etc.)
+6. Built-in defaults (embedded `rules/rules.yaml`)
+
+### Merge example
+
+Global overlay (`~/.config/longline/longline.yaml`) — looser, used as the shared baseline:
+
+```yaml
+defaults:
+  codex: strict
+
+profiles:
+  strict:
+    extends: default
+    safety_level: strict
+    rules:
+      - id: codex-no-curl-pipe-sh
+        level: high
+        match:
+          pipeline:
+            stages:
+              - { command: curl }
+              - { command: sh }
+        decision: deny
+        reason: "strict: do not pipe curl into sh"
+      - id: codex-glab-mr-create-ok
+        level: high
+        match:
+          command: glab
+          args: { all_of: ["mr", "create"] }
+        decision: allow
+        reason: "strict allows opening MRs"
+```
+
+Project overlay (`<repo>/.claude/longline.yaml`) — a production-deploy repo that tightens:
+
+```yaml
+profiles:
+  strict:
+    rules:
+      - id: this-repo-no-cargo-publish
+        level: high
+        match:
+          command: cargo
+          args: { any_of: ["publish"] }
+        decision: deny
+        reason: "this repo never publishes from Codex sessions"
+      - id: codex-glab-mr-create-ok          # same id as global → project wins
+        level: high
+        match:
+          command: glab
+          args: { all_of: ["mr", "create"] }
+        decision: deny
+        reason: "this repo: MRs must come from local dev, not Codex"
+```
+
+Resolved `strict` profile when Codex runs in this repo:
+
+- `extends: default` (from global; project did not override)
+- `safety_level: strict` (from global; project did not override)
+- Three rules:
+  - `codex-no-curl-pipe-sh` — global, unchanged; `curl | sh` is denied
+  - `this-repo-no-cargo-publish` — project-added; `cargo publish` is denied in this repo only
+  - `codex-glab-mr-create-ok` — redefined as `deny` by the project; MRs cannot be opened from inside Codex sessions in this repo (project tightened what the global profile allowed)
+
+### CLI reference
+
+```bash
+longline hook claude --profile <name>   # explicit profile for Claude sessions
+longline hook codex  --profile <name>   # explicit profile for Codex sessions
+longline check       --profile <name> '<command>'
+longline rules       --profile <name>   # annotates replaced builtins
+longline files       --profile <name>   # validates profile loads cleanly
+longline profiles                        # table of all profiles (all overlays)
+longline profiles --runtime codex        # resolved default profile for codex
+longline profiles --json                 # machine-readable; stable within minor versions
+```
+
+`--profile` is also honoured by the bare `longline` form (back-compat alias for `longline hook claude`).
+
+### Audit log
+
+Every JSONL entry in `~/.claude/hooks-logs/longline.jsonl` and `~/.codex/hooks-logs/longline.jsonl` carries a `profile` field:
+
+```jsonc
+{
+  "runtime": "codex",
+  "profile": "strict",
+  ...
+}
+```
+
+Users not using profiles see `"profile": "default"` on every entry.
+
+The reserved sentinel `"profile": "unresolved"` appears only on Codex fail-open entries where profile resolution itself failed (Phase 1 panic recovery). User-defined profiles may not be named `unresolved`.
+
+### Weakening note
+
+Profile rules can **weaken** embedded denies — including the v0.16.6 repo-corruption deny rules — by reusing the same rule `id` with a different decision. This is intentional per the longline threat model (optimize for false-positive elimination; the operator is trusted), but it means you can silently disable safety rails. After defining any profile, run:
+
+```bash
+longline rules --profile <name>
+```
+
+to confirm the resolved rule set. The output annotates each profile-source rule that replaced a same-id builtin with `[overrides id 'foo' from builtin]`.
+
+### Migration note
+
+If you have no `profiles:` block and no `--profile` flag, longline behaves byte-identically to v0.16. The single observable change in audit logs is a new `profile: "default"` field on every entry — any consumer of the JSONL output must tolerate unknown fields.
+
 ## Supported bash constructs
 
 The parser handles:
