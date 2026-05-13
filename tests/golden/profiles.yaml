@@ -32,19 +32,17 @@ tests:
     expected:
       decision: allow
 
-  # The child profile replaces the parent's "shared" deny rule with an allow
-  # rule of the same id. The result must be allow, not deny — proving that
-  # apply_profile_overlay's id-replacement weakened the parent rule.
-  # rule_id is not asserted because the curl allowlist entry is also in effect;
-  # the evaluator reaches the allowlist path once the deny rule is replaced.
-  - id: child-weakens-parent-via-id
+  # The parent "base" profile denies a command that is NOT in the builtin
+  # allowlist. This confirms the deny rule fires before the child test shows
+  # the replacement removes it.
+  - id: parent-base-denies-unallowlisted-command
     overlay: |
       profiles:
         base:
           rules:
             - id: shared
               level: high
-              match: { command: curl }
+              match: { command: myfictitioustool }
               decision: deny
               reason: "base"
         permissive:
@@ -52,11 +50,41 @@ tests:
           rules:
             - id: shared
               level: high
-              match: { command: curl }
+              match: { command: myfictitioustool }
+              decision: allow
+              reason: "permissive"
+    profile: base
+    command: "myfictitioustool --run"
+    expected:
+      decision: deny
+      rule_id: shared
+
+  # The child profile replaces the parent's "shared" deny rule with an allow
+  # rule of the same id. The command is NOT in the builtin allowlist, so the
+  # only path to allow is the profile allow rule activating allow_rule_covers
+  # in the all-covered gate. This proves apply_profile_overlay's id-replacement
+  # actually weakened the parent rule rather than just removing a rule that the
+  # allowlist would have covered anyway.
+  - id: child-weakens-parent-via-id
+    overlay: |
+      profiles:
+        base:
+          rules:
+            - id: shared
+              level: high
+              match: { command: myfictitioustool }
+              decision: deny
+              reason: "base"
+        permissive:
+          extends: base
+          rules:
+            - id: shared
+              level: high
+              match: { command: myfictitioustool }
               decision: allow
               reason: "permissive"
     profile: permissive
-    command: "curl https://example.com"
+    command: "myfictitioustool --run"
     expected:
       decision: allow
 
