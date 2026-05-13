@@ -420,6 +420,61 @@ ai_judge:
         let names = check_and_merge_profile_names(&g, &p).unwrap();
         assert_eq!(names.len(), 1);
     }
+
+    #[test]
+    fn test_validate_rejects_user_defined_unresolved() {
+        let mut p: Profiles = Profiles::new();
+        p.insert(UNRESOLVED_SENTINEL.into(), mk(None));
+        let err = validate_profiles(&p, None).unwrap_err();
+        assert!(err.contains(UNRESOLVED_SENTINEL) && err.contains("reserved"));
+    }
+
+    #[test]
+    fn test_validate_allows_user_defined_default_without_extends() {
+        let mut p: Profiles = Profiles::new();
+        p.insert("default".into(), mk(None));
+        validate_profiles(&p, None).unwrap();
+    }
+
+    #[test]
+    fn test_validate_defaults_target_must_exist() {
+        let p: Profiles = Profiles::new();
+        let d = Defaults {
+            claude: None,
+            codex: Some("ghost".into()),
+        };
+        let err = validate_profiles(&p, Some(&d)).unwrap_err();
+        assert!(err.contains("ghost") && err.contains("codex"));
+    }
+
+    #[test]
+    fn test_validate_defaults_target_default_is_always_valid() {
+        let p: Profiles = Profiles::new();
+        let d = Defaults {
+            claude: Some("default".into()),
+            codex: Some("default".into()),
+        };
+        validate_profiles(&p, Some(&d)).unwrap();
+    }
+
+    #[test]
+    fn test_validate_ai_judge_prompt_placeholders_required() {
+        let mut p: Profiles = Profiles::new();
+        p.insert(
+            "weird".into(),
+            ProfileEntry {
+                extends: None,
+                safety_level: None,
+                rules: None,
+                allowlists: None,
+                ai_judge: Some(crate::config::overlays::ProjectAiJudgeConfig {
+                    prompt: Some("no placeholders here".into()),
+                }),
+            },
+        );
+        let err = validate_profiles(&p, None).unwrap_err();
+        assert!(err.contains("placeholder"), "got: {err}");
+    }
 }
 
 /// Validate that no profile name has its `extends:` declared in both
@@ -468,4 +523,42 @@ pub fn check_and_merge_profile_names(
         names.insert(name.clone());
     }
     Ok(names)
+}
+
+/// Validate profile map content:
+/// - Rejects the reserved name `UNRESOLVED_SENTINEL`.
+/// - Validates `ai_judge.prompt` placeholders for each profile entry.
+/// - Ensures `defaults.<runtime>` targets exist in the map (or equal `DEFAULT_NAME`).
+pub fn validate_profiles(profiles: &Profiles, defaults: Option<&Defaults>) -> Result<(), String> {
+    if profiles.contains_key(UNRESOLVED_SENTINEL) {
+        return Err(format!(
+            "profile name '{UNRESOLVED_SENTINEL}' is reserved (used in audit log fail-open entries)"
+        ));
+    }
+    for (name, entry) in profiles {
+        if let Some(aj) = entry.ai_judge.as_ref() {
+            if let Some(prompt) = aj.prompt.as_deref() {
+                if !prompt.trim().is_empty() {
+                    let label =
+                        std::path::PathBuf::from(format!("profiles.{name}.ai_judge.prompt"));
+                    crate::config::prompt::validate_ai_judge_prompt(prompt, &label)?;
+                }
+            }
+        }
+    }
+    if let Some(d) = defaults {
+        for (runtime, target) in [
+            ("claude", d.claude.as_deref()),
+            ("codex", d.codex.as_deref()),
+        ] {
+            if let Some(t) = target {
+                if t != DEFAULT_NAME && !profiles.contains_key(t) {
+                    return Err(format!(
+                        "defaults.{runtime} references profile '{t}' which is not defined"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }
