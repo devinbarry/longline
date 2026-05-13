@@ -56,13 +56,14 @@ enum ClaudeHookAction {
     Passthrough { cwd: Option<String> },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct HookOptions {
     pub ask_on_deny: bool,
     pub ask_ai: bool,
     pub ask_ai_lenient: bool,
     pub cli_trust_level: Option<policy::TrustLevel>,
     pub cli_safety_level: Option<policy::SafetyLevel>,
+    pub profile_override: Option<String>,
 }
 
 pub(crate) fn run_hook(
@@ -109,7 +110,7 @@ fn run_hook_input(
                 options.cli_trust_level,
                 options.cli_safety_level,
                 "claude",
-                None,
+                options.profile_override.as_deref(),
             ) {
                 Ok(final_config) => final_config,
                 Err(e) => {
@@ -143,7 +144,7 @@ fn run_hook_input(
                 options.cli_trust_level,
                 options.cli_safety_level,
                 "claude",
-                None,
+                options.profile_override.as_deref(),
             ) {
                 eprintln!("longline: {e}");
                 return 2;

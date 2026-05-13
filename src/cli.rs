@@ -27,6 +27,10 @@ struct Cli {
     #[arg(long, value_name = "DIR", global = true)]
     dir: Option<PathBuf>,
 
+    /// Profile to activate (overrides runtime default)
+    #[arg(short = 'p', long)]
+    profile: Option<String>,
+
     /// Downgrade deny decisions to ask (hook mode only)
     #[arg(long)]
     ask_on_deny: bool,
@@ -87,6 +91,10 @@ enum Commands {
         /// Show only: allow, ask, deny
         #[arg(short, long)]
         filter: Option<DecisionFilter>,
+
+        /// Profile to activate (overrides runtime default)
+        #[arg(short = 'p', long)]
+        profile: Option<String>,
     },
     /// Show current rule configuration
     Rules {
@@ -105,9 +113,17 @@ enum Commands {
         /// Group by: decision, level
         #[arg(short, long)]
         group_by: Option<GroupBy>,
+
+        /// Profile to activate (overrides runtime default)
+        #[arg(short = 'p', long)]
+        profile: Option<String>,
     },
     /// Show loaded rule files and their contents
-    Files,
+    Files {
+        /// Profile to activate (overrides runtime default)
+        #[arg(short = 'p', long)]
+        profile: Option<String>,
+    },
     /// Extract embedded rules to ~/.config/longline/ for customization
     Init {
         /// Overwrite existing files
@@ -119,6 +135,10 @@ enum Commands {
         /// Adapter to dispatch to
         #[arg(value_enum)]
         adapter: HookAdapter,
+
+        /// Profile to activate (overrides runtime default)
+        #[arg(short = 'p', long)]
+        profile: Option<String>,
     },
 }
 
@@ -322,7 +342,7 @@ pub fn run() -> i32 {
     let cli = Cli::parse();
 
     // Handle Files command early (needs path before loading)
-    if let Some(Commands::Files) = &cli.command {
+    if let Some(Commands::Files { .. }) = &cli.command {
         return run_files(
             cli.config.as_ref(),
             cli.trust_level.as_ref(),
@@ -343,6 +363,7 @@ pub fn run() -> i32 {
         cli.command,
         Some(Commands::Hook {
             adapter: HookAdapter::Codex,
+            ..
         })
     );
 
@@ -392,6 +413,16 @@ pub fn run() -> i32 {
     // finalizes after reading cwd from stdin. Other subcommands resolve
     // project dir and finalize config eagerly.
     let is_hook_mode = matches!(cli.command, Some(Commands::Hook { .. }) | None);
+
+    // Extract the subcommand-level profile override before consuming cli.command.
+    // Hook and bare-form profiles are threaded separately (via HookOptions).
+    let subcommand_profile: Option<String> = match &cli.command {
+        Some(Commands::Check { profile, .. }) => profile.clone(),
+        Some(Commands::Rules { profile, .. }) => profile.clone(),
+        Some(Commands::Files { profile }) => profile.clone(),
+        _ => None,
+    };
+
     let (rules_config, project_config_path) = if is_hook_mode {
         (base_config, None)
     } else {
@@ -403,7 +434,7 @@ pub fn run() -> i32 {
             cli_trust_level,
             cli_safety_level,
             "claude",
-            None,
+            subcommand_profile.as_deref(),
         ) {
             Ok(c) => c,
             Err(e) => {
@@ -419,7 +450,7 @@ pub fn run() -> i32 {
     };
 
     match cli.command {
-        Some(Commands::Check { file, filter }) => {
+        Some(Commands::Check { file, filter, .. }) => {
             run_check(&rules_config, file, filter, project_config_path.as_ref())
         }
         Some(Commands::Rules {
@@ -427,6 +458,7 @@ pub fn run() -> i32 {
             filter,
             level,
             group_by,
+            ..
         }) => run_rules(
             &rules_config,
             verbose,
@@ -435,10 +467,11 @@ pub fn run() -> i32 {
             group_by,
             project_config_path.as_ref(),
         ),
-        Some(Commands::Files) => unreachable!(), // handled above
-        Some(Commands::Init { .. }) => unreachable!(), // handled above
+        Some(Commands::Files { .. }) => unreachable!(), // handled above
+        Some(Commands::Init { .. }) => unreachable!(),  // handled above
         Some(Commands::Hook {
             adapter: HookAdapter::Codex,
+            profile,
         }) => crate::adapters::codex::run_hook(
             rules_config,
             &home_dir(),
@@ -448,12 +481,13 @@ pub fn run() -> i32 {
                 ask_ai_lenient: cli.ask_ai_lenient,
                 cli_trust_level,
                 cli_safety_level,
+                profile_override: profile,
             },
         ),
         Some(Commands::Hook {
             adapter: HookAdapter::Claude,
-        })
-        | None => claude::run_hook(
+            profile,
+        }) => claude::run_hook(
             rules_config,
             &home_dir(),
             claude::HookOptions {
@@ -462,6 +496,20 @@ pub fn run() -> i32 {
                 ask_ai_lenient: cli.ask_ai_lenient,
                 cli_trust_level,
                 cli_safety_level,
+                profile_override: profile,
+            },
+        ),
+        // Bare-form back-compat: route to Claude adapter using top-level --profile.
+        None => claude::run_hook(
+            rules_config,
+            &home_dir(),
+            claude::HookOptions {
+                ask_on_deny: cli.ask_on_deny,
+                ask_ai: cli.ask_ai || cli.ask_ai_lenient,
+                ask_ai_lenient: cli.ask_ai_lenient,
+                cli_trust_level,
+                cli_safety_level,
+                profile_override: cli.profile,
             },
         ),
     }
@@ -961,6 +1009,7 @@ mod tests {
         match cli.command {
             Some(Commands::Hook {
                 adapter: HookAdapter::Codex,
+                ..
             }) => {}
             other => panic!("expected Hook(Codex), got {other:?}"),
         }
@@ -972,6 +1021,7 @@ mod tests {
         match cli.command {
             Some(Commands::Hook {
                 adapter: HookAdapter::Claude,
+                ..
             }) => {}
             other => panic!("expected Hook(Claude), got {other:?}"),
         }
@@ -989,9 +1039,40 @@ mod tests {
         match cli.command {
             Some(Commands::Hook {
                 adapter: HookAdapter::Codex,
+                ..
             }) => {}
             other => panic!("expected Hook(Codex), got {other:?}"),
         }
         assert!(cli.ask_on_deny);
+    }
+
+    // --- --profile flag tests ---
+
+    #[test]
+    fn test_cli_parses_hook_codex_with_profile() {
+        let cli =
+            Cli::try_parse_from(["longline", "hook", "codex", "--profile", "strict"]).unwrap();
+        match cli.command {
+            Some(Commands::Hook { adapter, profile }) => {
+                assert_eq!(adapter, HookAdapter::Codex);
+                assert_eq!(profile.as_deref(), Some("strict"));
+            }
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parses_bare_form_with_profile() {
+        let cli = Cli::try_parse_from(["longline", "--profile", "afterhours"]).unwrap();
+        assert_eq!(cli.profile.as_deref(), Some("afterhours"));
+    }
+
+    #[test]
+    fn test_cli_parses_check_with_profile() {
+        let cli = Cli::try_parse_from(["longline", "check", "--profile", "strict"]).unwrap();
+        match cli.command {
+            Some(Commands::Check { profile, .. }) => assert_eq!(profile.as_deref(), Some("strict")),
+            _ => panic!(),
+        }
     }
 }

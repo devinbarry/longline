@@ -176,13 +176,14 @@ fn action_from_permission_request(input: CodexPermissionRequestInput) -> CodexHo
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(crate) struct HookOptions {
     pub ask_on_deny: bool,
     pub ask_ai: bool,
     pub ask_ai_lenient: bool,
     pub cli_trust_level: Option<policy::TrustLevel>,
     pub cli_safety_level: Option<policy::SafetyLevel>,
+    pub profile_override: Option<String>,
 }
 
 const RUNTIME_LITERAL: &str = "codex";
@@ -217,7 +218,7 @@ fn run_hook_input(
                 options.cli_trust_level,
                 options.cli_safety_level,
                 "codex",
-                None,
+                options.profile_override.as_deref(),
             ) {
                 Ok(c) => c,
                 Err(e) => {
@@ -683,6 +684,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         run_hook_input(embedded_rules(), &home, options, input)
     }
@@ -723,6 +725,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         let json = r#"{"hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{}}"#;
         let exit = run_hook_input(embedded_rules(), &home, options, json);
@@ -739,6 +742,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         let json =
             r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#;
@@ -756,6 +760,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         let json = r#"{"hook_event_name":"FutureCodexEvent"}"#;
         let exit = run_hook_input(embedded_rules(), &home, options, json);
@@ -778,6 +783,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         let exit = run_hook_input(embedded_rules(), &home, options, r#"{"this is not": valid"#);
         assert_eq!(exit, 0);
@@ -800,6 +806,7 @@ mod tests {
             ask_ai_lenient: false,
             cli_trust_level: None,
             cli_safety_level: None,
+            profile_override: None,
         };
         let exit = run_hook_input(
             embedded_rules(),
