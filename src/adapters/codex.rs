@@ -211,17 +211,26 @@ fn run_hook_input(
     match action_from_input_str(input_str) {
         CodexHookAction::Evaluate { event, invocation } => {
             let cwd_path = invocation.cwd().map(PathBuf::from);
-            let final_config = match config::finalize_config(
-                rules_config,
-                home,
-                cwd_path.as_deref(),
-                options.cli_trust_level,
-                options.cli_safety_level,
-                "codex",
-                options.profile_override.as_deref(),
-            ) {
-                Ok(c) => c,
-                Err(e) => {
+            // Phase 1 catch_unwind: wraps profile resolution / config
+            // finalization. A panic OR Err here is a pre-resolution failure,
+            // so the fail-open audit entry carries profile="unresolved".
+            // AssertUnwindSafe is acceptable because longline re-loads config
+            // on every invocation -- no half-initialized state survives a
+            // panic past the early return below.
+            let finalize_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                config::finalize_config(
+                    rules_config,
+                    home,
+                    cwd_path.as_deref(),
+                    options.cli_trust_level,
+                    options.cli_safety_level,
+                    "codex",
+                    options.profile_override.as_deref(),
+                )
+            }));
+            let final_config = match finalize_result {
+                Ok(Ok(c)) => c,
+                Ok(Err(e)) => {
                     eprintln!("longline: {e}");
                     write_fail_open_entry_with_session(
                         home,
@@ -229,6 +238,20 @@ fn run_hook_input(
                         invocation.cwd().unwrap_or(""),
                         invocation.command_or_empty(),
                         &format!("config finalization failed: {e}"),
+                        invocation.session_id().map(String::from),
+                        "unresolved",
+                    );
+                    return 0;
+                }
+                Err(panic) => {
+                    let reason = describe_panic(panic.as_ref());
+                    eprintln!("longline: finalize_config panic: {reason}");
+                    write_fail_open_entry_with_session(
+                        home,
+                        invocation.tool_name(),
+                        invocation.cwd().unwrap_or(""),
+                        invocation.command_or_empty(),
+                        &format!("finalize_config panicked: {reason}"),
                         invocation.session_id().map(String::from),
                         "unresolved",
                     );
@@ -244,16 +267,22 @@ fn run_hook_input(
             let panic_cwd = invocation.cwd().unwrap_or("").to_string();
             let panic_command = invocation.command_or_empty().to_string();
             let panic_session_id = invocation.session_id().map(String::from);
+            // Clone the resolved profile BEFORE moving final_config into the
+            // evaluator. By Phase 2, profile resolution has succeeded, so
+            // the fail-open audit entry carries the resolved name (not
+            // "unresolved").
+            let resolved_profile = final_config.resolved_profile.clone();
 
             let opts = evaluator::EvaluationOptions {
                 ask_on_deny: options.ask_on_deny,
                 ask_ai: options.ask_ai,
                 ask_ai_lenient: options.ask_ai_lenient,
             };
-            // Spec §Fail-Open Posture lists "evaluator panic" as a fail-open
-            // source. catch_unwind ensures a panic anywhere in the evaluator
-            // / parser / policy / AI judge translates to exit 0 + empty
-            // stdout + stderr + JSONL audit entry rather than a crash.
+            // Phase 2 catch_unwind: wraps the evaluator. Spec §Fail-Open
+            // Posture lists "evaluator panic" as a fail-open source.
+            // A panic anywhere in the evaluator / parser / policy / AI
+            // judge translates to exit 0 + empty stdout + stderr + JSONL
+            // audit entry rather than a crash.
             let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 evaluator::evaluate_invocation(
                     final_config,
@@ -279,7 +308,7 @@ fn run_hook_input(
                         &panic_command,
                         &format!("evaluator panic: {reason}"),
                         panic_session_id,
-                        "unresolved",
+                        &resolved_profile,
                     );
                     0
                 }

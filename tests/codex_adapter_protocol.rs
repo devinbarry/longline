@@ -366,6 +366,106 @@ fn fail_open_global_config_preserves_session_id() {
     assert_eq!(entry["session_id"], "session-fail-open-global");
 }
 
+// ---------- Task 11: phased panic guards + pre/post-resolution profile sentinels ----------
+//
+// The Codex adapter runs profile resolution inside a Phase-1 catch_unwind
+// (around finalize_config). On any pre-resolution failure (panic, Err,
+// unknown profile name, malformed input, bad rules manifest), the fail-open
+// audit entry MUST carry profile="unresolved" -- the resolved name is
+// unknown at that point. On the success path, the resolved profile name
+// (e.g. "default", "strict") MUST flow through to the audit entry and
+// MUST NOT be "unresolved".
+
+#[test]
+fn codex_unknown_profile_fails_open_with_unresolved() {
+    // --profile ghost where no profile named "ghost" exists.
+    // resolve_profile_name returns "ghost", then finalize_config rejects
+    // it as unknown -> pre-resolution Err -> fail-open with "unresolved".
+    let env = TestEnv::new().build();
+    let result = run_longline(
+        &["hook", "codex", "--profile", "ghost"],
+        env.home_path(),
+        Some(&codex_input("PreToolUse", "Bash", "ls")),
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    assert_eq!(result.stdout, "");
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(
+        entry["profile"], "unresolved",
+        "unknown profile must produce profile=unresolved; entry={entry}"
+    );
+}
+
+#[test]
+fn codex_malformed_input_fail_open_uses_unresolved() {
+    // Pre-resolution failure: stdin is not valid JSON. The Malformed
+    // branch in run_hook_input writes the fail-open audit entry with
+    // profile="unresolved" because finalize_config never ran.
+    let env = TestEnv::new().build();
+    let result = run_codex(&env, "this is not valid json at all");
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["profile"], "unresolved");
+    assert_eq!(entry["parse_ok"], false);
+}
+
+#[test]
+fn codex_bad_rules_manifest_fail_open_uses_unresolved() {
+    // Pre-resolution failure: --config points at a corrupt rules manifest.
+    // The cli.rs codex-hook fail-open path fires BEFORE finalize_config
+    // can resolve a profile, so profile="unresolved".
+    let env = TestEnv::new().build();
+    let manifest = env.home_path().join("bad-rules.yaml");
+    std::fs::write(&manifest, "{ this is not valid yaml at all !!! :::").unwrap();
+    let manifest_str = manifest.to_string_lossy().to_string();
+    let result = run_longline(
+        &["--config", &manifest_str, "hook", "codex"],
+        env.home_path(),
+        Some(&codex_input("PreToolUse", "Bash", "ls")),
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("fail-open log entry written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(entry["profile"], "unresolved");
+}
+
+#[test]
+fn codex_success_path_writes_resolved_profile_name() {
+    // Post-resolution success: --profile strict resolves to a declared
+    // profile. The audit entry must carry "strict", not "unresolved".
+    let env = TestEnv::new()
+        .with_global_config("profiles:\n  strict: {}\n")
+        .build();
+    // Use a Bash command that produces a deny -> guaranteed JSONL entry.
+    let result = run_longline(
+        &["hook", "codex", "--profile", "strict"],
+        env.home_path(),
+        Some(&codex_input("PreToolUse", "Bash", "rm -rf /")),
+    );
+    assert_eq!(result.exit_code, 0, "stderr: {}", result.stderr);
+    let log = env.home_path().join(".codex/hooks-logs/longline.jsonl");
+    let content = std::fs::read_to_string(&log).expect("audit log written");
+    let last = content.lines().rfind(|l| !l.is_empty()).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(last).unwrap();
+    assert_eq!(entry["runtime"], "codex");
+    assert_eq!(
+        entry["profile"], "strict",
+        "resolved profile name must flow to audit entry; entry={entry}"
+    );
+    assert_ne!(entry["profile"], "unresolved");
+}
+
 #[test]
 fn fail_open_malformed_input_preserves_session_id() {
     let env = TestEnv::new().build();
