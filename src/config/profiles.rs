@@ -43,6 +43,34 @@ pub type Profiles = BTreeMap<String, ProfileEntry>;
 pub const UNRESOLVED_SENTINEL: &str = "unresolved";
 pub const DEFAULT_NAME: &str = "default";
 
+/// Resolve the profile name for this invocation.
+///
+/// Precedence (highest first):
+/// 1. CLI flag (`cli_override`)
+/// 2. Project `defaults.<runtime>`
+/// 3. Global `defaults.<runtime>`
+/// 4. Built-in fallback: `"default"`.
+///
+/// Pure function behind a single seam — adding env-var selection later
+/// is a one-line patch between steps 1 and 2.
+pub fn resolve_profile_name(
+    runtime: &str,
+    cli_override: Option<&str>,
+    project_defaults: Option<&Defaults>,
+    global_defaults: Option<&Defaults>,
+) -> String {
+    if let Some(n) = cli_override {
+        return n.to_string();
+    }
+    if let Some(n) = project_defaults.and_then(|d| d.for_runtime(runtime)) {
+        return n.to_string();
+    }
+    if let Some(n) = global_defaults.and_then(|d| d.for_runtime(runtime)) {
+        return n.to_string();
+    }
+    DEFAULT_NAME.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +139,69 @@ ai_judge:
     fn test_defaults_rejects_unknown_runtime_key() {
         let result: Result<Defaults, _> = serde_norway::from_str("windsurf: foo\n");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_profile_name_cli_wins() {
+        let proj = Defaults {
+            claude: Some("p-c".into()),
+            codex: Some("p-x".into()),
+        };
+        let glob = Defaults {
+            claude: Some("g-c".into()),
+            codex: Some("g-x".into()),
+        };
+        assert_eq!(
+            resolve_profile_name("codex", Some("flag"), Some(&proj), Some(&glob)),
+            "flag"
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_name_project_beats_global() {
+        let proj = Defaults {
+            claude: Some("p-c".into()),
+            codex: None,
+        };
+        let glob = Defaults {
+            claude: Some("g-c".into()),
+            codex: Some("g-x".into()),
+        };
+        assert_eq!(
+            resolve_profile_name("claude", None, Some(&proj), Some(&glob)),
+            "p-c"
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_name_falls_through_to_global() {
+        let glob = Defaults {
+            claude: None,
+            codex: Some("g-x".into()),
+        };
+        assert_eq!(
+            resolve_profile_name("codex", None, None, Some(&glob)),
+            "g-x"
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_name_builtin_fallback() {
+        assert_eq!(
+            resolve_profile_name("codex", None, None, None),
+            DEFAULT_NAME
+        );
+        assert_eq!(
+            resolve_profile_name("claude", None, None, None),
+            DEFAULT_NAME
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_name_unknown_runtime_falls_to_default() {
+        assert_eq!(
+            resolve_profile_name("windsurf", None, None, None),
+            DEFAULT_NAME
+        );
     }
 }
