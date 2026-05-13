@@ -139,6 +139,160 @@ pub fn resolve_profile_name(
     DEFAULT_NAME.to_string()
 }
 
+/// Apply a profile entry's contributions to `config` with asymmetric
+/// id-replacement: same-id rules are removed from the accumulator
+/// regardless of source layer before the profile's rule is pushed.
+///
+/// This is the structural surface that distinguishes profile-layer
+/// application (spec layers 4-5) from top-level overlay merge (layers
+/// 2-3). It is **not interchangeable** with `merge_overlay_config`.
+///
+/// Tracks `ai_judge.prompt` replacement into `project_ai_prompt` when
+/// the profile entry sets a non-empty prompt. The caller decides
+/// whether to consume that or discard it.
+pub fn apply_profile_overlay_full(
+    config: &mut crate::config::rules::RulesConfig,
+    entry: &ProfileEntry,
+    source: crate::config::overlays::RuleSource,
+    project_ai_prompt: &mut Option<String>,
+) -> Vec<(String, crate::config::overlays::RuleSource)> {
+    let mut removed: Vec<(String, crate::config::overlays::RuleSource)> = Vec::new();
+    if let Some(level) = entry.safety_level {
+        config.safety_level = level;
+    }
+    if let Some(rules) = entry.rules.as_ref() {
+        for rule in rules.iter().cloned() {
+            let mut rule = rule;
+            rule.source = source;
+            // Capture the prior rule's source BEFORE removing it from the accumulator.
+            if let Some(prior) = config.rules.iter().find(|r| r.id == rule.id) {
+                removed.push((rule.id.clone(), prior.source));
+            }
+            config.rules.retain(|r| r.id != rule.id);
+            config.rules.push(rule);
+        }
+    }
+    if let Some(allow) = entry.allowlists.as_ref() {
+        for ae in allow.commands.iter().cloned() {
+            let mut ae = ae;
+            ae.source = source;
+            config.allowlists.commands.push(ae);
+        }
+        config.allowlists.paths.extend(allow.paths.iter().cloned());
+    }
+    if let Some(aj) = entry.ai_judge.as_ref() {
+        if let Some(prompt) = aj.prompt.as_deref() {
+            if !prompt.trim().is_empty() {
+                *project_ai_prompt = Some(prompt.to_string());
+            }
+        }
+    }
+    removed
+}
+
+/// Convenience wrapper when the caller doesn't need prompt tracking or
+/// replacement metadata. Discards both return channels.
+pub fn apply_profile_overlay(
+    config: &mut crate::config::rules::RulesConfig,
+    entry: &ProfileEntry,
+    source: crate::config::overlays::RuleSource,
+) {
+    let mut discard: Option<String> = None;
+    let _ = apply_profile_overlay_full(config, entry, source, &mut discard);
+}
+
+/// Validate that no profile name has its `extends:` redeclared across
+/// overlays, and return the union of profile names across the two maps.
+///
+/// Predicate is **project-declaration based** (spec §3): the conflict
+/// fires only when the project overlay declares `extends:` for a profile
+/// that is also declared in the global overlay. The canonical
+/// "project adds rules/allowlist/safety_level to a globally-defined
+/// profile" case (global declares `strict.extends: default`, project
+/// silent) is NOT a conflict — the edge is fixed at the first
+/// declaration site (global) and the project may freely extend the
+/// profile body without redeclaring the parent.
+pub fn check_and_merge_profile_names(
+    global: &Profiles,
+    project: &Profiles,
+    global_path: Option<&std::path::Path>,
+    project_path: Option<&std::path::Path>,
+) -> Result<std::collections::BTreeSet<String>, String> {
+    let mut names = std::collections::BTreeSet::new();
+    let g_label = match global_path {
+        Some(p) => format!("global {}", p.display()),
+        None => "global".to_string(),
+    };
+    let p_label = match project_path {
+        Some(p) => format!("project {}", p.display()),
+        None => "project".to_string(),
+    };
+    for (name, g_entry) in global {
+        names.insert(name.clone());
+        if let Some(p_entry) = project.get(name) {
+            if let Some(p_target) = p_entry.extends.as_deref() {
+                // Project declared extends. Conflict regardless of
+                // whether global declared anything — the inheritance
+                // edge is fixed at the first declaration site.
+                let (g_target_str, g_decl_label) = match g_entry.extends.as_deref() {
+                    Some(g) => (g.to_string(), "explicit"),
+                    None => ("default".to_string(), "implicit"),
+                };
+                return Err(format!(
+                    "profile '{name}' has conflicting extends: across overlays\n\
+                     {g_label}: extends '{g_target_str}' ({g_decl_label})\n\
+                     {p_label}: extends '{p_target}'\n\
+                     Profile inheritance edges may not be redeclared across overlays; \
+                     if this project needs a different parent, use a new profile name."
+                ));
+            }
+            // Project did NOT declare extends — no conflict.
+        }
+    }
+    for name in project.keys() {
+        names.insert(name.clone());
+    }
+    Ok(names)
+}
+
+/// Validate profile map content:
+/// - Rejects the reserved name `UNRESOLVED_SENTINEL`.
+/// - Validates `ai_judge.prompt` placeholders for each profile entry.
+/// - Ensures `defaults.<runtime>` targets exist in the map (or equal `DEFAULT_NAME`).
+pub fn validate_profiles(profiles: &Profiles, defaults: Option<&Defaults>) -> Result<(), String> {
+    if profiles.contains_key(UNRESOLVED_SENTINEL) {
+        return Err(format!(
+            "profile name '{UNRESOLVED_SENTINEL}' is reserved (used in audit log fail-open entries)"
+        ));
+    }
+    for (name, entry) in profiles {
+        if let Some(aj) = entry.ai_judge.as_ref() {
+            if let Some(prompt) = aj.prompt.as_deref() {
+                if !prompt.trim().is_empty() {
+                    let label =
+                        std::path::PathBuf::from(format!("profiles.{name}.ai_judge.prompt"));
+                    crate::config::prompt::validate_ai_judge_prompt(prompt, &label)?;
+                }
+            }
+        }
+    }
+    if let Some(d) = defaults {
+        for (runtime, target) in [
+            ("claude", d.claude.as_deref()),
+            ("codex", d.codex.as_deref()),
+        ] {
+            if let Some(t) = target {
+                if t != DEFAULT_NAME && !profiles.contains_key(t) {
+                    return Err(format!(
+                        "defaults.{runtime} references profile '{t}' which is not defined"
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,158 +810,4 @@ rules:
         let err = validate_profiles(&p, None).unwrap_err();
         assert!(err.contains("placeholder"), "got: {err}");
     }
-}
-
-/// Apply a profile entry's contributions to `config` with asymmetric
-/// id-replacement: same-id rules are removed from the accumulator
-/// regardless of source layer before the profile's rule is pushed.
-///
-/// This is the structural surface that distinguishes profile-layer
-/// application (spec layers 4-5) from top-level overlay merge (layers
-/// 2-3). It is **not interchangeable** with `merge_overlay_config`.
-///
-/// Tracks `ai_judge.prompt` replacement into `project_ai_prompt` when
-/// the profile entry sets a non-empty prompt. The caller decides
-/// whether to consume that or discard it.
-pub fn apply_profile_overlay_full(
-    config: &mut crate::config::rules::RulesConfig,
-    entry: &ProfileEntry,
-    source: crate::config::overlays::RuleSource,
-    project_ai_prompt: &mut Option<String>,
-) -> Vec<(String, crate::config::overlays::RuleSource)> {
-    let mut removed: Vec<(String, crate::config::overlays::RuleSource)> = Vec::new();
-    if let Some(level) = entry.safety_level {
-        config.safety_level = level;
-    }
-    if let Some(rules) = entry.rules.as_ref() {
-        for rule in rules.iter().cloned() {
-            let mut rule = rule;
-            rule.source = source;
-            // Capture the prior rule's source BEFORE removing it from the accumulator.
-            if let Some(prior) = config.rules.iter().find(|r| r.id == rule.id) {
-                removed.push((rule.id.clone(), prior.source));
-            }
-            config.rules.retain(|r| r.id != rule.id);
-            config.rules.push(rule);
-        }
-    }
-    if let Some(allow) = entry.allowlists.as_ref() {
-        for ae in allow.commands.iter().cloned() {
-            let mut ae = ae;
-            ae.source = source;
-            config.allowlists.commands.push(ae);
-        }
-        config.allowlists.paths.extend(allow.paths.iter().cloned());
-    }
-    if let Some(aj) = entry.ai_judge.as_ref() {
-        if let Some(prompt) = aj.prompt.as_deref() {
-            if !prompt.trim().is_empty() {
-                *project_ai_prompt = Some(prompt.to_string());
-            }
-        }
-    }
-    removed
-}
-
-/// Convenience wrapper when the caller doesn't need prompt tracking or
-/// replacement metadata. Discards both return channels.
-pub fn apply_profile_overlay(
-    config: &mut crate::config::rules::RulesConfig,
-    entry: &ProfileEntry,
-    source: crate::config::overlays::RuleSource,
-) {
-    let mut discard: Option<String> = None;
-    let _ = apply_profile_overlay_full(config, entry, source, &mut discard);
-}
-
-/// Validate that no profile name has its `extends:` redeclared across
-/// overlays, and return the union of profile names across the two maps.
-///
-/// Predicate is **project-declaration based** (spec §3): the conflict
-/// fires only when the project overlay declares `extends:` for a profile
-/// that is also declared in the global overlay. The canonical
-/// "project adds rules/allowlist/safety_level to a globally-defined
-/// profile" case (global declares `strict.extends: default`, project
-/// silent) is NOT a conflict — the edge is fixed at the first
-/// declaration site (global) and the project may freely extend the
-/// profile body without redeclaring the parent.
-pub fn check_and_merge_profile_names(
-    global: &Profiles,
-    project: &Profiles,
-    global_path: Option<&std::path::Path>,
-    project_path: Option<&std::path::Path>,
-) -> Result<std::collections::BTreeSet<String>, String> {
-    let mut names = std::collections::BTreeSet::new();
-    let g_label = match global_path {
-        Some(p) => format!("global {}", p.display()),
-        None => "global".to_string(),
-    };
-    let p_label = match project_path {
-        Some(p) => format!("project {}", p.display()),
-        None => "project".to_string(),
-    };
-    for (name, g_entry) in global {
-        names.insert(name.clone());
-        if let Some(p_entry) = project.get(name) {
-            if let Some(p_target) = p_entry.extends.as_deref() {
-                // Project declared extends. Conflict regardless of
-                // whether global declared anything — the inheritance
-                // edge is fixed at the first declaration site.
-                let (g_target_str, g_decl_label) = match g_entry.extends.as_deref() {
-                    Some(g) => (g.to_string(), "explicit"),
-                    None => ("default".to_string(), "implicit"),
-                };
-                return Err(format!(
-                    "profile '{name}' has conflicting extends: across overlays\n\
-                     {g_label}: extends '{g_target_str}' ({g_decl_label})\n\
-                     {p_label}: extends '{p_target}'\n\
-                     Profile inheritance edges may not be redeclared across overlays; \
-                     if this project needs a different parent, use a new profile name."
-                ));
-            }
-            // Project did NOT declare extends — no conflict.
-        }
-    }
-    for name in project.keys() {
-        names.insert(name.clone());
-    }
-    Ok(names)
-}
-
-/// Validate profile map content:
-/// - Rejects the reserved name `UNRESOLVED_SENTINEL`.
-/// - Validates `ai_judge.prompt` placeholders for each profile entry.
-/// - Ensures `defaults.<runtime>` targets exist in the map (or equal `DEFAULT_NAME`).
-pub fn validate_profiles(profiles: &Profiles, defaults: Option<&Defaults>) -> Result<(), String> {
-    if profiles.contains_key(UNRESOLVED_SENTINEL) {
-        return Err(format!(
-            "profile name '{UNRESOLVED_SENTINEL}' is reserved (used in audit log fail-open entries)"
-        ));
-    }
-    for (name, entry) in profiles {
-        if let Some(aj) = entry.ai_judge.as_ref() {
-            if let Some(prompt) = aj.prompt.as_deref() {
-                if !prompt.trim().is_empty() {
-                    let label =
-                        std::path::PathBuf::from(format!("profiles.{name}.ai_judge.prompt"));
-                    crate::config::prompt::validate_ai_judge_prompt(prompt, &label)?;
-                }
-            }
-        }
-    }
-    if let Some(d) = defaults {
-        for (runtime, target) in [
-            ("claude", d.claude.as_deref()),
-            ("codex", d.codex.as_deref()),
-        ] {
-            if let Some(t) = target {
-                if t != DEFAULT_NAME && !profiles.contains_key(t) {
-                    return Err(format!(
-                        "defaults.{runtime} references profile '{t}' which is not defined"
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
 }
