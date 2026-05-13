@@ -369,7 +369,7 @@ ai_judge:
         g.insert("strict".into(), mk(Some("default")));
         let mut p: Profiles = Profiles::new();
         p.insert("paranoid".into(), mk(Some("strict")));
-        let names = check_and_merge_profile_names(&g, &p).unwrap();
+        let names = check_and_merge_profile_names(&g, &p, None, None).unwrap();
         let mut sorted = names.iter().cloned().collect::<Vec<_>>();
         sorted.sort();
         assert_eq!(sorted, vec!["paranoid", "strict"]);
@@ -381,23 +381,41 @@ ai_judge:
         g.insert("strict".into(), mk(Some("default")));
         let mut p: Profiles = Profiles::new();
         p.insert("strict".into(), mk(Some("hardened")));
-        let err = check_and_merge_profile_names(&g, &p).unwrap_err();
+        let err = check_and_merge_profile_names(&g, &p, None, None).unwrap_err();
         assert!(err.contains("strict") && err.contains("default") && err.contains("hardened"));
         assert!(err.contains("conflicting extends"));
+        assert!(err.contains("(explicit)"));
     }
 
     #[test]
     fn test_merge_names_extends_redeclared_equal_target_also_errors() {
-        // Spec §3 (post-R2): presence-based check, not value-based.
-        // Global with no extends (implicit default) + project with explicit
-        // extends: default is also a conflict.
+        // Project-declaration-based check (spec §3): global silent +
+        // project declares extends: default is still a conflict because
+        // the project tried to redeclare the inheritance edge. Error
+        // message labels the global side as "(implicit)".
         let mut g: Profiles = Profiles::new();
         g.insert("strict".into(), mk(None));
         let mut p: Profiles = Profiles::new();
         p.insert("strict".into(), mk(Some("default")));
-        let err = check_and_merge_profile_names(&g, &p).unwrap_err();
+        let err = check_and_merge_profile_names(&g, &p, None, None).unwrap_err();
         assert!(err.contains("strict"));
         assert!(err.contains("default") && err.contains("(implicit)"));
+    }
+
+    #[test]
+    fn test_merge_names_global_declares_extends_project_silent_is_ok() {
+        // Canonical case (spec §3 worked example): global declares
+        // strict.extends: default, project adds rules to strict without
+        // redeclaring extends. The project-declaration-based predicate
+        // means this is NOT an error — the project is freely extending
+        // the body of a globally-defined profile.
+        let mut g: Profiles = Profiles::new();
+        g.insert("strict".into(), mk(Some("default")));
+        let mut p: Profiles = Profiles::new();
+        p.insert("strict".into(), mk(None));
+        let names = check_and_merge_profile_names(&g, &p, None, None).unwrap();
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("strict"));
     }
 
     #[test]
@@ -406,7 +424,7 @@ ai_judge:
         let g: Profiles = Profiles::new();
         let mut p: Profiles = Profiles::new();
         p.insert("strict".into(), mk(Some("default")));
-        let names = check_and_merge_profile_names(&g, &p).unwrap();
+        let names = check_and_merge_profile_names(&g, &p, None, None).unwrap();
         assert_eq!(names.len(), 1);
     }
 
@@ -417,8 +435,28 @@ ai_judge:
         g.insert("strict".into(), mk(None));
         let mut p: Profiles = Profiles::new();
         p.insert("strict".into(), mk(None));
-        let names = check_and_merge_profile_names(&g, &p).unwrap();
+        let names = check_and_merge_profile_names(&g, &p, None, None).unwrap();
         assert_eq!(names.len(), 1);
+    }
+
+    #[test]
+    fn test_merge_names_error_message_includes_overlay_paths() {
+        // Spec §3 worked example: error names the overlay file paths.
+        let mut g: Profiles = Profiles::new();
+        g.insert("strict".into(), mk(Some("default")));
+        let mut p: Profiles = Profiles::new();
+        p.insert("strict".into(), mk(Some("hardened")));
+        let g_path = std::path::PathBuf::from("/home/u/.config/longline/longline.yaml");
+        let p_path = std::path::PathBuf::from("/repo/.claude/longline.yaml");
+        let err = check_and_merge_profile_names(&g, &p, Some(&g_path), Some(&p_path)).unwrap_err();
+        assert!(
+            err.contains("/home/u/.config/longline/longline.yaml"),
+            "expected global path in error, got: {err}"
+        );
+        assert!(
+            err.contains("/repo/.claude/longline.yaml"),
+            "expected project path in error, got: {err}"
+        );
     }
 
     #[test]
@@ -682,46 +720,52 @@ pub fn apply_profile_overlay(
     let _ = apply_profile_overlay_full(config, entry, source, &mut discard);
 }
 
-/// Validate that no profile name has its `extends:` declared in both
+/// Validate that no profile name has its `extends:` redeclared across
 /// overlays, and return the union of profile names across the two maps.
 ///
-/// "Declared" is presence-based: omitted `extends:` in one overlay and
-/// explicit `extends:` in the other is also a conflict. Per spec §3 this
-/// eliminates the implicit-vs-explicit `default` edge case.
+/// Predicate is **project-declaration based** (spec §3): the conflict
+/// fires only when the project overlay declares `extends:` for a profile
+/// that is also declared in the global overlay. The canonical
+/// "project adds rules/allowlist/safety_level to a globally-defined
+/// profile" case (global declares `strict.extends: default`, project
+/// silent) is NOT a conflict — the edge is fixed at the first
+/// declaration site (global) and the project may freely extend the
+/// profile body without redeclaring the parent.
 pub fn check_and_merge_profile_names(
     global: &Profiles,
     project: &Profiles,
+    global_path: Option<&std::path::Path>,
+    project_path: Option<&std::path::Path>,
 ) -> Result<std::collections::BTreeSet<String>, String> {
     let mut names = std::collections::BTreeSet::new();
+    let g_label = match global_path {
+        Some(p) => format!("global {}", p.display()),
+        None => "global".to_string(),
+    };
+    let p_label = match project_path {
+        Some(p) => format!("project {}", p.display()),
+        None => "project".to_string(),
+    };
     for (name, g_entry) in global {
         names.insert(name.clone());
         if let Some(p_entry) = project.get(name) {
-            if g_entry.extends.is_some() && p_entry.extends.is_some() {
-                return Err(format!(
-                    "profile '{name}' has conflicting extends: across overlays\n\
-                     global: extends '{}'\n\
-                     project: extends '{}'\n\
-                     Profile inheritance edges may not be redeclared across overlays; \
-                     if this project needs a different parent, use a new profile name.",
-                    g_entry.extends.as_deref().unwrap(),
-                    p_entry.extends.as_deref().unwrap(),
-                ));
-            }
-            if g_entry.extends.is_some() || p_entry.extends.is_some() {
-                // One side omitted → implicit default. Other side declared explicitly.
-                let (decl_overlay, decl_target, omit_overlay) = if g_entry.extends.is_some() {
-                    ("global", g_entry.extends.as_deref().unwrap(), "project")
-                } else {
-                    ("project", p_entry.extends.as_deref().unwrap(), "global")
+            if let Some(p_target) = p_entry.extends.as_deref() {
+                // Project declared extends. Conflict regardless of
+                // whether global declared anything — the inheritance
+                // edge is fixed at the first declaration site.
+                let (g_target_str, g_decl_label) = match g_entry.extends.as_deref() {
+                    Some(g) => (g.to_string(), "explicit"),
+                    None => ("default".to_string(), "implicit"),
                 };
                 return Err(format!(
                     "profile '{name}' has conflicting extends: across overlays\n\
-                     {decl_overlay}: extends '{decl_target}'\n\
-                     {omit_overlay}: extends 'default' (implicit)\n\
+                     {g_label}: extends '{g_target_str}' ({g_decl_label})\n\
+                     {p_label}: extends '{p_target}'\n\
                      Profile inheritance edges may not be redeclared across overlays; \
                      if this project needs a different parent, use a new profile name."
                 ));
             }
+            // Project did NOT declare extends — no conflict.
         }
     }
     for name in project.keys() {

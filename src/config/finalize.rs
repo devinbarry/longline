@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::config::discovery::{load_global_config, load_project_config};
+use crate::config::discovery::{
+    find_project_root, global_config_path, load_global_config, load_project_config,
+    project_config_path,
+};
 use crate::config::overlays::{merge_overlay_config, RuleSource};
 use crate::config::profiles::{
     apply_profile_overlay_full, check_and_merge_profile_names, resolve_profile_name,
@@ -63,7 +66,16 @@ pub fn finalize_config(
     }
 
     // Cross-overlay validation: extends-redeclaration + per-overlay content checks.
-    let merged_names = check_and_merge_profile_names(&global_profiles, &project_profiles)?;
+    // Pass overlay file paths so the error message names them per spec §3.
+    let global_overlay_path = global_config_path(home);
+    let project_overlay_path =
+        project_dir.and_then(|dir| find_project_root(dir).map(|r| project_config_path(&r)));
+    let merged_names = check_and_merge_profile_names(
+        &global_profiles,
+        &project_profiles,
+        Some(global_overlay_path.as_path()),
+        project_overlay_path.as_deref(),
+    )?;
 
     // Build the union so the defaults-target check resolves against the
     // merged name space (a defaults entry in one overlay may target a

@@ -453,6 +453,103 @@ fn back_compat_bare_equals_hook_claude_malformed() {
 }
 
 #[test]
+fn test_profiles_subcommand_errors_on_cycle() {
+    // R18-3: the `profiles` subcommand must run the full validation
+    // pipeline (cycle detection, unknown-extends-target, content) before
+    // emitting output. A cycle previously surfaced silently in the table.
+    let tmp = tempfile::tempdir().unwrap();
+    let config_dir = tmp.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"profiles:
+  a: { extends: b }
+  b: { extends: a }
+"#,
+    )
+    .unwrap();
+
+    let result = support::bin::run_longline(&["profiles"], tmp.path(), None);
+    assert_eq!(
+        result.exit_code, 2,
+        "extends cycle must surface as exit 2; stdout: {} stderr: {}",
+        result.stdout, result.stderr
+    );
+    assert!(
+        result.stderr.contains("cycle"),
+        "stderr must mention the cycle: {}",
+        result.stderr
+    );
+}
+
+#[test]
+fn test_files_subcommand_unknown_profile_exits_2() {
+    // R18-4: `longline files --profile <name>` previously ignored the
+    // flag silently. It must now validate the profile resolves.
+    let tmp = tempfile::tempdir().unwrap();
+    let result = support::bin::run_longline(
+        &["files", "--profile", "ghost-does-not-exist"],
+        tmp.path(),
+        None,
+    );
+    assert_eq!(
+        result.exit_code, 2,
+        "unknown profile must exit 2; stdout: {} stderr: {}",
+        result.stdout, result.stderr
+    );
+    assert!(
+        result.stderr.contains("ghost-does-not-exist"),
+        "stderr must name the unknown profile: {}",
+        result.stderr
+    );
+}
+
+#[test]
+fn test_profiles_subcommand_global_declared_project_silent_ok() {
+    // R18-1: canonical case from spec §3 worked example — global declares
+    // strict.extends: default, project adds rules to strict without
+    // redeclaring extends. Must NOT error.
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+    let config_dir = home.join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"profiles:
+  strict:
+    extends: default
+    safety_level: strict
+"#,
+    )
+    .unwrap();
+
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(project_dir.join(".claude")).unwrap();
+    std::fs::create_dir_all(project_dir.join(".git")).unwrap();
+    std::fs::write(
+        project_dir.join(".claude").join("longline.yaml"),
+        r#"profiles:
+  strict:
+    rules:
+      - id: p-rule
+        level: high
+        match: { command: rm }
+        decision: deny
+        reason: "project rm deny"
+"#,
+    )
+    .unwrap();
+
+    let dir_str = project_dir.to_str().unwrap();
+    let result = support::bin::run_longline(&["--dir", dir_str, "profiles"], home, None);
+    assert_eq!(
+        result.exit_code, 0,
+        "canonical project-adds-to-global-profile case must succeed; stderr: {}",
+        result.stderr
+    );
+}
+
+#[test]
 fn test_bare_form_no_profile_config_emits_default() {
     let tmp = tempfile::tempdir().unwrap();
     let bin = longline_bin();

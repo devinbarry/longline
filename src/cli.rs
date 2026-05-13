@@ -351,11 +351,12 @@ pub fn run() -> i32 {
     let cli = Cli::parse();
 
     // Handle Files command early (needs path before loading)
-    if let Some(Commands::Files { .. }) = &cli.command {
+    if let Some(Commands::Files { profile }) = &cli.command {
         return run_files(
             cli.config.as_ref(),
             cli.trust_level.as_ref(),
             cli.dir.as_ref(),
+            profile.as_deref(),
         );
     }
 
@@ -761,7 +762,36 @@ fn run_files(
     config_path: Option<&PathBuf>,
     trust_override: Option<&TrustLevelArg>,
     dir_override: Option<&PathBuf>,
+    profile: Option<&str>,
 ) -> i32 {
+    // Validate the requested profile resolves before printing the file
+    // list. The list itself is profile-independent, but the user
+    // expectation is that `--profile <name>` either applies or errors.
+    // Silently ignoring the flag is a footgun.
+    if profile.is_some() {
+        let base = match load_config(config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("longline: {e}");
+                return 2;
+            }
+        };
+        let project_dir = resolve_dir(dir_override);
+        let trust = trust_override.map(TrustLevelArg::to_trust_level);
+        if let Err(e) = config::finalize_config(
+            base,
+            &home_dir(),
+            project_dir.as_deref(),
+            trust,
+            None,
+            "claude",
+            profile,
+        ) {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    }
+
     let loaded = if let Some(path) = config_path {
         match policy::load_rules_with_info(path) {
             Ok(c) => c,
@@ -937,6 +967,55 @@ fn run_profiles(runtime: Option<String>, json: bool, dir_override: Option<&PathB
         .as_ref()
         .and_then(|p| p.profiles.clone())
         .unwrap_or_default();
+
+    // Validate before display: a cycle, unknown extends target, or
+    // cross-overlay extends conflict must surface as exit 2 rather than
+    // silently appearing in the output table.
+    let g_overlay_path = config::global_config_path(&home);
+    let p_overlay_path = project_dir
+        .as_deref()
+        .and_then(config::find_project_root)
+        .map(|r| config::project_config_path(&r));
+    let merged_names = match longline::config::profiles::check_and_merge_profile_names(
+        &g_prof,
+        &p_prof,
+        Some(g_overlay_path.as_path()),
+        p_overlay_path.as_deref(),
+    ) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    };
+    // Build union for content + chain validation against the merged
+    // namespace (mirrors finalize_config's cartesian validation).
+    let mut union = g_prof.clone();
+    for (k, v) in &p_prof {
+        union.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+    if let Err(e) = longline::config::profiles::validate_profiles(&union, p_defaults.as_ref()) {
+        eprintln!("longline: {e}");
+        return 2;
+    }
+    if let Err(e) = longline::config::profiles::validate_profiles(&union, g_defaults.as_ref()) {
+        eprintln!("longline: {e}");
+        return 2;
+    }
+    if let Err(e) = longline::config::profiles::validate_profiles(&g_prof, None) {
+        eprintln!("longline: {e}");
+        return 2;
+    }
+    if let Err(e) = longline::config::profiles::validate_profiles(&p_prof, None) {
+        eprintln!("longline: {e}");
+        return 2;
+    }
+    for name in &merged_names {
+        if let Err(e) = longline::config::profiles::walk_extends_chain(name, &union) {
+            eprintln!("longline: {e}");
+            return 2;
+        }
+    }
 
     // Resolve the active profile name + source label for a runtime.
     let resolve_runtime = |rt: &str| -> (String, &'static str) {
