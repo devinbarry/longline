@@ -13,6 +13,11 @@ pub struct FinalConfig {
     pub rules: RulesConfig,
     pub project_ai_prompt: Option<String>,
     pub resolved_profile: String,
+    /// (rule_id, prior_source) for every same-id rule that a profile-layer
+    /// rule replaced during application. Consumed by `longline rules
+    /// --profile <name>` to annotate weakening overrides; ignored by hook
+    /// hot paths.
+    pub replaced_ids: Vec<(String, RuleSource)>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -94,23 +99,26 @@ pub fn finalize_config(
     }
 
     // Walk and apply: two calls per chain step (global, then project).
+    let mut replaced_ids: Vec<(String, RuleSource)> = Vec::new();
     let chain = walk_extends_chain(&resolved, &union)?;
     for (name, _entry_from_union) in &chain {
         if let Some(g_entry) = global_profiles.get(name) {
-            apply_profile_overlay_full(
+            let r = apply_profile_overlay_full(
                 &mut config,
                 g_entry,
                 RuleSource::Global,
                 &mut project_ai_prompt,
             );
+            replaced_ids.extend(r);
         }
         if let Some(p_entry) = project_profiles.get(name) {
-            apply_profile_overlay_full(
+            let r = apply_profile_overlay_full(
                 &mut config,
                 p_entry,
                 RuleSource::Project,
                 &mut project_ai_prompt,
             );
+            replaced_ids.extend(r);
         }
     }
 
@@ -126,6 +134,7 @@ pub fn finalize_config(
         rules: config,
         project_ai_prompt,
         resolved_profile: resolved,
+        replaced_ids,
     })
 }
 

@@ -338,6 +338,53 @@ fn test_profiles_table_merged_source_sums_counts() {
     );
 }
 
+// ── rules --profile annotates replaced builtins ────────────────────────
+
+#[test]
+fn test_rules_subcommand_annotates_replaced_builtins() {
+    // Spec §5/§10: when a profile redefines a same-id rule that already
+    // exists at a prior layer (here: the builtin `rm-recursive-root`),
+    // `longline rules --profile <name>` must annotate the weakening so a
+    // user inspecting the profile can see which builtins it neutralized.
+    let tmp = tempfile::tempdir().unwrap();
+    let config_dir = tmp.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"
+profiles:
+  weaken:
+    rules:
+      - id: rm-recursive-root
+        level: high
+        match: { command: rm }
+        decision: allow
+        reason: "weaken: allow rm (test fixture)"
+"#,
+    )
+    .unwrap();
+
+    let result = support::bin::run_longline(&["rules", "--profile", "weaken"], tmp.path(), None);
+    assert_eq!(
+        result.exit_code, 0,
+        "exit code should be 0; stderr: {}",
+        result.stderr
+    );
+    let s = &result.stdout;
+    assert!(
+        s.contains("overrides"),
+        "rules output must annotate profile-overrides-builtin: {s}"
+    );
+    assert!(
+        s.contains("rm-recursive-root"),
+        "annotation must name the replaced id: {s}"
+    );
+    assert!(
+        s.contains("from builtin"),
+        "annotation must name the prior source: {s}"
+    );
+}
+
 // ── Back-compat: bare `longline` ≡ `longline hook claude` ──────────────
 
 #[test]

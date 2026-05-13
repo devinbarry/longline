@@ -566,6 +566,40 @@ rules:
         assert!(prompt_out.unwrap().contains("hi"));
     }
 
+    /// Structural guard — `merge_overlay_config` accepts only `ProjectConfig`,
+    /// `apply_profile_overlay_full` accepts only `&ProfileEntry`. They are
+    /// distinct types; a refactor that confused them would not compile.
+    ///
+    /// This test exists to make the invariant explicit and visible. We
+    /// assert each function pointer can be assigned to a concrete signature
+    /// that pins its input type — if the types were aliased or made
+    /// interchangeable, the assignment would still compile but a downstream
+    /// reviewer reading this test would see the structural intent.
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn test_profile_entry_and_project_config_are_distinct_types() {
+        // Pin merge_overlay_config to a fn pointer that requires ProjectConfig.
+        let _merge: fn(
+            &mut crate::config::rules::RulesConfig,
+            crate::config::overlays::ProjectConfig,
+            crate::config::overlays::RuleSource,
+        ) = crate::config::overlays::merge_overlay_config;
+
+        // Pin apply_profile_overlay_full to a fn pointer requiring &ProfileEntry.
+        let _apply: fn(
+            &mut crate::config::rules::RulesConfig,
+            &ProfileEntry,
+            crate::config::overlays::RuleSource,
+            &mut Option<String>,
+        ) -> Vec<(String, crate::config::overlays::RuleSource)> = apply_profile_overlay_full;
+
+        // The following swap would not compile (left here as a comment so
+        // anyone refactoring sees the structural fact):
+        //
+        //   let _swap: fn(_, ProfileEntry, _) = merge_overlay_config;
+        //     // error[E0308]: expected ProjectConfig, found ProfileEntry
+    }
+
     #[test]
     fn test_validate_ai_judge_prompt_placeholders_required() {
         let mut p: Profiles = Profiles::new();
@@ -602,7 +636,8 @@ pub fn apply_profile_overlay_full(
     entry: &ProfileEntry,
     source: crate::config::overlays::RuleSource,
     project_ai_prompt: &mut Option<String>,
-) {
+) -> Vec<(String, crate::config::overlays::RuleSource)> {
+    let mut removed: Vec<(String, crate::config::overlays::RuleSource)> = Vec::new();
     if let Some(level) = entry.safety_level {
         config.safety_level = level;
     }
@@ -610,6 +645,10 @@ pub fn apply_profile_overlay_full(
         for rule in rules.iter().cloned() {
             let mut rule = rule;
             rule.source = source;
+            // Capture the prior rule's source BEFORE removing it from the accumulator.
+            if let Some(prior) = config.rules.iter().find(|r| r.id == rule.id) {
+                removed.push((rule.id.clone(), prior.source));
+            }
             config.rules.retain(|r| r.id != rule.id);
             config.rules.push(rule);
         }
@@ -629,16 +668,18 @@ pub fn apply_profile_overlay_full(
             }
         }
     }
+    removed
 }
 
-/// Convenience wrapper when the caller doesn't need prompt tracking.
+/// Convenience wrapper when the caller doesn't need prompt tracking or
+/// replacement metadata. Discards both return channels.
 pub fn apply_profile_overlay(
     config: &mut crate::config::rules::RulesConfig,
     entry: &ProfileEntry,
     source: crate::config::overlays::RuleSource,
 ) {
     let mut discard: Option<String> = None;
-    apply_profile_overlay_full(config, entry, source, &mut discard);
+    let _ = apply_profile_overlay_full(config, entry, source, &mut discard);
 }
 
 /// Validate that no profile name has its `extends:` declared in both

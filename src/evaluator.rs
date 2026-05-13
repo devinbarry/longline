@@ -585,6 +585,7 @@ mod tests {
             rules,
             project_ai_prompt: None,
             resolved_profile: "default".to_string(),
+            replaced_ids: Vec::new(),
         }
     }
 

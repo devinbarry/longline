@@ -437,8 +437,8 @@ pub fn run() -> i32 {
         _ => None,
     };
 
-    let (rules_config, project_config_path) = if is_hook_mode {
-        (base_config, None)
+    let (rules_config, project_config_path, replaced_ids) = if is_hook_mode {
+        (base_config, None, Vec::new())
     } else {
         let project_dir = resolve_dir(cli.dir.as_ref());
         let final_config = match config::finalize_config(
@@ -458,9 +458,10 @@ pub fn run() -> i32 {
         };
         let rules_config = final_config.rules;
         let _project_ai_prompt = final_config.project_ai_prompt;
+        let replaced_ids = final_config.replaced_ids;
 
         let pcp = project_dir.and_then(|dir| config::existing_project_config_path(&dir));
-        (rules_config, pcp)
+        (rules_config, pcp, replaced_ids)
     };
 
     match cli.command {
@@ -480,6 +481,7 @@ pub fn run() -> i32 {
             level,
             group_by,
             project_config_path.as_ref(),
+            &replaced_ids,
         ),
         Some(Commands::Files { .. }) => unreachable!(), // handled above
         Some(Commands::Init { .. }) => unreachable!(),  // handled above
@@ -618,6 +620,16 @@ fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
     }
 }
 
+/// Map a RuleSource to its lowercase label, matching the existing
+/// `--filter source:<label>` parsing surface.
+fn rule_source_label(s: policy::RuleSource) -> &'static str {
+    match s {
+        policy::RuleSource::BuiltIn => "builtin",
+        policy::RuleSource::Global => "global",
+        policy::RuleSource::Project => "project",
+    }
+}
+
 fn run_rules(
     config: &policy::RulesConfig,
     verbose: bool,
@@ -625,6 +637,7 @@ fn run_rules(
     level: Option<LevelFilter>,
     group_by: Option<GroupBy>,
     project_config_path: Option<&PathBuf>,
+    replaced_ids: &[(String, policy::RuleSource)],
 ) -> i32 {
     print_global_config_banner();
 
@@ -680,6 +693,26 @@ fn run_rules(
                 println!("{}", crate::output::rules_table(&rules));
             }
         }
+    }
+
+    // Per spec §5/§10: annotate profile-source rules whose ids replaced a
+    // same-id rule from a prior layer. Without this surface, a profile that
+    // neutralizes a builtin deny (by redefining it as `allow`) would look
+    // identical to a profile that just added a new rule -- the weakening
+    // would be invisible to `longline rules --profile X`. The annotation
+    // prints below the table on its own line, regardless of --filter, so it
+    // remains visible even when source:project filters are applied.
+    if !replaced_ids.is_empty() {
+        println!();
+        println!("Profile overrides (same-id replacements from prior layers):");
+        for (id, prior_source) in replaced_ids {
+            println!(
+                "  [overrides id '{}' from {}]",
+                id,
+                rule_source_label(*prior_source)
+            );
+        }
+        println!();
     }
 
     // Filter allowlist entries by trust level (evaluation cutoff -- unchanged)
