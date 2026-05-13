@@ -574,6 +574,7 @@ mod tests {
         longline::config::FinalConfig {
             rules,
             project_ai_prompt: None,
+            resolved_profile: "default".to_string(),
         }
     }
 

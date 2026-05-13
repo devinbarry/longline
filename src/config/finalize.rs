@@ -1,39 +1,120 @@
 use std::path::Path;
 
 use crate::config::discovery::{load_global_config, load_project_config};
-use crate::config::overlays::{merge_overlay_config, merge_project_config, RuleSource};
+use crate::config::overlays::{merge_overlay_config, RuleSource};
+use crate::config::profiles::{
+    apply_profile_overlay_full, check_and_merge_profile_names, resolve_profile_name,
+    validate_profiles, walk_extends_chain, DEFAULT_NAME,
+};
 use crate::config::rules::{RulesConfig, SafetyLevel, TrustLevel};
 
 #[derive(Debug)]
 pub struct FinalConfig {
     pub rules: RulesConfig,
     pub project_ai_prompt: Option<String>,
+    pub resolved_profile: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn finalize_config(
     mut config: RulesConfig,
     home: &Path,
     project_dir: Option<&Path>,
     cli_trust_level: Option<TrustLevel>,
     cli_safety_level: Option<SafetyLevel>,
+    runtime: &str,
+    profile_override: Option<&str>,
 ) -> Result<FinalConfig, String> {
-    if let Some(global_config) = load_global_config(home)? {
-        merge_overlay_config(&mut config, global_config, RuleSource::Global);
+    let global_config = load_global_config(home)?;
+    let project_config = match project_dir {
+        Some(dir) => load_project_config(dir)?,
+        None => None,
+    };
+
+    // Detach profile-related fields from each overlay BEFORE moving the
+    // overlay into merge_overlay_config (which consumes ProjectConfig).
+    let (global_defaults, global_profiles) = global_config
+        .as_ref()
+        .map(|g| (g.defaults.clone(), g.profiles.clone().unwrap_or_default()))
+        .unwrap_or_default();
+    let (project_defaults, project_profiles) = project_config
+        .as_ref()
+        .map(|p| (p.defaults.clone(), p.profiles.clone().unwrap_or_default()))
+        .unwrap_or_default();
+
+    if let Some(g) = global_config {
+        merge_overlay_config(&mut config, g, RuleSource::Global);
     }
 
     let mut project_ai_prompt: Option<String> = None;
-    if let Some(dir) = project_dir {
-        if let Some(project_config) = load_project_config(dir)? {
-            project_ai_prompt = project_config
-                .ai_judge
-                .as_ref()
-                .and_then(|a| a.prompt.as_ref())
-                .filter(|prompt| !prompt.trim().is_empty())
-                .cloned();
-            merge_project_config(&mut config, project_config);
+    if let Some(p) = project_config {
+        project_ai_prompt = p
+            .ai_judge
+            .as_ref()
+            .and_then(|a| a.prompt.as_ref())
+            .filter(|s| !s.trim().is_empty())
+            .cloned();
+        merge_overlay_config(&mut config, p, RuleSource::Project);
+    }
+
+    // Cross-overlay validation: extends-redeclaration + per-overlay content checks.
+    let merged_names = check_and_merge_profile_names(&global_profiles, &project_profiles)?;
+
+    // Build the union so the defaults-target check resolves against the
+    // merged name space (a defaults entry in one overlay may target a
+    // profile declared in the other overlay).
+    let mut union = global_profiles.clone();
+    for (k, v) in &project_profiles {
+        union.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+
+    // Content checks per overlay (reserved names, ai_judge prompts) and
+    // defaults-target checks against the union of profile names. The
+    // cartesian (global/project profiles × global/project defaults)
+    // ensures every overlay's defaults entry is validated even when the
+    // referenced profile lives in the other overlay.
+    validate_profiles(&union, project_defaults.as_ref())?;
+    validate_profiles(&union, global_defaults.as_ref())?;
+    validate_profiles(&global_profiles, None)?;
+    validate_profiles(&project_profiles, None)?;
+
+    // Eager extends-chain validation for every merged profile.
+    for name in &merged_names {
+        walk_extends_chain(name, &union)?;
+    }
+
+    let resolved = resolve_profile_name(
+        runtime,
+        profile_override,
+        project_defaults.as_ref(),
+        global_defaults.as_ref(),
+    );
+    if resolved != DEFAULT_NAME && !merged_names.contains(&resolved) {
+        return Err(format!("unknown profile: '{resolved}'"));
+    }
+
+    // Walk and apply: two calls per chain step (global, then project).
+    let chain = walk_extends_chain(&resolved, &union)?;
+    for (name, _entry_from_union) in &chain {
+        if let Some(g_entry) = global_profiles.get(name) {
+            apply_profile_overlay_full(
+                &mut config,
+                g_entry,
+                RuleSource::Global,
+                &mut project_ai_prompt,
+            );
+        }
+        if let Some(p_entry) = project_profiles.get(name) {
+            apply_profile_overlay_full(
+                &mut config,
+                p_entry,
+                RuleSource::Project,
+                &mut project_ai_prompt,
+            );
         }
     }
 
+    // CLI flags apply LAST per the field-precedence ladder.
     if let Some(level) = cli_trust_level {
         config.trust_level = level;
     }
@@ -44,6 +125,7 @@ pub fn finalize_config(
     Ok(FinalConfig {
         rules: config,
         project_ai_prompt,
+        resolved_profile: resolved,
     })
 }
 
@@ -64,7 +146,8 @@ mod tests {
         let original_trust = config.trust_level;
         let original_safety = config.safety_level;
 
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
+        let result =
+            finalize_config(config, home.path(), None, None, None, "claude", None).unwrap();
 
         assert_eq!(result.rules.trust_level, original_trust);
         assert_eq!(result.rules.safety_level, original_safety);
@@ -82,7 +165,8 @@ mod tests {
         .unwrap();
 
         let config = config::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
+        let result =
+            finalize_config(config, home.path(), None, None, None, "claude", None).unwrap();
 
         assert_eq!(result.rules.trust_level, Full);
     }
@@ -113,8 +197,16 @@ mod tests {
         .unwrap();
 
         let config = config::load_embedded_rules().unwrap();
-        let result =
-            finalize_config(config, home.path(), Some(project_dir.path()), None, None).unwrap();
+        let result = finalize_config(
+            config,
+            home.path(),
+            Some(project_dir.path()),
+            None,
+            None,
+            "claude",
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result.rules.trust_level, Minimal,
@@ -154,6 +246,8 @@ mod tests {
             Some(project_dir.path()),
             Some(Standard),
             None,
+            "claude",
+            None,
         )
         .unwrap();
 
@@ -175,7 +269,16 @@ mod tests {
         .unwrap();
 
         let config = config::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), None, None, Some(Critical)).unwrap();
+        let result = finalize_config(
+            config,
+            home.path(),
+            None,
+            None,
+            Some(Critical),
+            "claude",
+            None,
+        )
+        .unwrap();
 
         assert_eq!(
             result.rules.safety_level, Critical,
@@ -195,7 +298,7 @@ mod tests {
         .unwrap();
 
         let config = config::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), None, None, None);
+        let result = finalize_config(config, home.path(), None, None, None, "claude", None);
         assert!(result.is_err(), "Invalid global config should return error");
     }
 
@@ -212,7 +315,15 @@ mod tests {
         .unwrap();
 
         let config = config::load_embedded_rules().unwrap();
-        let result = finalize_config(config, home.path(), Some(project_dir.path()), None, None);
+        let result = finalize_config(
+            config,
+            home.path(),
+            Some(project_dir.path()),
+            None,
+            None,
+            "claude",
+            None,
+        );
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unknown field"));
@@ -232,7 +343,8 @@ mod tests {
         let config = config::load_embedded_rules().unwrap();
         let base_count = config.allowlists.commands.len();
 
-        let result = finalize_config(config, home.path(), None, None, None).unwrap();
+        let result =
+            finalize_config(config, home.path(), None, None, None, "claude", None).unwrap();
 
         assert_eq!(
             result.rules.allowlists.commands.len(),
@@ -264,7 +376,8 @@ mod tests {
             },
             rules: vec![],
         };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None).unwrap();
+        let result =
+            finalize_config(base, tmp.path(), Some(repo), None, None, "claude", None).unwrap();
         let prompt = result.project_ai_prompt.expect("prompt should be Some");
         assert!(prompt.contains("{code}"), "got: {prompt}");
     }
@@ -286,7 +399,7 @@ mod tests {
             },
             rules: vec![],
         };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None, "claude", None)
             .expect("finalize_config should succeed");
         assert!(result.project_ai_prompt.is_none());
     }
@@ -316,11 +429,122 @@ mod tests {
             },
             rules: vec![],
         };
-        let result = finalize_config(base, tmp.path(), Some(repo), None, None)
+        let result = finalize_config(base, tmp.path(), Some(repo), None, None, "claude", None)
             .expect("finalize_config should succeed");
         assert!(
             result.project_ai_prompt.is_none(),
             "all-whitespace prompt must be filtered to None"
         );
+    }
+
+    #[test]
+    fn test_finalize_applies_profile_rules() {
+        use crate::config;
+        let home = tempfile::TempDir::new().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("longline.yaml"),
+            r#"
+defaults:
+  codex: strict
+
+profiles:
+  strict:
+    extends: default
+    safety_level: strict
+    rules:
+      - id: codex-deny-curl
+        level: high
+        match: { command: curl }
+        decision: deny
+        reason: "strict denies curl"
+"#,
+        )
+        .unwrap();
+
+        let result = finalize_config(
+            config::load_embedded_rules().unwrap(),
+            home.path(),
+            None,
+            None,
+            None,
+            "codex",
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(result.resolved_profile, "strict");
+        assert_eq!(result.rules.safety_level, SafetyLevel::Strict);
+        assert!(result.rules.rules.iter().any(|r| r.id == "codex-deny-curl"));
+    }
+
+    #[test]
+    fn test_finalize_cli_safety_level_beats_profile_safety_level() {
+        // Spec §4 field-precedence ladder: CLI flag > profile contribution.
+        use crate::config;
+        let home = tempfile::TempDir::new().unwrap();
+        let config_dir = home.path().join(".config").join("longline");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("longline.yaml"),
+            r#"
+profiles:
+  lenient:
+    safety_level: high
+"#,
+        )
+        .unwrap();
+
+        let result = finalize_config(
+            config::load_embedded_rules().unwrap(),
+            home.path(),
+            None,
+            None,
+            Some(SafetyLevel::Critical),
+            "claude",
+            Some("lenient"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            result.rules.safety_level,
+            SafetyLevel::Critical,
+            "CLI --safety-level critical must beat profile safety_level: high"
+        );
+    }
+
+    #[test]
+    fn test_finalize_unknown_cli_profile_errors() {
+        use crate::config;
+        let home = tempfile::TempDir::new().unwrap();
+        let result = finalize_config(
+            config::load_embedded_rules().unwrap(),
+            home.path(),
+            None,
+            None,
+            None,
+            "codex",
+            Some("ghost"),
+        );
+        let err = result.unwrap_err();
+        assert!(err.contains("ghost"), "got: {err}");
+    }
+
+    #[test]
+    fn test_finalize_default_resolved_when_no_config() {
+        use crate::config;
+        let home = tempfile::TempDir::new().unwrap();
+        let result = finalize_config(
+            config::load_embedded_rules().unwrap(),
+            home.path(),
+            None,
+            None,
+            None,
+            "claude",
+            None,
+        )
+        .unwrap();
+        assert_eq!(result.resolved_profile, "default");
     }
 }

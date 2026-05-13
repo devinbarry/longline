@@ -398,6 +398,8 @@ pub fn run() -> i32 {
             project_dir.as_deref(),
             cli_trust_level,
             cli_safety_level,
+            "claude",
+            None,
         ) {
             Ok(c) => c,
             Err(e) => {

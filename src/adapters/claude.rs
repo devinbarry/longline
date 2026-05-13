@@ -108,6 +108,8 @@ fn run_hook_input(
                 cwd_path.as_deref(),
                 options.cli_trust_level,
                 options.cli_safety_level,
+                "claude",
+                None,
             ) {
                 Ok(final_config) => final_config,
                 Err(e) => {
@@ -140,6 +142,8 @@ fn run_hook_input(
                 cwd_path.as_deref(),
                 options.cli_trust_level,
                 options.cli_safety_level,
+                "claude",
+                None,
             ) {
                 eprintln!("longline: {e}");
                 return 2;

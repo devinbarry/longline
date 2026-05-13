@@ -216,6 +216,8 @@ fn run_hook_input(
                 cwd_path.as_deref(),
                 options.cli_trust_level,
                 options.cli_safety_level,
+                "codex",
+                None,
             ) {
                 Ok(c) => c,
                 Err(e) => {
