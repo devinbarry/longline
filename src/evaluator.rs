@@ -89,6 +89,7 @@ pub(crate) fn evaluate_invocation(
             ask_ai_lenient: options.ask_ai_lenient,
             project_ai_prompt: final_config.project_ai_prompt.as_deref(),
             runtime,
+            profile: final_config.resolved_profile.clone(),
         }),
         Invocation::ReadPath {
             tool_name: _,
@@ -215,6 +216,7 @@ struct ShellEvaluationRequest<'a> {
     ask_ai_lenient: bool,
     project_ai_prompt: Option<&'a str>,
     runtime: &'static str,
+    profile: String,
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
@@ -232,8 +234,12 @@ fn evaluate_shell_command_with_parse_result(
         Ok(stmt) => stmt,
         Err(e) => {
             let log_reason = Some(format!("Parse error: {e}"));
-            let entry = logger::make_entry_with_runtime(
-                request.runtime,
+            let ctx = logger::EntryContext {
+                runtime: request.runtime,
+                profile: request.profile.clone(),
+            };
+            let entry = logger::make_entry(
+                &ctx,
                 "Bash",
                 request.cwd,
                 request.command,
@@ -343,8 +349,12 @@ fn evaluate_shell_command_with_parse_result(
         Some(result.reason.clone())
     };
     let matched_rules: Vec<String> = result.rule_id.clone().into_iter().collect();
-    let mut entry = logger::make_entry_with_runtime(
-        request.runtime,
+    let ctx = logger::EntryContext {
+        runtime: request.runtime,
+        profile: request.profile.clone(),
+    };
+    let mut entry = logger::make_entry(
+        &ctx,
         "Bash",
         request.cwd,
         request.command,
@@ -771,6 +781,7 @@ mod tests {
                 ask_ai_lenient: false,
                 project_ai_prompt: None,
                 runtime: "claude",
+                profile: "default".to_string(),
             },
             Err("synthetic parser failure".to_string()),
         );

@@ -229,6 +229,7 @@ fn run_hook_input(
                         invocation.command_or_empty(),
                         &format!("config finalization failed: {e}"),
                         invocation.session_id().map(String::from),
+                        "unresolved",
                     );
                     return 0;
                 }
@@ -277,6 +278,7 @@ fn run_hook_input(
                         &panic_command,
                         &format!("evaluator panic: {reason}"),
                         panic_session_id,
+                        "unresolved",
                     );
                     0
                 }
@@ -290,7 +292,15 @@ fn run_hook_input(
             // tool/cwd/command/session_id for the fail-open audit entry so
             // operators can debug. JSON parse failures yield empty strings.
             let (tool, cwd, command, session_id) = best_effort_audit_fields(input_str);
-            write_fail_open_entry_with_session(home, &tool, &cwd, &command, &reason, session_id);
+            write_fail_open_entry_with_session(
+                home,
+                &tool,
+                &cwd,
+                &command,
+                &reason,
+                session_id,
+                "unresolved",
+            );
             0
         }
     }
@@ -360,7 +370,7 @@ fn print_json<T: serde::Serialize>(value: &T) {
 }
 
 fn write_fail_open_entry(home: &Path, tool: &str, cwd: &str, command: &str, reason: &str) {
-    write_fail_open_entry_with_session(home, tool, cwd, command, reason, None);
+    write_fail_open_entry_with_session(home, tool, cwd, command, reason, None, "unresolved");
 }
 
 fn write_fail_open_entry_with_session(
@@ -370,9 +380,14 @@ fn write_fail_open_entry_with_session(
     command: &str,
     reason: &str,
     session_id: Option<String>,
+    profile: &str,
 ) {
-    let entry = crate::logger::make_entry_with_runtime(
-        RUNTIME_LITERAL,
+    let ctx = crate::logger::EntryContext {
+        runtime: RUNTIME_LITERAL,
+        profile: profile.to_string(),
+    };
+    let entry = crate::logger::make_entry(
+        &ctx,
         tool,
         cwd,
         command,

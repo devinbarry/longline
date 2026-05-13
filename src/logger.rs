@@ -14,6 +14,7 @@ const LOG_MAX_BYTES_ENV: &str = "LONGLINE_LOG_MAX_BYTES";
 pub struct LogEntry {
     pub version: &'static str,
     pub runtime: &'static str,
+    pub profile: String,
     pub ts: String,
     pub tool: String,
     pub cwd: String,
@@ -27,6 +28,14 @@ pub struct LogEntry {
     pub reason: Option<String>,
     pub parse_ok: bool,
     pub session_id: Option<String>,
+}
+
+/// Context carried into every audit log entry. Single constructor seam
+/// per CLAUDE.md "one constructor only".
+#[derive(Debug)]
+pub struct EntryContext {
+    pub runtime: &'static str,
+    pub profile: String,
 }
 
 /// Write a log entry to a specific path.
@@ -149,10 +158,10 @@ fn log_decision_to_with_rotation(entry: &LogEntry, path: &Path, max_bytes: u64, 
     }
 }
 
-/// Create a log entry from evaluation results, stamped with an explicit runtime.
+/// Create a log entry from evaluation results.
 #[allow(clippy::too_many_arguments)]
-pub fn make_entry_with_runtime(
-    runtime: &'static str,
+pub fn make_entry(
+    ctx: &EntryContext,
     tool: &str,
     cwd: &str,
     command: &str,
@@ -164,7 +173,8 @@ pub fn make_entry_with_runtime(
 ) -> LogEntry {
     LogEntry {
         version: env!("CARGO_PKG_VERSION"),
-        runtime,
+        runtime: ctx.runtime,
+        profile: ctx.profile.clone(),
         ts: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         tool: tool.to_string(),
         cwd: cwd.to_string(),
@@ -197,8 +207,12 @@ mod tests {
     #[test]
     fn test_make_entry_does_not_truncate_long_command() {
         let long_cmd = "x".repeat(2000);
-        let entry = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             &long_cmd,
@@ -214,8 +228,12 @@ mod tests {
 
     #[test]
     fn test_make_entry_short_command() {
-        let entry = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "ls",
@@ -230,8 +248,12 @@ mod tests {
 
     #[test]
     fn test_log_entry_serialization() {
-        let entry = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/home/user",
             "rm -rf /",
@@ -251,8 +273,12 @@ mod tests {
 
     #[test]
     fn test_make_entry_with_runtime_serializes_runtime_field() {
-        let entry = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "ls",
@@ -268,8 +294,12 @@ mod tests {
 
     #[test]
     fn test_make_entry_with_runtime_codex() {
-        let entry = make_entry_with_runtime(
-            "codex",
+        let ctx = EntryContext {
+            runtime: "codex",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "rm -rf /",
@@ -282,6 +312,70 @@ mod tests {
         let json = serde_json::to_string(&entry).unwrap();
         assert!(json.contains("\"runtime\":\"codex\""), "got: {json}");
         assert!(json.contains("\"decision\":\"deny\""), "got: {json}");
+    }
+
+    #[test]
+    fn test_make_entry_serializes_profile_field() {
+        let ctx = EntryContext {
+            runtime: "codex",
+            profile: "strict".into(),
+        };
+        let entry = make_entry(
+            &ctx,
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
+        let j = serde_json::to_string(&entry).unwrap();
+        assert!(j.contains("\"runtime\":\"codex\""));
+        assert!(j.contains("\"profile\":\"strict\""));
+    }
+
+    #[test]
+    fn test_make_entry_profile_default_string() {
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
+        let j = serde_json::to_string(&entry).unwrap();
+        assert!(j.contains("\"profile\":\"default\""));
+    }
+
+    #[test]
+    fn test_make_entry_unresolved_sentinel_serializes() {
+        let ctx = EntryContext {
+            runtime: "codex",
+            profile: "unresolved".into(),
+        };
+        let entry = make_entry(
+            &ctx,
+            "Bash",
+            "",
+            "",
+            Decision::Allow,
+            vec![],
+            None,
+            false,
+            None,
+        );
+        let j = serde_json::to_string(&entry).unwrap();
+        assert!(j.contains("\"profile\":\"unresolved\""));
     }
 
     #[test]
@@ -299,8 +393,12 @@ mod tests {
 
         let n = 100;
         for i in 0..n {
-            let entry = make_entry_with_runtime(
-                "codex",
+            let ctx = EntryContext {
+                runtime: "codex",
+                profile: "default".into(),
+            };
+            let entry = make_entry(
+                &ctx,
                 "Bash",
                 "/tmp",
                 &format!("cmd-{i}"),
@@ -333,8 +431,12 @@ mod tests {
         let dir = unique_test_dir("basic-write");
         let path = dir.join("test.jsonl");
 
-        let entry = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "ls",
@@ -359,8 +461,12 @@ mod tests {
         let dir = unique_test_dir("rotation-threshold");
         let path = dir.join("test.jsonl");
 
-        let first = make_entry_with_runtime(
-            "claude",
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let first = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "first-command",
@@ -370,8 +476,8 @@ mod tests {
             true,
             None,
         );
-        let second = make_entry_with_runtime(
-            "claude",
+        let second = make_entry(
+            &ctx,
             "Bash",
             "/tmp",
             "second-command",
@@ -402,8 +508,12 @@ mod tests {
         let path = dir.join("test.jsonl");
 
         for i in 1..=12 {
-            let entry = make_entry_with_runtime(
-                "claude",
+            let ctx = EntryContext {
+                runtime: "claude",
+                profile: "default".into(),
+            };
+            let entry = make_entry(
+                &ctx,
                 "Bash",
                 "/tmp",
                 &format!("cmd-{i}"),

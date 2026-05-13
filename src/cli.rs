@@ -358,8 +358,12 @@ pub fn run() -> i32 {
                 let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut buf);
                 eprintln!("longline: {e}");
                 let (tool, cwd, command, session_id) = parse_codex_input_fields(&buf);
-                let entry = crate::logger::make_entry_with_runtime(
-                    "codex",
+                let ctx = crate::logger::EntryContext {
+                    runtime: "codex",
+                    profile: "unresolved".to_string(),
+                };
+                let entry = crate::logger::make_entry(
+                    &ctx,
                     &tool,
                     &cwd,
                     &command,
