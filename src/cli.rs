@@ -943,13 +943,6 @@ fn run_profiles(runtime: Option<String>, json: bool, dir_override: Option<&PathB
         return 0;
     }
 
-    // Build the union map: global profiles first, project entries win on non-extends keys.
-    // For table display purposes, union = all profile names from both overlays.
-    let mut union = g_prof.clone();
-    for (k, v) in &p_prof {
-        union.entry(k.clone()).or_insert_with(|| v.clone());
-    }
-
     // Source label for a profile name.
     let source_label = |name: &str| -> &'static str {
         match (g_prof.contains_key(name), p_prof.contains_key(name)) {
@@ -978,46 +971,84 @@ fn run_profiles(runtime: Option<String>, json: bool, dir_override: Option<&PathB
         }
     };
 
+    // Build a display row that reflects BOTH overlay contributions for merged profiles.
+    // For source="merged": rule_count and allowlist_count are summed; safety prefers
+    // project's value; extends comes from whichever side declared it (cross-overlay
+    // redeclaration is a hard error caught earlier, so only one side can have it).
+    // For non-merged profiles (source=global or source=project), that source's entry
+    // is used directly.
+    let display_row = |name: &str,
+                       g_entry: Option<&longline::config::profiles::ProfileEntry>,
+                       p_entry: Option<&longline::config::profiles::ProfileEntry>,
+                       source: &'static str,
+                       ai_judge_src: &'static str|
+     -> crate::output::ProfileRow {
+        let rule_count = g_entry
+            .and_then(|e| e.rules.as_ref().map(|r| r.len()))
+            .unwrap_or(0)
+            + p_entry
+                .and_then(|e| e.rules.as_ref().map(|r| r.len()))
+                .unwrap_or(0);
+        let allowlist_count = g_entry
+            .and_then(|e| e.allowlists.as_ref().map(|a| a.commands.len()))
+            .unwrap_or(0)
+            + p_entry
+                .and_then(|e| e.allowlists.as_ref().map(|a| a.commands.len()))
+                .unwrap_or(0);
+        let safety = p_entry
+            .and_then(|e| e.safety_level)
+            .or_else(|| g_entry.and_then(|e| e.safety_level))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                if name == "default" {
+                    "high".into()
+                } else {
+                    "\u{2014}".into()
+                }
+            });
+        let extends = p_entry
+            .and_then(|e| e.extends.clone())
+            .or_else(|| g_entry.and_then(|e| e.extends.clone()));
+        crate::output::ProfileRow {
+            name: name.to_string(),
+            extends,
+            safety,
+            rule_count,
+            allowlist_count,
+            ai_judge_source: ai_judge_src,
+            source,
+        }
+    };
+
+    // Collect the union of profile names from both overlays (BTreeSet for stable order).
+    let mut all_names: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for k in g_prof.keys() {
+        all_names.insert(k.clone());
+    }
+    for k in p_prof.keys() {
+        all_names.insert(k.clone());
+    }
+
     // Build profile rows: "default" always first, then remaining in sorted order.
     let mut rows: Vec<crate::output::ProfileRow> = Vec::new();
-    rows.push(crate::output::ProfileRow {
-        name: "default".into(),
-        extends: union.get("default").and_then(|e| e.extends.clone()),
-        safety: union
-            .get("default")
-            .and_then(|e| e.safety_level.map(|s| s.to_string()))
-            .unwrap_or_else(|| "high".into()),
-        rule_count: union
-            .get("default")
-            .and_then(|e| e.rules.as_ref().map(|r| r.len()))
-            .unwrap_or(0),
-        allowlist_count: union
-            .get("default")
-            .and_then(|e| e.allowlists.as_ref().map(|a| a.commands.len()))
-            .unwrap_or(0),
-        ai_judge_source: ai_judge_source_label("default"),
-        source: source_label("default"),
-    });
-    for (name, entry) in &union {
+    rows.push(display_row(
+        "default",
+        g_prof.get("default"),
+        p_prof.get("default"),
+        source_label("default"),
+        ai_judge_source_label("default"),
+    ));
+    for name in &all_names {
         if name == "default" {
             continue;
         }
-        rows.push(crate::output::ProfileRow {
-            name: name.clone(),
-            extends: entry.extends.clone(),
-            safety: entry
-                .safety_level
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "\u{2014}".into()),
-            rule_count: entry.rules.as_ref().map(|r| r.len()).unwrap_or(0),
-            allowlist_count: entry
-                .allowlists
-                .as_ref()
-                .map(|a| a.commands.len())
-                .unwrap_or(0),
-            ai_judge_source: ai_judge_source_label(name),
-            source: source_label(name),
-        });
+        rows.push(display_row(
+            name,
+            g_prof.get(name.as_str()),
+            p_prof.get(name.as_str()),
+            source_label(name),
+            ai_judge_source_label(name),
+        ));
     }
 
     if json {

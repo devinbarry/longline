@@ -270,6 +270,74 @@ fn test_profiles_subcommand_runtime_flag() {
     );
 }
 
+#[test]
+fn test_profiles_table_merged_source_sums_counts() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path();
+
+    // Global overlay defines `strict` with 1 rule.
+    let config_dir = home.join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"profiles:
+  strict:
+    rules:
+      - id: g-rule
+        level: high
+        match:
+          command: curl
+        decision: deny
+        reason: "global curl deny"
+"#,
+    )
+    .unwrap();
+
+    // Project overlay adds 1 more rule to `strict`.
+    let project_dir = home.join("project");
+    std::fs::create_dir_all(project_dir.join(".claude")).unwrap();
+    std::fs::create_dir_all(project_dir.join(".git")).unwrap();
+    std::fs::write(
+        project_dir.join(".claude").join("longline.yaml"),
+        r#"profiles:
+  strict:
+    rules:
+      - id: p-rule
+        level: high
+        match:
+          command: rm
+        decision: deny
+        reason: "project rm deny"
+"#,
+    )
+    .unwrap();
+
+    let dir_str = project_dir.to_str().unwrap();
+    let result = support::bin::run_longline(&["--dir", dir_str, "profiles", "--json"], home, None);
+    assert_eq!(
+        result.exit_code, 0,
+        "exit code should be 0; stderr: {}",
+        result.stderr
+    );
+    let v: serde_json::Value =
+        serde_json::from_str(&result.stdout).expect("output must be valid JSON");
+    let strict = v["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["name"] == "strict")
+        .expect("strict profile must be in output");
+    assert_eq!(
+        strict["source"], "merged",
+        "strict defined in both overlays must have source=merged"
+    );
+    assert_eq!(
+        strict["rule_count"], 2,
+        "merged profile must show sum of both overlays' rule counts (got: {})",
+        strict["rule_count"]
+    );
+}
+
 // ── Back-compat: bare `longline` ≡ `longline hook claude` ──────────────
 
 #[test]
