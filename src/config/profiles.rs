@@ -190,17 +190,6 @@ pub fn apply_profile_overlay_full(
     removed
 }
 
-/// Convenience wrapper when the caller doesn't need prompt tracking or
-/// replacement metadata. Discards both return channels.
-pub fn apply_profile_overlay(
-    config: &mut crate::config::rules::RulesConfig,
-    entry: &ProfileEntry,
-    source: crate::config::overlays::RuleSource,
-) {
-    let mut discard: Option<String> = None;
-    let _ = apply_profile_overlay_full(config, entry, source, &mut discard);
-}
-
 /// Validate that no profile name has its `extends:` redeclared across
 /// overlays, and return the union of profile names across the two maps.
 ///
