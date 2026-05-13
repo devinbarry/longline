@@ -451,3 +451,52 @@ fn back_compat_bare_equals_hook_claude_malformed() {
         "exit code mismatch on malformed"
     );
 }
+
+#[test]
+fn test_bare_form_no_profile_config_emits_default() {
+    let tmp = tempfile::tempdir().unwrap();
+    let bin = longline_bin();
+
+    let cases = [
+        r#"{"tool_name":"Bash","tool_input":{"command":"ls"}}"#,
+        r#"{"tool_name":"Bash","tool_input":{"command":"rm -rf /"}}"#,
+    ];
+
+    for stdin in cases {
+        let mut child = Command::new(&bin)
+            .env("HOME", tmp.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let _ = child.stdin.as_mut().unwrap().write_all(stdin.as_bytes());
+        let _ = child.wait_with_output();
+    }
+
+    let log = tmp
+        .path()
+        .join(".claude")
+        .join("hooks-logs")
+        .join("longline.jsonl");
+    if log.exists() {
+        let content = std::fs::read_to_string(&log).unwrap();
+        let lines: Vec<&str> = content.lines().filter(|l| !l.trim().is_empty()).collect();
+        assert!(!lines.is_empty(), "expected at least one audit entry");
+        for line in &lines {
+            assert!(
+                line.contains("\"profile\":\"default\""),
+                "every audit entry must carry profile=default under no-profile-config: {line}"
+            );
+            assert!(
+                !line.contains("\"profile\":\"unresolved\""),
+                "unresolved must never appear under valid no-config: {line}"
+            );
+        }
+    } else {
+        panic!(
+            "expected audit log at {} to exist after two valid hook invocations",
+            log.display()
+        );
+    }
+}
