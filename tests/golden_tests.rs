@@ -11,6 +11,10 @@ struct TestCase {
     id: String,
     command: String,
     expected: Expected,
+    #[serde(default)]
+    overlay: Option<String>,
+    #[serde(default)]
+    profile: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,11 +43,44 @@ fn load_golden_tests(filename: &str) -> TestSuite {
 
 fn run_golden_suite(filename: &str) {
     let suite = load_golden_tests(filename);
-    let config = longline::policy::load_rules(&rules_path()).expect("Failed to load default rules");
 
     let mut failures = Vec::new();
 
     for case in &suite.tests {
+        let config = if case.overlay.is_some() || case.profile.is_some() {
+            // Build a temp HOME with the overlay written out, then finalize.
+            let tmp = tempfile::tempdir().unwrap();
+            if let Some(overlay) = &case.overlay {
+                if !overlay.trim().is_empty() {
+                    let config_dir = tmp.path().join(".config").join("longline");
+                    std::fs::create_dir_all(&config_dir).unwrap();
+                    std::fs::write(config_dir.join("longline.yaml"), overlay).unwrap();
+                }
+            }
+            let base =
+                longline::policy::load_rules(&rules_path()).expect("Failed to load base rules");
+            match longline::config::finalize_config(
+                base,
+                tmp.path(),
+                None,
+                None,
+                None,
+                "claude",
+                case.profile.as_deref(),
+            ) {
+                Ok(fc) => fc.rules,
+                Err(e) => {
+                    failures.push(format!(
+                        "  CONFIG ERROR [{}]: finalize_config failed: {e}",
+                        case.id
+                    ));
+                    continue;
+                }
+            }
+        } else {
+            longline::policy::load_rules(&rules_path()).expect("Failed to load default rules")
+        };
+
         let stmt = match longline::parser::parse(&case.command) {
             Ok(s) => s,
             Err(e) => {
@@ -305,4 +342,9 @@ fn golden_shell_c_wrappers() {
 #[test]
 fn golden_gh_readonly() {
     run_golden_suite("gh_readonly.yaml");
+}
+
+#[test]
+fn test_golden_profiles() {
+    run_golden_suite("profiles.yaml");
 }

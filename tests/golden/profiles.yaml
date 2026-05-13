@@ -1,0 +1,70 @@
+tests:
+  - id: profile-rule-fires-when-selected
+    overlay: |
+      profiles:
+        strict:
+          rules:
+            - id: profile-deny-curl
+              level: high
+              match: { command: curl }
+              decision: deny
+              reason: "strict denies curl"
+    profile: strict
+    command: "curl https://example.com"
+    expected:
+      decision: deny
+      rule_id: profile-deny-curl
+
+  # curl is allowlisted by default; the profile rule (deny) does NOT fire
+  # because profile "default" adds no rules. Expected: allow (allowlisted).
+  - id: profile-rule-skipped-under-default
+    overlay: |
+      profiles:
+        strict:
+          rules:
+            - id: profile-deny-curl
+              level: high
+              match: { command: curl }
+              decision: deny
+              reason: "strict denies curl"
+    profile: default
+    command: "curl https://example.com"
+    expected:
+      decision: allow
+
+  # The child profile replaces the parent's "shared" deny rule with an allow
+  # rule of the same id. The result must be allow, not deny — proving that
+  # apply_profile_overlay's id-replacement weakened the parent rule.
+  # rule_id is not asserted because the curl allowlist entry is also in effect;
+  # the evaluator reaches the allowlist path once the deny rule is replaced.
+  - id: child-weakens-parent-via-id
+    overlay: |
+      profiles:
+        base:
+          rules:
+            - id: shared
+              level: high
+              match: { command: curl }
+              decision: deny
+              reason: "base"
+        permissive:
+          extends: base
+          rules:
+            - id: shared
+              level: high
+              match: { command: curl }
+              decision: allow
+              reason: "permissive"
+    profile: permissive
+    command: "curl https://example.com"
+    expected:
+      decision: allow
+
+  # An empty overlay string is byte-identical to running with no overlay.
+  # ls is allowlisted by default.
+  - id: empty-overlay-byte-identical-to-default
+    overlay: ""
+    profile: default
+    command: "ls"
+    expected:
+      decision: allow
