@@ -469,11 +469,12 @@ fn codex_success_path_writes_resolved_profile_name() {
 #[test]
 fn codex_global_duplicate_id_in_profile_fails_open_with_unresolved() {
     // Pre-resolution failure: a GLOBAL overlay declares profiles.strict
-    // with duplicate rule ids. The duplicate fires on the FIRST union
-    // validate_profiles call (finalize.rs call (1)) because union.strict
-    // came from global. Fail-open posture: exit 0, empty stdout, audit
-    // entry with profile="unresolved" and a `reason` that names the
-    // duplicate id and profile.
+    // with duplicate rule ids. Because union.strict came from global,
+    // any of the three global-touching validate_profiles calls in
+    // finalize.rs ((1) and (2) with &union, (3) with &global_profiles)
+    // catches the duplicate; whichever runs first wins. Fail-open
+    // posture: exit 0, empty stdout, audit entry with profile="unresolved"
+    // and a `reason` that names the duplicate id and profile.
     let global = r#"
 profiles:
   strict:
