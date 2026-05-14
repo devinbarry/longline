@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.1] - 2026-05-14
+
+### Fixed
+
+- **Profile config: duplicate rule ids within a single profile entry's
+  `rules:` block now error at config load** instead of silently
+  last-wins. Error names the profile and the colliding id. If your
+  profile YAML has two rules with the same id under one profile,
+  deduplicate before upgrading to 0.18.1.
+
+### Changed
+
+- Internal cleanup: removed the unused `apply_profile_overlay` thin
+  wrapper; `apply_profile_overlay_full` remains the canonical
+  profile-layer application entry point.
+
 ## [0.18.0] - 2026-05-13
 
 ### Added
