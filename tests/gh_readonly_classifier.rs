@@ -267,7 +267,35 @@ fn api_redirect_returns_none() {
     assert_eq!(
         classify("gh api repos/foo 2> /tmp/err"),
         None,
-        "stderr redirect"
+        "stderr redirect to non-devnull file still rejects"
+    );
+    // 2>/dev/null is the one exempted form — pure stderr suppression.
+    assert_eq!(
+        classify("gh api repos/foo 2>/dev/null"),
+        Some("api (GET)"),
+        "2>/dev/null is the sole permitted redirect on gh api"
+    );
+    assert_eq!(
+        classify("gh api repos/foo --jq '.[]' 2>/dev/null"),
+        Some("api (GET)"),
+        "2>/dev/null alongside --jq still allows"
+    );
+    // Intentionally excluded forms remain None.
+    assert_eq!(
+        classify("gh api repos/foo 2>>/dev/null"),
+        None,
+        "append to devnull rejects"
+    );
+    assert_eq!(
+        classify("gh api repos/foo > /dev/null 2>&1"),
+        None,
+        "combined stdout+stderr devnull rejects"
+    );
+    // Duplicate 2>/dev/null is idempotent — still allows.
+    assert_eq!(
+        classify("gh api repos/foo 2>/dev/null 2>/dev/null"),
+        Some("api (GET)"),
+        "duplicate 2>/dev/null is idempotent"
     );
 }
 
@@ -643,7 +671,23 @@ fn r7_new_families_require_strict_invocation() {
     assert_eq!(
         classify("gh cache list > /tmp/out"),
         None,
-        "redirect on R7-new"
+        "stdout redirect on R7-NEW rejects"
+    );
+    // 2>/dev/null is exempted for R7-NEW families too.
+    assert_eq!(
+        classify("gh release view v1 2>/dev/null"),
+        Some("release view"),
+        "2>/dev/null permitted on R7-NEW gh release view"
+    );
+    assert_eq!(
+        classify("gh search issues --repo foo 2>/dev/null"),
+        Some("search issues"),
+        "2>/dev/null permitted on R7-NEW gh search"
+    );
+    assert_eq!(
+        classify("gh cache list 2>/dev/null"),
+        Some("cache list"),
+        "2>/dev/null permitted on R7-NEW gh cache list"
     );
 }
 

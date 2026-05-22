@@ -26,6 +26,11 @@ fn has_unsafe_argv(argv: &[Arg]) -> bool {
 /// Used to exempt this common pattern from the redirect-rejection guards in
 /// classify_gh_api and require_strict_invocation, which otherwise reject ALL
 /// redirects to match pre-R7 ask uniformity.
+///
+/// Intentionally excluded: `2>>/dev/null` (Append op), `>/dev/null 2>&1`
+/// (DupOutput op / fd-None redirect), and `2>&-` (close fd). Those forms
+/// are semantically similar but less common; keeping them as ask is
+/// conservative and avoids edge-case parsing surprises.
 fn is_stderr_devnull(r: &Redirect) -> bool {
     r.fd == Some(2) && r.op == RedirectOp::Write && r.target == "/dev/null"
 }
