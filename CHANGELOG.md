@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.2] - 2026-05-22
+
+### Fixed
+
+- **`gh api` and R7-NEW classifier families (`gh release`, `gh search`,
+  `gh gist`, `gh label`, `gh status`, `gh secret list`, `gh variable list`,
+  `gh cache list`) now correctly allow `2>/dev/null`** in two previously
+  broken forms:
+
+  - `gh api ... 2>/dev/null` and `gh api ... 2>/dev/null | cmd` — the
+    classifier's Step 0a-ter redirect guard rejected all redirects, including
+    pure stderr suppression. `2>/dev/null` carries no file-write risk and is
+    now exempted via the new `is_stderr_devnull` helper.
+
+  - `gh api ... | cmd 2>/dev/null` — when tree-sitter wraps the whole
+    pipeline in a `redirected_statement`, the `2>/dev/null` on the last
+    stage was previously propagated to all stages (including `gh api`),
+    causing a spurious ask. The `is_stderr_devnull` exemption corrects this
+    without weakening output-redirect guards: a dangerous `> file` redirect
+    on the last stage is still propagated to `gh api` and correctly asks.
+
+  Both forms were confirmed in production audit logs. 9 golden tests and
+  7 unit-test assertions added; regression guard verifies that
+  `gh api ... | base64 -d > ~/.ssh/authorized_keys` still asks.
+
 ## [0.18.1] - 2026-05-14
 
 ### Fixed
