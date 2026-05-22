@@ -700,3 +700,9 @@ tests:
     expected:
       decision: ask
     note: "stdout redirect to sensitive file still asks; not covered by 2>/dev/null exemption"
+
+  - id: gh-api-get-pipe-base64-write-sensitive-asks
+    command: "gh api repos/owner/repo/contents/key --jq .content | base64 -d > ~/.ssh/authorized_keys"
+    expected:
+      decision: ask
+    note: "P0 regression guard: stdout write to authorized_keys via pipeline must ask even though 2>/dev/null exemption is active"

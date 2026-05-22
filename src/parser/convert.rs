@@ -316,11 +316,8 @@ fn inject_redirects_into_leaves(stmt: &mut Statement, redirects: &[Redirect]) {
     match stmt {
         Statement::SimpleCommand(cmd) => cmd.redirects.extend_from_slice(redirects),
         Statement::Pipeline(p) => {
-            // In bash, `a | b 2>/dev/null` scopes the redirect to b only.
-            // tree-sitter wraps the whole pipeline in redirected_statement,
-            // so inject only into the last stage to match bash semantics.
-            if let Some(last) = p.stages.last_mut() {
-                inject_redirects_into_leaves(last, redirects);
+            for stage in &mut p.stages {
+                inject_redirects_into_leaves(stage, redirects);
             }
         }
         Statement::List(l) => {
@@ -330,14 +327,6 @@ fn inject_redirects_into_leaves(stmt: &mut Statement, redirects: &[Redirect]) {
             }
         }
         Statement::Subshell(inner) | Statement::CommandSubstitution(inner) => {
-            // For a subshell containing a pipeline, e.g. `(A | B) 2>/dev/null`,
-            // this recurses into the inner pipeline and injects into the last
-            // stage only (via the Pipeline arm above). In bash the redirect
-            // applies to the whole subshell, but the last-stage-only treatment
-            // is intentional: the security-relevant redirect information (file
-            // writes) is still captured on the output stage, and the gh api
-            // classifier remains unaffected for A in the common
-            // `(gh api ...) 2>/dev/null` pattern.
             inject_redirects_into_leaves(inner, redirects);
         }
         Statement::Opaque(_) | Statement::Empty => {}
