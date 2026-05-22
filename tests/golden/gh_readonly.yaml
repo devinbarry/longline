@@ -605,3 +605,98 @@ tests:
       decision: allow
       rule_id: gh-readonly-classifier
     note: "post-subcommand flags are normal; only between subcommand and shape is the bypass surface"
+
+  # ════════════════════════════════════════════════════════════════
+  # Bug 1: pipeline redirect injection
+  #
+  # Shell: `A | B 2>/dev/null` — tree-sitter wraps the whole pipeline
+  # in redirected_statement; inject_redirects_into_leaves propagates
+  # 2>/dev/null to ALL stages including A (gh api / R7-NEW).  The
+  # redirect is semantically on B only, so A must not be disqualified.
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-get-pipe-cmd-stderr-redirect-allow
+    command: "gh api repos/owner/repo/releases | head -5 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "2>/dev/null on last pipeline stage must not propagate to gh api"
+
+  - id: gh-api-get-pipe-base64-stderr-redirect-allow
+    command: "gh api repos/owner/repo/contents/file.go --jq '.content' | base64 -d 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "common decode pattern: 2>/dev/null on base64 must not disqualify gh api GET"
+
+  - id: gh-release-view-pipe-cmd-stderr-redirect-allow
+    command: "gh release view v1.0 | head -20 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "R7-NEW: 2>/dev/null on last stage must not propagate to gh release view"
+
+  - id: gh-search-issues-pipe-cmd-stderr-redirect-allow
+    command: "gh search issues --repo PowerDNS/pdns \"negative cache\" | head -10 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "R7-NEW: 2>/dev/null on last stage must not propagate to gh search issues"
+
+  # ════════════════════════════════════════════════════════════════
+  # Bug 2: stderr redirect directly on gh api / R7-NEW command
+  #
+  # Shell: `gh api ... 2>/dev/null | next_cmd` or bare
+  # `gh api ... 2>/dev/null` — tree-sitter puts 2>/dev/null on the
+  # gh api leaf (correct bash semantics).  The classifier/
+  # require_strict_invocation rejects ALL redirects, but a pure stderr
+  # suppression redirect to /dev/null is read-only and safe.
+  # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-get-stderr-devnull-alone-allow
+    command: "gh api repos/owner/repo/releases 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "stderr suppression on gh api GET must allow"
+
+  - id: gh-api-get-jq-stderr-devnull-alone-allow
+    command: "gh api repos/owner/repo/git/trees/main?recursive=1 --jq '.tree[]' 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "common: jq filter + 2>/dev/null on gh api GET must allow"
+
+  - id: gh-api-get-stderr-devnull-pipe-allow
+    command: "gh api repos/owner/repo/releases --jq '.[0:5]' 2>/dev/null | head -5"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "gh api 2>/dev/null piped to head: both Bug 1 and Bug 2 path; must allow"
+
+  - id: gh-release-view-stderr-devnull-allow
+    command: "gh release view v1.0 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "R7-NEW: stderr suppression on gh release view must allow"
+
+  - id: gh-search-issues-stderr-devnull-allow
+    command: "gh search issues --repo PowerDNS/pdns \"query\" 2>/dev/null"
+    expected:
+      decision: allow
+      rule_id: gh-readonly-classifier
+    note: "R7-NEW: stderr suppression on gh search issues must allow"
+
+  # Regression guards: stdout/file writes still ask
+  - id: gh-api-get-stdout-redirect-still-asks
+    command: "gh api repos/owner/repo/releases > /tmp/out.json"
+    expected:
+      decision: ask
+    note: "stdout redirect to file is not safe; must still ask"
+
+  - id: gh-api-get-write-sensitive-still-asks
+    command: "gh api repos/owner/repo/keys > ~/.ssh/authorized_keys"
+    expected:
+      decision: ask
+    note: "stdout redirect to sensitive file still asks; not covered by 2>/dev/null exemption"

@@ -8,7 +8,7 @@
 //! See `docs/superpowers/specs/2026-05-05-r7-readonly-gh-classifier-design.md`
 //! for the full design rationale.
 
-use crate::parser::{Arg, ArgMeta, SimpleCommand};
+use crate::parser::{Arg, ArgMeta, Redirect, RedirectOp, SimpleCommand};
 
 /// Body/field flag tokens (long forms). Any token equal to one of these
 /// or starting with `<flag>=` triggers `gh api` rejection.
@@ -19,6 +19,15 @@ const API_BODY_LONG_FLAGS: &[&str] = &["--field", "--form", "--raw-field", "--in
 /// from parsed argv (command substitution, variable expansion, etc.).
 fn has_unsafe_argv(argv: &[Arg]) -> bool {
     argv.iter().any(|a| matches!(a.meta, ArgMeta::UnsafeString))
+}
+
+/// Returns true if the redirect is exactly `2>/dev/null` — pure stderr
+/// suppression that performs no file write and carries no security risk.
+/// Used to exempt this common pattern from the redirect-rejection guards in
+/// classify_gh_api and require_strict_invocation, which otherwise reject ALL
+/// redirects to match pre-R7 ask uniformity.
+fn is_stderr_devnull(r: &Redirect) -> bool {
+    r.fd == Some(2) && r.op == RedirectOp::Write && r.target == "/dev/null"
 }
 
 /// Top-level gh flags that take a value as the next argv token. When
@@ -84,7 +93,7 @@ fn require_strict_invocation(cmd: &SimpleCommand) -> Option<()> {
     if !cmd.assignments.is_empty() {
         return None;
     }
-    if !cmd.redirects.is_empty() {
+    if !cmd.redirects.iter().all(is_stderr_devnull) {
         return None;
     }
     // R7 round-10 (Opus High): `--hostname` redirects auth to a different
@@ -391,15 +400,15 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
         return None;
     }
 
-    // Step 0a-ter: reject any redirects. Pre-R7 trust:full asked for
-    // every redirect form (`gh api repos/foo > ~/.bashrc`,
-    // `gh api repos/foo > ~/.ssh/authorized_keys`, `gh api repos/foo
-    // > /tmp/anything`). The existing redirect-write-etc rule only
-    // catches /etc/* targets; sensitive home-dir files like
-    // ~/.ssh/authorized_keys, ~/.bashrc, ~/.zshrc are NOT covered.
-    // Rejecting all redirects on gh api preserves pre-R7 ask uniformity
-    // for this class.
-    if !cmd.redirects.is_empty() {
+    // Step 0a-ter: reject redirects other than bare `2>/dev/null`.
+    // Pre-R7 trust:full asked for every redirect form (`gh api repos/foo
+    // > ~/.bashrc`, `gh api repos/foo > ~/.ssh/authorized_keys`).  The
+    // existing redirect-write-etc rule only catches /etc/* targets; home-
+    // dir files like ~/.ssh/authorized_keys are NOT covered.  Rejecting
+    // non-stderr-devnull redirects preserves pre-R7 ask uniformity while
+    // allowing the common `gh api ... 2>/dev/null` stderr-suppression
+    // pattern, which is read-only and carries no file-write risk.
+    if !cmd.redirects.iter().all(is_stderr_devnull) {
         return None;
     }
 
