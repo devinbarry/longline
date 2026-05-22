@@ -297,6 +297,12 @@ fn api_redirect_returns_none() {
         Some("api (GET)"),
         "duplicate 2>/dev/null is idempotent"
     );
+    // Mixed: 2>/dev/null present but a stdout redirect is also present — .all() returns false.
+    assert_eq!(
+        classify("gh api repos/foo 2>/dev/null > /tmp/out"),
+        None,
+        "mixed stderr-devnull + stdout redirect still rejects (.all boundary)"
+    );
 }
 
 #[test]
