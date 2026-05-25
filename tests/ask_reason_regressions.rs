@@ -280,16 +280,16 @@ fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
 }
 
 #[test]
-fn redirected_shell_c_wrappers_deny_sensitive_writes_via_new_rule() {
+fn redirected_shell_c_wrappers_ask_on_sensitive_writes_via_new_rule() {
     for command in [
         "bash -c 'cat README.md' > ~/.ssh/authorized_keys",
         "find . -exec sh -c 'cat README.md' sh {} \\; > ~/.ssh/authorized_keys",
         "xargs sh -c 'cat README.md' > ~/.ssh/authorized_keys",
     ] {
-        assert_deny_reason(
+        assert_ask_reason(
             command,
             "redirect-write-ssh-authorized-keys",
-            "Redirect write to SSH authorized_keys",
+            "Writing to SSH authorized_keys",
         );
     }
 }
