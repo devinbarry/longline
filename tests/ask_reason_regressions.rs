@@ -280,18 +280,29 @@ fn find_xargs_shell_c_surfaces_dangerous_inner_command() {
 }
 
 #[test]
-fn redirected_shell_c_wrappers_do_not_allow_sensitive_writes() {
+fn redirected_shell_c_wrappers_deny_sensitive_writes_via_new_rule() {
     for command in [
         "bash -c 'cat README.md' > ~/.ssh/authorized_keys",
         "find . -exec sh -c 'cat README.md' sh {} \\; > ~/.ssh/authorized_keys",
         "xargs sh -c 'cat README.md' > ~/.ssh/authorized_keys",
     ] {
-        assert_ask_reason(
+        assert_deny_reason(
             command,
-            "shell-c-redirect",
-            "Shell command wrapper output is redirected",
+            "redirect-write-ssh-authorized-keys",
+            "Redirect write to SSH authorized_keys",
         );
     }
+}
+
+#[test]
+fn shell_c_redirect_still_fires_on_non_sensitive_file_target() {
+    // Catch-all preservation: any wrapper redirect to a non-sensitive
+    // file target still ASKs via shell-c-redirect.
+    assert_ask_reason(
+        "bash -c 'echo hi' > /tmp/foo",
+        "shell-c-redirect",
+        "Shell command wrapper output is redirected",
+    );
 }
 
 #[test]
