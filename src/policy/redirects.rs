@@ -19,7 +19,6 @@ pub(super) fn is_devnull_target(r: &Redirect) -> bool {
 /// accepted because it cannot exfiltrate data to a sensitive file
 /// path; the worst case is information leaking to the controlling
 /// terminal. Empty list returns true (no redirects = nothing to leak).
-#[allow(dead_code)] // wired in Task 3
 pub(super) fn redirects_discard_all_output(redirs: &[Redirect]) -> bool {
     if redirs.is_empty() {
         return true;

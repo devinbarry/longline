@@ -252,3 +252,67 @@ tests:
     command: "sg docker -c \"docker run --rm alpine:3.23 sh\""
     expected:
       decision: ask
+
+  # ── R3 P0-2: devnull relaxation, canonical and stderr-only ──
+  - id: bash-c-2-devnull-allows
+    command: "bash -c 'echo hi' 2>/dev/null"
+    expected:
+      decision: allow
+  - id: bash-c-stdout-devnull-allows
+    command: "bash -c 'echo hi' >/dev/null"
+    expected:
+      decision: allow
+  - id: bash-c-full-discard-canonical
+    command: "bash -c 'echo hi' > /dev/null 2>&1"
+    expected:
+      decision: allow
+  - id: bash-c-file-redirect-still-asks
+    command: "bash -c 'echo hi' > /tmp/foo"
+    expected:
+      decision: ask
+      rule_id: shell-c-redirect
+  - id: bash-c-reversed-dup-leaks-still-asks
+    command: "bash -c 'echo hi' 2>&1 > /dev/null"
+    expected:
+      decision: ask
+      rule_id: shell-c-redirect
+
+  # ── R2 P0-A: assignment-guard preserves ASK on devnull redirects ──
+  - id: git-ssh-command-bash-c-2-devnull-still-asks
+    command: "GIT_SSH_COMMAND=/tmp/evil bash -c 'git fetch' 2>/dev/null"
+    expected:
+      decision: ask
+      rule_id: shell-c-redirect
+  - id: foo-bar-bash-c-2-devnull-still-asks
+    command: "FOO=bar bash -c 'echo' 2>/dev/null"
+    expected:
+      decision: ask
+      rule_id: shell-c-redirect
+
+  # ── Pre-existing-behavior pins (R4 scope discipline) ──
+  - id: git-ssh-command-bash-c-no-redirect-still-allows
+    command: "GIT_SSH_COMMAND=/tmp/evil bash -c 'git fetch'"
+    expected:
+      decision: allow
+  - id: foo-bar-bash-c-no-redirect-still-allows
+    command: "FOO=bar bash -c 'echo'"
+    expected:
+      decision: allow
+
+  # ── Non-bash shell-c parity ──
+  - id: sh-c-2-devnull-allows
+    command: "sh -c 'echo hi' 2>/dev/null"
+    expected:
+      decision: allow
+  - id: zsh-c-2-devnull-allows
+    command: "zsh -c 'echo hi' 2>/dev/null"
+    expected:
+      decision: allow
+  - id: dash-c-2-devnull-allows
+    command: "dash -c 'echo hi' 2>/dev/null"
+    expected:
+      decision: allow
+  - id: ksh-c-2-devnull-allows
+    command: "ksh -c 'echo hi' 2>/dev/null"
+    expected:
+      decision: allow

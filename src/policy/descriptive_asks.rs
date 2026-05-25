@@ -162,7 +162,18 @@ fn redirected_shell_c(cmd: &SimpleCommand) -> Option<PolicyResult> {
     if cmd.redirects.is_empty() {
         return None;
     }
-
+    // Mirror the gate's safety conditions: skip only when there are
+    // no env-var assignments AND the redirect set is a pure output
+    // discard (handles `>/dev/null 2>&1` etc.). With assignments
+    // present, the gate keeps the wrapper uncovered (per
+    // shell_c_covered_via_extras), so this classifier must still
+    // ASK to give the user a meaningful reason rather than the
+    // generic Unrecognized-command fallback.
+    if cmd.assignments.is_empty()
+        && crate::policy::redirects::redirects_discard_all_output(&cmd.redirects)
+    {
+        return None;
+    }
     if matches!(
         crate::parser::shell_c::unwrap_shell_c(cmd),
         Some(stmt) if !matches!(stmt, Statement::Opaque(_))
@@ -172,7 +183,6 @@ fn redirected_shell_c(cmd: &SimpleCommand) -> Option<PolicyResult> {
             "Shell command wrapper output is redirected",
         ));
     }
-
     None
 }
 

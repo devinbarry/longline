@@ -17,6 +17,7 @@ pub use config::{
 
 use crate::domain::{Decision, PolicyResult};
 use crate::parser::{self, Statement};
+use crate::policy::redirects::redirects_discard_all_output;
 
 use allowlist::{
     find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,
@@ -283,13 +284,33 @@ fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bo
     let Statement::SimpleCommand(cmd) = leaf else {
         return false;
     };
-    // A shell-c wrapper's redirects are runtime-significant: stdout/stderr from
-    // the parsed inner command still flows through the outer redirect target.
-    // Treating redirected shell-c as covered would let a safe inner command
-    // such as `cat README.md` hide a sensitive write like
-    // `bash -c 'cat README.md' > ~/.ssh/authorized_keys`.
+    // Pre-existing no-redirect coverage stays exactly as before.
+    // The block below only loosens the gate for redirect-bearing
+    // wrappers.
+    //
+    // Tolerate redirect sets whose net effect is pure output discard
+    // (e.g. 2>/dev/null, >/dev/null, &>/dev/null, >& /dev/null,
+    // > /dev/null 2>&1). They cannot exfiltrate data, so they cannot
+    // turn an allowlisted inner command into a sensitive-write
+    // bypass. Any redirect set with a non-/dev/null target keeps the
+    // gate closed — the policy then relies on redirect-write-* rules
+    // (sensitive targets) or shell-c-redirect (catch-all attribution)
+    // to evaluate file-target redirects.
+    //
+    // Refuse the devnull relaxation when the wrapper carries env-var
+    // assignments. unwrap_shell_c (parser::shell_c::unwrap_shell_c)
+    // reparses only the -c arg text and drops outer cmd.assignments.
+    // The git-env-rce-vars rule and analogous env-aware rules only
+    // fire when the inner SimpleCommand itself carries the assignment,
+    // so relaxing here would silently allow
+    // `GIT_SSH_COMMAND=evil bash -c 'git fetch' 2>/dev/null`.
     if !cmd.redirects.is_empty() {
-        return false;
+        if !cmd.assignments.is_empty() {
+            return false;
+        }
+        if !redirects_discard_all_output(&cmd.redirects) {
+            return false;
+        }
     }
     match parser::shell_c::unwrap_shell_c(cmd) {
         None | Some(Statement::Opaque(_)) => false,
