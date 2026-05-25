@@ -314,12 +314,12 @@ tests:
   # R7 round-5 review — redirect bypass + wrapper-assignment bypass
   # ════════════════════════════════════════════════════════════════
 
-  - id: gh-api-redirect-to-authorized-keys-denies
+  - id: gh-api-redirect-to-authorized-keys-asks
     command: "gh api repos/foo > ~/.ssh/authorized_keys"
     expected:
       decision: ask
       rule_id: redirect-write-ssh-authorized-keys
-    note: "v0.18.3: now denies via redirect-write-ssh-authorized-keys (was: ask under R7 trust:full)"
+    note: "v0.18.3: ask via redirect-write-ssh-authorized-keys (was: ask under R7 trust:full; now surfaces a more specific reason)"
 
   - id: gh-api-redirect-to-bashrc-asks
     command: "gh api repos/foo > ~/.bashrc"
@@ -380,12 +380,12 @@ tests:
       decision: ask
     note: "find -exec extracts gh api as extra leaf; classifier skipped"
 
-  - id: gh-api-find-exec-redirect-denies
+  - id: gh-api-find-exec-redirect-asks
     command: "find . -exec gh api repos/foo \\; > ~/.ssh/authorized_keys"
     expected:
       decision: ask
       rule_id: redirect-write-ssh-authorized-keys
-    note: "v0.18.3: now denies via redirect-write-ssh-authorized-keys (find leaf carries the redirect; rule fires on it)"
+    note: "v0.18.3: ask via redirect-write-ssh-authorized-keys (find leaf carries the redirect; rule fires on it)"
 
   - id: gh-api-xargs-asks
     command: "echo repos/foo | xargs gh api"
@@ -697,16 +697,16 @@ tests:
       decision: ask
     note: "stdout redirect to file is not safe; must still ask"
 
-  - id: gh-api-get-write-sensitive-denies
+  - id: gh-api-get-write-sensitive-asks
     command: "gh api repos/owner/repo/keys > ~/.ssh/authorized_keys"
     expected:
       decision: ask
       rule_id: redirect-write-ssh-authorized-keys
-    note: "v0.18.3: stdout redirect to authorized_keys now denies (was: ask under shell-c-redirect)"
+    note: "v0.18.3: ask via redirect-write-ssh-authorized-keys (was: ask under shell-c-redirect; now surfaces a more specific reason)"
 
-  - id: gh-api-get-pipe-base64-write-sensitive-denies
+  - id: gh-api-get-pipe-base64-write-sensitive-asks
     command: "gh api repos/owner/repo/contents/key --jq .content | base64 -d > ~/.ssh/authorized_keys"
     expected:
       decision: ask
       rule_id: redirect-write-ssh-authorized-keys
-    note: "v0.18.3: pipeline tail's redirect to authorized_keys now denies; deny is strictly stronger than the pre-spec ask"
+    note: "v0.18.3: pipeline tail's redirect to authorized_keys asks via the more-specific new rule"
