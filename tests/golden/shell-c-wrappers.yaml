@@ -316,3 +316,18 @@ tests:
     command: "ksh -c 'echo hi' 2>/dev/null"
     expected:
       decision: allow
+
+  # ── afterhours daemon-jam regression pins (the literal shapes from
+  #    the original audit log that motivated v0.18.3) ──
+  - id: afterhours-jam-1-xargs-shc-devnull
+    command: "ls -t /tmp/*.jsonl | head -5 | xargs -I {} sh -c 'echo {}' 2>/dev/null"
+    expected:
+      decision: allow
+  - id: afterhours-jam-2-tmux-display-subst-with-lsof-pipe
+    command: "PANE_PID=$(tmux display -t %32 -p '#{pane_pid}') && lsof -p $PANE_PID | grep rollout"
+    expected:
+      decision: allow
+  - id: afterhours-jam-3-tmux-display-subst-with-lsof
+    command: "PANE_PID=$(tmux display -t %33 -p '#{pane_pid}') && lsof -p $PANE_PID"
+    expected:
+      decision: allow
