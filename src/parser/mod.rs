@@ -932,3 +932,114 @@ mod tests {
         );
     }
 }
+
+// --- Redirect shape pins: document actual tree-sitter-bash 0.25.x behavior ---
+//
+// tree-sitter-bash emits the following token kinds inside file_redirect nodes:
+//   "&>"  — anonymous token, not matched in parse_redirect → op stays Write (default)
+//   "&>>" — anonymous token, not matched in parse_redirect → op stays Write (default)
+//   ">&-" — combined anonymous token (no separate "-" word child) → op stays Write, target ""
+//   ">&"  — matched in parse_redirect → op = DupOutput; destination word → target set
+//
+// The redirect-write-* rules list DupOutput in their op_any_of to catch ">& file" forms.
+// "&>" and "&>>" produce Write, which is already in op_any_of for those rules, so they
+// are covered. ">&-" (close-fd) produces Write + empty target — the redirect-write-*
+// rules require a non-empty, non-devnull target, so close-fd is naturally excluded.
+#[cfg(test)]
+mod redirect_shape_tests {
+    use super::*;
+
+    fn first_simplecommand(cmd: &str) -> SimpleCommand {
+        let stmt = parse(cmd).unwrap_or_else(|e| panic!("parse({cmd:?}) failed: {e}"));
+        match stmt {
+            Statement::SimpleCommand(c) => c,
+            other => panic!("expected SimpleCommand for {cmd:?}, got {other:?}"),
+        }
+    }
+
+    // &> /tmp/foo: tree-sitter emits anonymous "&>" token (not matched in parse_redirect),
+    // so op falls back to the default Write. The word child still sets the target.
+    #[test]
+    fn bash_amp_gt_to_file_produces_write_redirect() {
+        let c = first_simplecommand("echo k &> /tmp/foo");
+        assert!(
+            !c.redirects.is_empty(),
+            "expected at least one redirect for '&>', got {:?}",
+            c.redirects,
+        );
+        let r = &c.redirects[0];
+        assert_eq!(
+            r.op,
+            RedirectOp::Write,
+            "'&>' falls through to Write (default) in parse_redirect; got {:?}",
+            r.op,
+        );
+        assert_eq!(
+            r.target, "/tmp/foo",
+            "destination word is still captured despite op token not being matched",
+        );
+    }
+
+    // &>> /tmp/foo: same as &> — anonymous token, falls through to Write default.
+    #[test]
+    fn bash_amp_gt_gt_to_file_produces_write_redirect() {
+        let c = first_simplecommand("echo k &>> /tmp/foo");
+        assert!(
+            !c.redirects.is_empty(),
+            "expected at least one redirect for '&>>', got {:?}",
+            c.redirects,
+        );
+        let r = &c.redirects[0];
+        assert_eq!(
+            r.op,
+            RedirectOp::Write,
+            "'&>>' falls through to Write (default) in parse_redirect; got {:?}",
+            r.op,
+        );
+        assert_eq!(
+            r.target, "/tmp/foo",
+            "destination word is still captured for &>>",
+        );
+    }
+
+    // >& /tmp/foo: ">&" IS matched in parse_redirect → DupOutput.
+    #[test]
+    fn dup_output_file_target() {
+        let c = first_simplecommand("echo k >& /tmp/foo");
+        let r = c
+            .redirects
+            .first()
+            .unwrap_or_else(|| panic!("expected redirect for '>& /tmp/foo', got none"));
+        assert_eq!(
+            r.op,
+            RedirectOp::DupOutput,
+            "'>& file' should produce DupOutput; got {:?}",
+            r.op,
+        );
+        assert_eq!(r.target, "/tmp/foo");
+    }
+
+    // >&- (close fd): tree-sitter emits a single combined ">&-" token with no separate
+    // word child. parse_redirect has no arm for ">&-", so op stays Write and target stays "".
+    #[test]
+    fn dup_output_close_dash_produces_write_empty_target() {
+        let c = first_simplecommand("echo k >&-");
+        let r = c
+            .redirects
+            .first()
+            .unwrap_or_else(|| panic!("expected redirect for '>&-', got none"));
+        // ">&-" is a combined anonymous token — parse_redirect has no arm for it,
+        // so op defaults to Write and there is no word child to set a target.
+        assert_eq!(
+            r.op,
+            RedirectOp::Write,
+            "'>&-' falls through to Write (default); got {:?}",
+            r.op,
+        );
+        assert_eq!(
+            r.target, "",
+            "'>&-' has no word child, so target stays empty; got {:?}",
+            r.target,
+        );
+    }
+}
