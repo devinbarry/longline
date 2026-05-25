@@ -143,11 +143,11 @@ Wire **both** `PreToolUse` and `PermissionRequest`. If you wire only `PreToolUse
 
 Field names are case-sensitive — `PreToolUse`, `PermissionRequest`, `Bash` — typos are silently ignored by Codex.
 
-Project rule overlays live at `<repo>/.claude/longline.yaml` regardless of runtime — Claude and Codex share the same project config. v0.16 also adds `<repo>/.codex/` as a project-root marker so Codex-only repos are discoverable.
+Project rule overlays live at `<repo>/.claude/longline.yaml` regardless of runtime — Claude and Codex share the same project config. `<repo>/.codex/` is also recognized as a project-root marker for Codex-only repos.
 
 The same hooks can be expressed inline in `~/.codex/config.toml` under `[[hooks.PreToolUse]]` / `[[hooks.PermissionRequest]]` blocks; pick whichever you already maintain.
 
-This release covers Codex `Bash` only. `apply_patch` and MCP tool calls pass through to Codex's normal flow without longline policy evaluation; both will be policy-evaluated in a later release.
+Codex `Bash` is fully policy-evaluated. `apply_patch` and MCP tool calls currently pass through to Codex's normal flow without longline evaluation.
 
 ## Usage
 
@@ -330,7 +330,7 @@ These flags combine with the hook command in your settings:
 
 ### Why profiles exist
 
-Different runtimes and session contexts need different rule sets. Codex tooling is materially sloppier than Claude tooling and benefits from tighter rules; a specialized context such as an afterhours daemon supervising Codex may need stricter rules still, while an interactive Claude session can be more permissive. Profiles let one binary serve all of these without duplicating `rules.yaml`. If you run only one runtime in one mode, you do not need profiles — the implicit `default` profile applies and behavior is byte-identical to v0.16.
+Different runtimes and session contexts need different rule sets. Codex tooling is materially sloppier than Claude tooling and benefits from tighter rules; a specialized context such as an afterhours daemon supervising Codex may need stricter rules still, while an interactive Claude session can be more permissive. Profiles let one binary serve all of these without duplicating `rules.yaml`. If you run only one runtime in one mode, you do not need profiles — the implicit `default` profile applies.
 
 ### Conceptual model
 
@@ -495,21 +495,17 @@ Every JSONL entry in `~/.claude/hooks-logs/longline.jsonl` and `~/.codex/hooks-l
 
 Users not using profiles see `"profile": "default"` on every entry.
 
-The reserved sentinel `"profile": "unresolved"` appears only on Codex fail-open entries where profile resolution itself failed (Phase 1 panic recovery). User-defined profiles may not be named `unresolved`.
+The reserved sentinel `"profile": "unresolved"` appears only on Codex fail-open entries where profile resolution itself failed. User-defined profiles may not be named `unresolved`.
 
 ### Weakening note
 
-Profile rules can **weaken** embedded denies — including the v0.16.6 repo-corruption deny rules — by reusing the same rule `id` with a different decision. This is intentional per the longline threat model (optimize for false-positive elimination; the operator is trusted), but it means you can silently disable safety rails. After defining any profile, run:
+Profile rules can **weaken** embedded denies by reusing the same rule `id` with a different decision. This is intentional per the longline threat model (optimize for false-positive elimination; the operator is trusted), but it means you can silently disable safety rails. After defining any profile, run:
 
 ```bash
 longline rules --profile <name>
 ```
 
 to confirm the resolved rule set. The output annotates each profile-source rule that replaced a same-id builtin with `[overrides id 'foo' from builtin]`.
-
-### Migration note
-
-If you have no `profiles:` block and no `--profile` flag, longline behaves byte-identically to v0.16. The single observable change in audit logs is a new `profile: "default"` field on every entry — any consumer of the JSONL output must tolerate unknown fields.
 
 ## Supported bash constructs
 
