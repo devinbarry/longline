@@ -2,6 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.3] - 2026-05-25
+
+### Added
+
+- **`tmux display` allowlisted** (alias for `tmux display-message`).
+  Closes the afterhours daemon-jam class for invocations like
+  `PANE_PID=$(tmux display -t %N -p '#{pane_pid}')`.
+- **New `redirect-write-*` ASK rules in `secrets.yaml`** for direct
+  redirect writes to sensitive paths:
+  `redirect-write-ssh-authorized-keys`, `redirect-write-ssh-private-key`,
+  `redirect-write-env-file`, `redirect-write-cloud-credentials` (covers
+  AWS + kube). Previously `echo k > ~/.ssh/authorized_keys` allowed
+  silently (no rule fired); now it surfaces an ASK so the human can
+  approve or reject explicitly. All four rules are ASK, not DENY —
+  these are high-trust operations with legitimate workflows (deploy
+  keys, ssh-keygen, aws configure, kube bootstrap) that warrant human
+  review, not a hard block. Op coverage includes `>`, `>>`, `>|`,
+  `>&`, `&>`, `&>>`. Target globs cover both literal-`~` paths and
+  `**/` companion entries for absolute paths.
+
+### Changed
+
+- **shell-c wrappers with `/dev/null`-only redirects no longer ASK.**
+  `bash -c '...' 2>/dev/null`, `bash -c '...' > /dev/null 2>&1`, and
+  the other canonical output-discard shapes now allow (gate +
+  classifier both relaxed via a new stateful
+  `redirects_discard_all_output` walker). Fixes the afterhours
+  daemon-jam class for benign discard redirects. File-target wrapper
+  redirects continue to ASK via the unchanged `shell-c-redirect`
+  reason.
+- **shell-c wrappers carrying env-var assignments continue to ASK on
+  devnull redirects.** `GIT_SSH_COMMAND=… bash -c '...' 2>/dev/null`
+  asks even though the redirect is pure /dev/null — closing an
+  env-smuggling bypass the relaxation would otherwise have opened.
+  The pre-existing no-redirect form of the same bypass
+  (`GIT_SSH_COMMAND=evil bash -c 'git fetch'` allows) is a known gap
+  outside this release's scope.
+
+### Internal
+
+- New `src/policy/redirects.rs` module hosts `is_devnull_target`,
+  `redirects_discard_all_output` (stateful order-aware walker), and
+  the relocated `is_stderr_devnull` (moved from `gh_classifier.rs`).
+
 ## [0.18.2] - 2026-05-22
 
 ### Fixed
