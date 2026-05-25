@@ -397,6 +397,18 @@ tests:
     command: "tmux display-message -p '#{session_name}'"
     expected:
       decision: allow
+  - id: tmux-display-alias
+    command: "tmux display -t %32 -p '#{pane_pid}'"
+    expected:
+      decision: allow
+  - id: tmux-display-alias-in-subst
+    command: "PANE_PID=$(tmux display -t %32 -p '#{pane_pid}')"
+    expected:
+      decision: allow
+  - id: tmux-display-message-still-allows
+    command: "tmux display-message -t %32 -p '#{pane_pid}'"
+    expected:
+      decision: allow
   # tmux: boolean flags before subcommand (should still match allowlist)
   - id: tmux-boolean-flag-before-ls
     command: "tmux -v ls"

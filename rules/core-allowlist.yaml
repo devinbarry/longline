@@ -157,6 +157,7 @@ allowlists:
     - { command: "tmux list-panes", trust: minimal }
     - { command: "tmux capture-pane", trust: minimal }
     - { command: "tmux display-message", trust: minimal }
+    - { command: "tmux display", trust: minimal }
     - { command: "tmux show-options", trust: minimal }
     - { command: "tmux show-environment", trust: minimal }
     - { command: "tmux has-session", trust: minimal }
