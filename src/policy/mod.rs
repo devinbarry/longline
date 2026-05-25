@@ -3,6 +3,7 @@ mod config;
 mod descriptive_asks;
 pub mod gh_classifier;
 mod matching;
+pub(crate) mod redirects;
 
 #[allow(unused_imports)]
 pub use config::{

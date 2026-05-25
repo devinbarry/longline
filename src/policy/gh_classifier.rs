@@ -8,7 +8,8 @@
 //! See `docs/superpowers/specs/2026-05-05-r7-readonly-gh-classifier-design.md`
 //! for the full design rationale.
 
-use crate::parser::{Arg, ArgMeta, Redirect, RedirectOp, SimpleCommand};
+use super::redirects::is_stderr_devnull;
+use crate::parser::{Arg, ArgMeta, SimpleCommand};
 
 /// Body/field flag tokens (long forms). Any token equal to one of these
 /// or starting with `<flag>=` triggers `gh api` rejection.
@@ -19,20 +20,6 @@ const API_BODY_LONG_FLAGS: &[&str] = &["--field", "--form", "--raw-field", "--in
 /// from parsed argv (command substitution, variable expansion, etc.).
 fn has_unsafe_argv(argv: &[Arg]) -> bool {
     argv.iter().any(|a| matches!(a.meta, ArgMeta::UnsafeString))
-}
-
-/// Returns true if the redirect is exactly `2>/dev/null` — pure stderr
-/// suppression that performs no file write and carries no security risk.
-/// Used to exempt this common pattern from the redirect-rejection guards in
-/// classify_gh_api and require_strict_invocation, which otherwise reject ALL
-/// redirects to match pre-R7 ask uniformity.
-///
-/// Intentionally excluded: `2>>/dev/null` (Append op), `>/dev/null 2>&1`
-/// (DupOutput op / fd-None redirect), and `2>&-` (close fd). Those forms
-/// are semantically similar but less common; keeping them as ask is
-/// conservative and avoids edge-case parsing surprises.
-fn is_stderr_devnull(r: &Redirect) -> bool {
-    r.fd == Some(2) && r.op == RedirectOp::Write && r.target == "/dev/null"
 }
 
 /// Top-level gh flags that take a value as the next argv token. When
