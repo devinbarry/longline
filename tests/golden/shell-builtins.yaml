@@ -113,7 +113,7 @@ tests:
   # ════════════════════════════════════════════════════════════════
   # source / . (parsed as SimpleCommand, NOT allowlisted)
   # source/. are intentionally not in the core allowlist because
-  # secrets.yaml deny rules only cover cat/less/more/head/tail/bat,
+  # secrets.yaml ask rules only cover cat/less/more/head/tail/bat,
   # not source. Allowlisting source would let `source ~/.ssh/id_rsa`
   # through unchecked. See bypass-attempts.yaml for security tests.
   # ════════════════════════════════════════════════════════════════
@@ -149,25 +149,25 @@ tests:
       decision: ask
 
   # ── Dangerous source: denied by rules ─────────────────────────
-  - id: source-env-deny
+  - id: source-env-asks
     command: "source .env"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
-  - id: source-env-local-deny
+  - id: source-env-local-asks
     command: "source .env.local"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
-  - id: dot-env-deny
+  - id: dot-env-asks
     command: ". .env"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
-  - id: dot-envrc-deny
+  - id: dot-envrc-asks
     command: ". .envrc"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
 
   # ════════════════════════════════════════════════════════════════
@@ -211,16 +211,16 @@ tests:
     expected:
       decision: allow
 
-  # ── Negative: command + dangerous inner = deny ────────────────
+  # ── Negative: command + dangerous inner ──────────────────────
   - id: command-rm-deny
     command: "command rm -rf /"
     expected:
       decision: deny
       rule_id: rm-recursive-root
-  - id: command-cat-env-deny
+  - id: command-cat-env-asks
     command: "command cat .env"
     expected:
-      decision: deny
+      decision: ask
       rule_id: cat-env-file
   - id: command-unknown-ask
     command: "command some_unknown_command"

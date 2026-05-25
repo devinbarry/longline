@@ -75,16 +75,16 @@ tests:
       decision: deny
       rule_id: rm-recursive-root
 
-  - id: bare-assign-deny-cat-env
+  - id: bare-assign-asks-cat-env
     command: "SECRET=$(cat .env)"
     expected:
-      decision: deny
+      decision: ask
       rule_id: cat-env-file
 
-  - id: bare-assign-deny-cat-ssh
+  - id: bare-assign-asks-cat-ssh
     command: "KEY=$(cat ~/.ssh/id_rsa)"
     expected:
-      decision: deny
+      decision: ask
       rule_id: cat-ssh-key
 
   # -- Unknown command in bare assignment (ask) -----------------------------

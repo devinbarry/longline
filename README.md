@@ -4,21 +4,41 @@
 [![crates.io](https://img.shields.io/crates/v/longline.svg)](https://crates.io/crates/longline)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) that auto-allows safe shell commands so AI coding agents stop interrupting you for approval — and still blocks the dangerous ones.
+A safety hook for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex CLI](https://github.com/openai/codex) that auto-allows safe shell commands so AI coding agents stop interrupting you for approval.
 
 ## What it does
 
-longline acts as a `PreToolUse` hook for both Claude Code and Codex CLI. It intercepts Bash commands before execution, parses them using tree-sitter, evaluates them against YAML-defined safety rules, and returns allow/ask/deny decisions. Under Claude it also handles Read, Grep, and Glob tools with path-based sensitive-file protection.
+`PreToolUse` hook for both runtimes. Intercepts Bash, parses with tree-sitter, evaluates against YAML rules, returns allow/ask/deny. Under Claude it also handles Read/Grep/Glob with path-based sensitive-file protection.
 
-**Design goal — speed, not gatekeeping.** Claude Code and Codex stop to ask for approval on nearly every shell command, which interrupts flow even when the command is plainly safe. longline's job is to keep those tools moving: auto-allow the obviously safe operations, reserve prompts for things that genuinely warrant human review, and let each repo extend the allowlist with whatever the developer considers safe in that project. It's a safety hook, but the day-to-day reason it exists is to speed up development and automation by replacing constant approval prompts with a configurable, well-tested policy.
+The day-to-day job is speed, not gatekeeping. Agents stop to ask on nearly every command; longline auto-allows the plainly safe ones and reserves prompts for things that genuinely warrant human review.
 
-**Key features:**
-- Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, and compound statements
+**Features:**
+- Structured parsing of pipelines, redirects, command substitutions, loops, conditionals, compound statements
+- Per-project overlays — extend the allowlist with whatever's safe in your repo
 - Configurable safety levels (critical, high, strict) and trust levels (minimal, standard, full)
-- Optional AI evaluation for inline interpreter code
-- 1850+ golden test cases for accuracy
-- JSONL audit logging
-- Fail-closed design: unknown/unparseable constructs default to `ask`
+- Optional AI evaluation for inline interpreter code (`python -c`, `node -e`, etc.)
+- 1850+ golden test cases
+- JSONL audit log
+- Fail-closed: unparseable constructs default to `ask`
+
+## Philosophy
+
+**Ask is the primary decision.** Deny is reserved for the small set of operations that are catastrophic, irreversible, and never legitimately needed — `rm -rf /`, `dd of=/dev/sda`, `mkfs`, `fdisk`, writes to `/dev/sd*`. Everything else asks. Allow is auto-applied for things on the allowlist.
+
+Why almost no deny? When a hook blocks an agent, the agent doesn't stop — it pivots. It renames the file, wraps the command, encodes it, falls back to a different tool. Deny shifts the failure surface from "did the agent listen?" to "did we patch every bypass?" Ask shifts it to "is the human paying attention?" — a much clearer protocol for collaboration. For the genuinely catastrophic class, neither blocking nor asking is great, but blocking is the lesser evil because a misclick on `ask` to `rm -rf /` is unrecoverable.
+
+For the rare legitimate use of a denied command (you really are formatting a disk), add an `allow_rules:` override in your project config. Don't weaken the rule globally.
+
+**Deterministic rules engine, not an LLM.** Every decision is a Rust function over a parsed CST and a YAML matcher. No network calls in the hot path, no model latency, no nondeterminism. A decision typically takes milliseconds; the agent never waits on longline. Same input = same output, every time. The optional `--ask-ai` mode invokes a separate LLM judge for inline interpreter code (`python -c '...'`), and even then only to *lift* an ask to allow, never to escalate to deny.
+
+## Repo design
+
+- **`src/parser/`** — tree-sitter Bash CST → typed `Statement` enum. Wrappers (`env`, `timeout`, `nice`, `nohup`, `strace`, `time`, `uv run`, `command`, `builtin`) are unwrapped. Shell-c wrappers (`bash -c`, `sh -c`, `zsh -c`, etc.) are re-parsed when the inner string is safe.
+- **`src/policy/`** — evaluates leaves against YAML matchers. Most-restrictive decision across all leaves wins. Allowlists checked after rules so rules can override allowlisted commands (e.g. `cat .env` asks despite `cat` being allowlisted).
+- **`src/config/`** — multi-file YAML loader, project/global overlay merge, profile system.
+- **`src/adapters/`** — runtime-specific JSON I/O. Claude vs Codex have different protocols; the evaluator is runtime-neutral.
+- **`rules/`** — the 16+ YAML rule files, embedded at compile time. Organized by domain: `git`, `secrets`, `network`, `filesystem`, `docker`, `node`, `python`, `rust`, etc.
+- **`tests/golden/`** — 1850+ test cases as YAML (command in, expected decision out). The runner is `tests/golden_tests.rs`.
 
 ## Installation
 

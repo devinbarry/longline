@@ -164,8 +164,10 @@ tests:
       rule_id: tee-any
     # writing to system file
   - id: tee-append-bashrc
+    overlay: |
+      disable_rules: [tee-any]
     command: "tee -a ~/.bashrc"
     expected:
-      decision: deny
+      decision: ask
       rule_id: edit-shell-profile
-    # modifying shell profile
+    # modifying shell profile (tee-any masks edit-shell-profile at same severity, disabled here)

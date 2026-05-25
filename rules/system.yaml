@@ -66,7 +66,7 @@ rules:
         any_of: [tee, ">>"]
       args:
         any_of: ["/etc/hosts"]
-    decision: deny
+    decision: ask
     reason: "Modifying /etc/hosts"
 
   - id: edit-sudoers
@@ -76,7 +76,7 @@ rules:
         any_of: [visudo, tee]
       args:
         any_of: ["/etc/sudoers", "/etc/sudoers.d/*"]
-    decision: deny
+    decision: ask
     reason: "Modifying sudoers configuration"
 
   - id: crontab-modify
@@ -106,7 +106,7 @@ rules:
       args:
         any_of: ["~/.bashrc", "~/.zshrc", "~/.bash_profile", "~/.profile",
                   "~/.zprofile", "/etc/profile", "/etc/bash.bashrc"]
-    decision: deny
+    decision: ask
     reason: "Modifying shell profile"
 
   # ============================================================
@@ -127,7 +127,7 @@ rules:
       command: crontab
       flags:
         any_of: ["-r"]
-    decision: deny
+    decision: ask
     reason: "Removing all cron jobs"
 
   - id: longline-init
@@ -151,7 +151,7 @@ rules:
           any_of: ["/etc/hosts", "/etc/passwd", "/etc/shadow", "/etc/sudoers",
                     "/etc/fstab", "/etc/resolv.conf", "/etc/profile",
                     "/etc/bash.bashrc", "/etc/sudoers.d/*"]
-    decision: deny
+    decision: ask
     reason: "Redirect write to system configuration file"
 
   - id: redirect-write-device

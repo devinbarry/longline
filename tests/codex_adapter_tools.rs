@@ -67,7 +67,9 @@ fn permission_request_bash_empty_command_does_not_panic() {
 // Shell metacharacters: policy must still fire on Codex input.
 
 #[test]
-fn pre_tool_use_pipeline_dangerous_denies() {
+fn pre_tool_use_pipeline_curl_pipe_sh_asks_passthrough() {
+    // curl | sh asks post-v0.18.4 (was deny). Codex PreToolUse on ask = empty stdout
+    // (passthrough to PermissionRequest), not a deny.
     let env = TestEnv::new().build();
     let input = json!({
         "hook_event_name": "PreToolUse",
@@ -79,7 +81,7 @@ fn pre_tool_use_pipeline_dangerous_denies() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(
         result.codex_pre_tool_use_decision().as_deref(),
-        Some("deny"),
+        None,
         "stdout: {:?}",
         result.stdout
     );

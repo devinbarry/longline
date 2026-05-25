@@ -18,7 +18,7 @@ rules:
               any_of: [curl, wget]
           - command:
               any_of: [sh, bash, zsh, dash, ksh, fish]
-    decision: deny
+    decision: ask
     reason: "Remote code execution: piping download to shell"
 
   - id: wget-pipe-interpreter
@@ -32,7 +32,7 @@ rules:
               any_of: [python, python3, ruby, perl, node]
             flags:
               none_of: ["-m", "-c", "-e"]
-    decision: deny
+    decision: ask
     reason: "Remote code execution: piping download to interpreter"
 
   - id: curl-pipe-interpreter-inline
@@ -112,5 +112,5 @@ rules:
         any_of: [source, "."]
       args:
         any_of: [".env", ".env.*", "**/.env", "**/.env.*", ".envrc"]
-    decision: deny
+    decision: ask
     reason: "Sourcing environment file"

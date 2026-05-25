@@ -49,10 +49,10 @@ tests:
     command: "visudo"
     expected:
       decision: ask
-  - id: visudo-sudoers-deny
+  - id: visudo-sudoers-asks
     command: "visudo /etc/sudoers"
     expected:
-      decision: deny
+      decision: ask
       rule_id: edit-sudoers
   - id: fdisk-deny
     command: "fdisk /dev/sda"
@@ -148,15 +148,53 @@ tests:
   - id: source-env-file
     command: "source .env"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
   - id: source-env-local
     command: "source .env.local"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
   - id: source-envrc
     command: "source .envrc"
     expected:
-      decision: deny
+      decision: ask
       rule_id: source-env
+
+  # ── v0.18.4 deny→ask flip coverage ──
+  # edit-etc-hosts fires only when tee-any (same severity, same decision) is disabled.
+  - id: edit-etc-hosts-tee-asks
+    overlay: |
+      disable_rules: [tee-any]
+    command: "tee /etc/hosts"
+    expected:
+      decision: ask
+      rule_id: edit-etc-hosts
+  # edit-sudoers via tee path — also shadowed by tee-any without overlay.
+  - id: edit-sudoers-tee-asks
+    overlay: |
+      disable_rules: [tee-any]
+    command: "tee /etc/sudoers"
+    expected:
+      decision: ask
+      rule_id: edit-sudoers
+  - id: redirect-write-etc-hosts-asks
+    command: "echo '127.0.0.1 foo' > /etc/hosts"
+    expected:
+      decision: ask
+      rule_id: redirect-write-etc
+  - id: redirect-write-etc-sudoers-asks
+    command: "echo 'user ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
+    expected:
+      decision: ask
+      rule_id: redirect-write-etc
+  # crontab-remove is strict-level — needs override_safety_level: strict to fire,
+  # and crontab-modify (high, same decision) must be disabled to surface its rule_id.
+  - id: crontab-remove-strict-asks
+    overlay: |
+      override_safety_level: strict
+      disable_rules: [crontab-modify]
+    command: "crontab -r"
+    expected:
+      decision: ask
+      rule_id: crontab-remove

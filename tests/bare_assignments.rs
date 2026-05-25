@@ -109,17 +109,17 @@ fn test_bare_assign_dangerous_rm() {
 }
 
 #[test]
-fn test_bare_assign_dangerous_cat_env() {
+fn test_bare_assign_sensitive_cat_env_asks() {
     let result = run_claude_hook("Bash", "SECRET=$(cat .env)");
     assert_eq!(result.exit_code, 0);
-    result.assert_claude_decision("deny");
+    result.assert_claude_decision("ask");
 }
 
 #[test]
-fn test_bare_assign_dangerous_cat_ssh_key() {
+fn test_bare_assign_sensitive_cat_ssh_key_asks() {
     let result = run_claude_hook("Bash", "KEY=$(cat ~/.ssh/id_rsa)");
     assert_eq!(result.exit_code, 0);
-    result.assert_claude_decision("deny");
+    result.assert_claude_decision("ask");
 }
 
 // ---------------------------------------------------------------------------
