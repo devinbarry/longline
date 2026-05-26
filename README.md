@@ -266,7 +266,7 @@ Example rules:
         any_of: [">", ">>"]
       target:
         any_of: ["/etc/hosts", "/etc/passwd", "/etc/shadow"]
-  decision: deny
+  decision: ask
   reason: "Redirect write to system configuration file"
 ```
 
