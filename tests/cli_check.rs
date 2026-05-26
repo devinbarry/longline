@@ -1,6 +1,6 @@
 mod support;
 use std::path::PathBuf;
-use support::cli::run_subcommand;
+use support::cli::{run_subcommand, run_subcommand_with_home};
 use support::paths::rules_path;
 
 #[test]
@@ -168,5 +168,64 @@ fn test_e2e_check_labels_opaque_ask() {
         result.stdout.contains("(opaque)"),
         "Should label opaque policy asks: {}",
         result.stdout
+    );
+}
+
+#[test]
+fn test_e2e_check_profile_accepts_inline_command() {
+    let home = tempfile::TempDir::new().unwrap();
+    let config_dir = home.path().join(".config").join("longline");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("longline.yaml"),
+        r#"
+profiles:
+  strict-smoke:
+    safety_level: strict
+    rules:
+      - id: strict-smoke-test-rule
+        level: high
+        match:
+          command: strict-smoke-command
+        decision: ask
+        reason: strict smoke profile rule
+"#,
+    )
+    .unwrap();
+
+    let home_str = home.path().to_string_lossy().to_string();
+    let result = run_subcommand_with_home(
+        &["check", "--profile", "strict-smoke", "strict-smoke-command"],
+        &home_str,
+    );
+
+    assert_eq!(result.exit_code, 0, "stderr={}", result.stderr);
+    assert!(
+        result.stdout.contains("strict-smoke-command"),
+        "stdout should include inline command: {}",
+        result.stdout
+    );
+    assert!(
+        result.stdout.contains("strict-smoke-test-rule"),
+        "stdout should include profile rule id: {}",
+        result.stdout
+    );
+    assert!(
+        result.stdout.contains("ask"),
+        "stdout should include ask decision: {}",
+        result.stdout
+    );
+}
+
+#[test]
+fn test_e2e_check_missing_txt_file_still_fails() {
+    let result = run_subcommand(&["check", "definitely-missing-longline-file.txt"]);
+    assert_eq!(result.exit_code, 1);
+    assert!(
+        result
+            .stderr
+            .contains("Failed to read definitely-missing-longline-file.txt"),
+        "stderr should preserve missing-file error: {}",
+        result.stderr
     );
 }

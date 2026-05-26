@@ -1,6 +1,6 @@
 use clap::Parser as ClapParser;
 use clap::Subcommand;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::adapters::claude;
 use longline::config;
@@ -85,7 +85,7 @@ impl SafetyLevelArg {
 enum Commands {
     /// Test commands against rules
     Check {
-        /// File with one command per line (stdin if omitted)
+        /// File with one command per line, '-' for stdin, or a single command string
         file: Option<PathBuf>,
 
         /// Show only: allow, ask, deny
@@ -602,23 +602,34 @@ fn run_check(
     0
 }
 
-fn read_check_input(file: Option<PathBuf>) -> Result<String, String> {
-    match file {
-        Some(path) if path.to_str() != Some("-") => std::fs::read_to_string(&path)
+fn read_check_input(file_or_command: Option<PathBuf>) -> Result<String, String> {
+    match file_or_command {
+        Some(path) if path.to_str() == Some("-") => read_check_stdin(),
+        Some(path) if path.exists() => std::fs::read_to_string(&path)
             .map_err(|e| format!("Failed to read {}: {e}", path.display())),
-        _ => {
-            if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                return Err(
-                    "No input provided. Use --file <path> or pipe commands to stdin.".to_string(),
-                );
-            }
-            let mut buf = String::new();
-            let mut stdin = std::io::stdin();
-            std::io::Read::read_to_string(&mut stdin, &mut buf)
-                .map_err(|e| format!("Failed to read stdin: {e}"))?;
-            Ok(buf)
-        }
+        Some(path) if looks_like_missing_file(&path) => std::fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display())),
+        Some(command) => Ok(command.to_string_lossy().into_owned()),
+        None => read_check_stdin(),
     }
+}
+
+fn looks_like_missing_file(path: &Path) -> bool {
+    path.components().count() > 1 || path.extension().is_some()
+}
+
+fn read_check_stdin() -> Result<String, String> {
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        return Err(
+            "No input provided. Pass a command string, use '-' for stdin, or pipe commands to stdin."
+                .to_string(),
+        );
+    }
+    let mut buf = String::new();
+    let mut stdin = std::io::stdin();
+    std::io::Read::read_to_string(&mut stdin, &mut buf)
+        .map_err(|e| format!("Failed to read stdin: {e}"))?;
+    Ok(buf)
 }
 
 /// Map a RuleSource to its lowercase label, matching the existing
