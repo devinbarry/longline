@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.5] - 2026-05-26
+
+### Added
+
+- **CLI contract smoke tests for README-promised workflows.** New
+  `scripts/cli-contract-smoke.sh` exercises the release binary the way
+  users invoke it: bare Claude hook usage, explicit Claude/Codex hook
+  subcommands, `rules`, `check`, `init`, `files`, profile handling,
+  config discovery, and AI-judge flag parsing.
+- **GitHub Actions CLI contract workflow.** New `CLI Contract` workflow
+  builds the release binary and runs the shell smoke suite on pushes,
+  pull requests, and manual dispatches.
+
+### Changed
+
+- **Release publishing is gated by the CLI contract suite.** The GitHub
+  release workflow now builds the final release binary and runs the smoke
+  tests before `cargo publish` and GitHub Release creation.
+- **GitHub Actions now use Node 24 runtimes.** Updated `actions/checkout`
+  and `softprops/action-gh-release` pins to versions that declare
+  `node24`, removing Node 20 deprecation warnings.
+- **`longline check` accepts inline command strings.** The README-documented
+  `longline check "command"` form now works in addition to file and stdin
+  input. Path-like missing inputs still fail as missing files.
+- **Lockfile yanked-package warnings removed.** Updated target-specific
+  WASM lockfile packages (`js-sys` / `wasm-bindgen` family) to non-yanked
+  compatible versions so `cargo publish` no longer warns during packaging.
+
 ## [0.18.4] - 2026-05-26
 
 ### Changed
