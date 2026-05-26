@@ -17,7 +17,7 @@ The day-to-day job is speed, not gatekeeping. Agents stop to ask on nearly every
 - Per-project overlays — extend the allowlist with whatever's safe in your repo
 - Configurable safety levels (critical, high, strict) and trust levels (minimal, standard, full)
 - Optional AI evaluation for inline interpreter code (`python -c`, `node -e`, etc.)
-- 1850+ golden test cases
+- 2300+ golden test cases
 - JSONL audit log
 - Fail-closed: unparseable constructs default to `ask`
 
@@ -38,7 +38,7 @@ For the rare legitimate use of a denied command (you really are formatting a dis
 - **`src/config/`** — multi-file YAML loader, project/global overlay merge, profile system.
 - **`src/adapters/`** — runtime-specific JSON I/O. Claude vs Codex have different protocols; the evaluator is runtime-neutral.
 - **`rules/`** — the 16+ YAML rule files, embedded at compile time. Organized by domain: `git`, `secrets`, `network`, `filesystem`, `docker`, `node`, `python`, `rust`, etc.
-- **`tests/golden/`** — 1850+ test cases as YAML (command in, expected decision out). The runner is `tests/golden_tests.rs`.
+- **`tests/golden/`** — 2300+ test cases as YAML (command in, expected decision out). The runner is `tests/golden_tests.rs`.
 
 ## Installation
 

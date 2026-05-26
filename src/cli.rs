@@ -9,7 +9,11 @@ use longline::parser;
 use longline::policy;
 
 #[derive(ClapParser)]
-#[command(name = "longline", version, about = "Safety hook for Claude Code")]
+#[command(
+    name = "longline",
+    version,
+    about = "Safety hook for Claude Code and Codex CLI"
+)]
 struct Cli {
     /// Path to rules YAML file
     #[arg(short, long, value_name = "FILE", global = true)]
