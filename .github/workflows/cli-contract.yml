@@ -1,0 +1,33 @@
+name: CLI Contract
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_HUSKY_DONT_INSTALL_HOOKS: "true"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Run CLI contract smoke tests
+        run: scripts/cli-contract-smoke.sh
+        env:
+          LONGLINE_BIN: ${{ github.workspace }}/target/release/longline
