@@ -88,6 +88,53 @@ release-finish:
     echo ""
     echo "Released ${TAG}"
 
+# Recovery: move the existing v$VERSION tag forward to HEAD.
+#
+# Use when the release commit shipped but the tag pipeline failed for a
+# reason fixed by a follow-up commit on the same version (e.g., a
+# CI-config bug discovered post-tag). Safe only if the broken tag never
+# reached external consumers — there is no public observer of the
+# original tag SHA to invalidate.
+#
+# Refuses unless HEAD is strictly ahead of the existing tag (so this
+# can't be used to silently move a tag backwards or sideways).
+release-retag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION=$(cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])")
+    TAG="v${VERSION}"
+
+    if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+        echo "Error: tag ${TAG} does not exist locally. Use 'just release-finish' for a fresh release."
+        exit 1
+    fi
+
+    OLD_SHA=$(git rev-parse "refs/tags/${TAG}")
+    NEW_SHA=$(git rev-parse HEAD)
+
+    if [ "${OLD_SHA}" = "${NEW_SHA}" ]; then
+        echo "Error: ${TAG} already points to HEAD (${NEW_SHA}). Nothing to do."
+        exit 1
+    fi
+
+    if ! git merge-base --is-ancestor "${OLD_SHA}" "${NEW_SHA}"; then
+        echo "Error: HEAD (${NEW_SHA}) is not a descendant of ${TAG} (${OLD_SHA})."
+        echo "       Refusing to move the tag — this would rewrite released history."
+        exit 1
+    fi
+
+    echo "Moving ${TAG}: ${OLD_SHA} → ${NEW_SHA}"
+
+    git tag -d "${TAG}"
+    git push origin ":refs/tags/${TAG}"
+    git tag -a "${TAG}" -m "${TAG}" HEAD
+    git push && git push --tags
+    cargo install --path . --force
+
+    echo ""
+    echo "Retagged ${TAG} at ${NEW_SHA}"
+
 # Install rules to ~/.config/longline/rules.yaml
 install-rules:
     mkdir -p ~/.config/longline
