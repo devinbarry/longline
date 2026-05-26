@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.4] - 2026-05-26
+
+### Changed
+
+- **17 deny rules flipped to ASK** in `secrets.yaml`, `network.yaml`,
+  and `system.yaml`. Continuation of the v0.18.3 pivot away from
+  deny-as-default, this time covering read-side and workflow-modifying
+  rules. The remaining filesystem/device deny floor (`rm-recursive-*`,
+  `dd-disk-device`, `mkfs-any`, `fdisk`, `redirect-write-device`) is
+  the catastrophic + irreversible + never-legitimately-needed class.
+  Out of scope for this release: the v0.16.6 `git.yaml`
+  repo-corruption deny pack stays as-is pending separate review.
+  - `secrets.yaml` (9): `cat-env-file`, `cat-ssh-key`, `cat-aws-creds`,
+    `cat-kube-config`, `tee-secrets`, `stdin-redirect-env-file`,
+    `stdin-redirect-ssh-key`, `stdin-redirect-aws-creds`,
+    `stdin-redirect-kube-config`.
+  - `network.yaml` (3): `curl-pipe-shell`, `wget-pipe-interpreter`,
+    `source-env`. Pipe-to-shell installs (e.g. `curl … | sh` rustup)
+    now ask instead of block.
+  - `system.yaml` (5): `edit-etc-hosts`, `edit-sudoers`,
+    `edit-shell-profile`, `crontab-remove`, `redirect-write-etc`.
+- **Use `allow_rules:` to override** if you have a legitimate need to
+  bypass any of the now-asks rules without human review.
+
+### Tests
+
+- 98 existing pinned goldens flipped from `decision: deny` to `ask`.
+- 56 test IDs renamed from `-deny`/`-denied` to `-asks` for accuracy.
+- New goldens added for 7 rules that previously had zero pin coverage:
+  the 4 `stdin-redirect-*` rules, `edit-etc-hosts`, `redirect-write-etc`,
+  and `crontab-remove` (the last via `override_safety_level: strict`
+  overlay since it's a strict-level rule).
+- 3 afterhours-daemon regression pins (`afterhours-jam-1/-2/-3`) added
+  in commit fc73fa6, originally targeted for v0.18.4 ship.
+
 ## [0.18.3] - 2026-05-25
 
 ### Added
