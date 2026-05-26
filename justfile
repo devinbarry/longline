@@ -80,10 +80,11 @@ release-finish:
         exit 1
     fi
 
-    # Tag + push + install. These are safe to re-run; the tag-exists check
-    # above is the primary idempotency guard.
+    # Tag + push + install. Push master with GitLab CI skipped so the tag
+    # push below is the only release pipeline.
     git tag -a "${TAG}" -m "${TAG}"
-    git push && git push --tags
+    git push -o ci.skip
+    git push --tags
     cargo install --path . --force
     echo ""
     echo "Released ${TAG}"
@@ -129,7 +130,8 @@ release-retag:
     git tag -d "${TAG}"
     git push origin ":refs/tags/${TAG}"
     git tag -a "${TAG}" -m "${TAG}" HEAD
-    git push && git push --tags
+    git push -o ci.skip
+    git push --tags
     cargo install --path . --force
 
     echo ""
