@@ -855,11 +855,11 @@ mod tests {
         assert_eq!(outcome.decision, Decision::Ask);
         assert_eq!(
             outcome.reason,
-            "Shell syntax is too complex to analyze safely"
+            "Couldn't fully parse this shell syntax — confirm to run it"
         );
         assert_eq!(
             outcome.log_reason.as_deref(),
-            Some("Shell syntax is too complex to analyze safely")
+            Some("Couldn't fully parse this shell syntax — confirm to run it")
         );
         assert_eq!(outcome.matched_rules, Vec::<String>::new());
         assert!(outcome.parse_ok);

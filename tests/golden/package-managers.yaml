@@ -200,3 +200,12 @@ tests:
     command: "deno info"
     expected:
       decision: allow
+  # ── pnpm read-only metadata ───────────────────────────────────
+  - id: pnpm-view-allow
+    command: "pnpm view react"
+    expected:
+      decision: allow
+  - id: pnpm-outdated-allow
+    command: "pnpm outdated"
+    expected:
+      decision: allow

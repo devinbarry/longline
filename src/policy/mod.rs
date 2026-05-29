@@ -20,8 +20,8 @@ use crate::parser::{self, Statement};
 use crate::policy::redirects::redirects_discard_all_output;
 
 use allowlist::{
-    find_allowlist_match, find_allowlist_reason, is_allowlisted, is_covered_by_wrapper_entry,
-    is_version_check,
+    command_label, find_allowlist_match, find_allowlist_reason, is_allowlisted,
+    is_covered_by_wrapper_entry, is_known_command_family, is_version_check,
 };
 use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
@@ -77,6 +77,11 @@ fn collect_substitution_leaves(stmt: &Statement) -> Vec<&Statement> {
     walk(stmt, &mut out);
     out
 }
+
+/// Reason emitted for an `Opaque` leaf — tree-sitter could not parse the
+/// construct so longline fails closed to ask. Shared as a constant so the
+/// `check` table can label the row `(opaque)` without duplicating the literal.
+pub const OPAQUE_REASON: &str = "Couldn't fully parse this shell syntax — confirm to run it";
 
 /// Evaluate a parsed statement against the policy rules.
 /// Returns the most restrictive decision across all leaves and pipeline rules.
@@ -382,8 +387,8 @@ fn allow_rule_covers(config: &RulesConfig, leaf: &Statement) -> bool {
 /// assignment with an unknown substitution (`VAR=$(unknown)`) doesn't
 /// short-circuit on the nameless original — its real deciding leaf is the
 /// substitution, which pass 1 surfaces. Without two passes the walker would
-/// stop at the nameless bare-assignment leaf and emit a useless
-/// "Unrecognized command".
+/// stop at the nameless bare-assignment leaf and emit a useless generic
+/// "not on longline's allowlist" message.
 ///
 /// Within each bucket, the deciding leaf's *own* trust-filtered allowlist
 /// reason takes precedence over the bucket-prefixed fallback so a leaf that
@@ -423,56 +428,85 @@ fn first_uncovered_leaf_reason(
     // Pass 1: prefer leaves we can actually name.
     for leaf in leaves.iter().copied() {
         if original_uncovered(leaf) {
-            if let Some(r) = named_reason(config, "Unrecognized command", leaf) {
+            if let Some(r) = named_reason(config, "", leaf) {
                 return Some(r);
             }
         }
     }
     for leaf in extra_leaves.iter().copied() {
         if extra_uncovered(leaf) {
-            if let Some(r) = named_reason(config, "Unrecognized inner command", leaf) {
+            if let Some(r) = named_reason(config, " (inside a wrapper or pipeline)", leaf) {
                 return Some(r);
             }
         }
     }
     for leaf in subst_leaves.iter().copied() {
         if subst_uncovered(leaf) {
-            if let Some(r) = named_reason(config, "Unrecognized command substitution", leaf) {
+            if let Some(r) = named_reason(config, " (in a command substitution)", leaf) {
                 return Some(r);
             }
         }
     }
 
-    // Pass 2: nothing nameable found — fall back to the bucket prefix on
-    // the first uncovered leaf. Reached when the only uncovered leaves are
-    // nameless (bare assignment with no inner substitution, or non-
-    // SimpleCommand variants).
+    // Pass 2: nothing nameable found — fall back to a generic confirmation
+    // request on the first uncovered leaf. Reached when the only uncovered
+    // leaves are nameless (bare assignment with no inner substitution, or
+    // non-SimpleCommand variants).
     for leaf in leaves.iter().copied() {
         if original_uncovered(leaf) {
-            return Some("Unrecognized command".to_string());
+            return Some(uncovered_fallback(""));
         }
     }
     for leaf in extra_leaves.iter().copied() {
         if extra_uncovered(leaf) {
-            return Some("Unrecognized inner command".to_string());
+            return Some(uncovered_fallback(" (inside a wrapper or pipeline)"));
         }
     }
     for leaf in subst_leaves.iter().copied() {
         if subst_uncovered(leaf) {
-            return Some("Unrecognized command substitution".to_string());
+            return Some(uncovered_fallback(" (in a command substitution)"));
         }
     }
     None
 }
 
-fn named_reason(config: &RulesConfig, prefix: &str, leaf: &Statement) -> Option<String> {
+/// Generic "held for confirmation" message for an uncovered leaf longline
+/// could not name (bare assignment, non-SimpleCommand variant). `context` is
+/// an empty string or a parenthetical locating the leaf (pipeline/wrapper or
+/// command substitution).
+fn uncovered_fallback(context: &str) -> String {
+    format!("This command isn't on longline's allowlist{context} — confirm to run it")
+}
+
+/// Build the user-facing reason for an uncovered, nameable leaf. `context` is
+/// an empty string or a parenthetical locating the leaf (e.g.
+/// " (inside a wrapper or pipeline)").
+///
+/// Three cases, in priority order:
+/// 1. The leaf matches an allowlist entry the current trust level couldn't
+///    grant — surface that entry's own description (e.g. `git push` under
+///    trust:standard hints "Pushes local commits to a remote repository").
+/// 2. The leaf's basename is a known command family but this specific
+///    operation isn't pre-approved — name the operation (`git frobnicate
+///    isn't on longline's allowlist — confirm to run it`) rather than calling
+///    an obviously-known command "unrecognized".
+/// 3. A genuinely unknown command — show it as written.
+fn named_reason(config: &RulesConfig, context: &str, leaf: &Statement) -> Option<String> {
     if let Statement::SimpleCommand(cmd) = leaf {
         if let Some(reason) = find_allowlist_reason(config, cmd) {
             return Some(reason);
         }
+        if is_known_command_family(config, cmd) {
+            let label = command_label(cmd);
+            return Some(format!(
+                "{label} isn't on longline's allowlist{context} — confirm to run it"
+            ));
+        }
         if let Some(name) = &cmd.name {
             if !name.is_empty() {
-                return Some(format!("{prefix}: {name}"));
+                return Some(format!(
+                    "{name} isn't on longline's allowlist{context} — confirm to run it"
+                ));
             }
         }
     }
@@ -495,7 +529,7 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
         Statement::Opaque(_) => PolicyResult {
             decision: Decision::Ask,
             rule_id: None,
-            reason: "Shell syntax is too complex to analyze safely".to_string(),
+            reason: "Couldn't fully parse this shell syntax — confirm to run it".to_string(),
         },
         Statement::SimpleCommand(cmd) => {
             // Check rules first -- rules always take priority
@@ -1656,10 +1690,62 @@ rules: []
         let result = evaluate(&config, &stmt);
 
         assert_eq!(result.decision, Decision::Ask);
-        // No allowlist entry exists, so the reason names the uncovered leaf
-        // with the bucket prefix. Pre-fix this fell back to the generic
-        // "No matching rule; using default decision".
-        assert_eq!(result.reason, "Unrecognized command: unknown-tool");
+        // No allowlist entry exists, so `unknown-tool` is not a known family:
+        // the message shows the command as written, framed as a confirmation
+        // request rather than a comprehension failure.
+        assert_eq!(
+            result.reason,
+            "unknown-tool isn't on longline's allowlist — confirm to run it"
+        );
+    }
+
+    #[test]
+    fn test_known_family_unlisted_subcommand_names_operation() {
+        // `git status` is allowlisted, so `git` is a KNOWN family. An unlisted
+        // git operation must name the operation ("git frobnicate"), not call an
+        // obviously-known command "unrecognized".
+        let config = RulesConfig {
+            version: 1,
+            default_decision: Decision::Ask,
+            safety_level: SafetyLevel::High,
+            trust_level: TrustLevel::Standard,
+            allowlists: Allowlists {
+                commands: vec![AllowlistEntry {
+                    command: "git status".to_string(),
+                    trust: TrustLevel::Minimal,
+                    reason: None,
+                    source: RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
+        };
+
+        let stmt = parse("git frobnicate --x").unwrap();
+        let result = evaluate(&config, &stmt);
+        assert_eq!(result.decision, Decision::Ask);
+        assert_eq!(
+            result.reason,
+            "git frobnicate isn't on longline's allowlist — confirm to run it"
+        );
+
+        // Falsifiable isolation: with NO git entry, `git` is not a known family,
+        // so the same input falls through to the unknown-command branch, which
+        // names only the basename ("git"), not the operation. This is uniquely
+        // reachable without the known-family branch, proving the branch fired
+        // above.
+        let empty = RulesConfig {
+            allowlists: Allowlists {
+                commands: vec![],
+                paths: vec![],
+            },
+            ..config
+        };
+        let result = evaluate(&empty, &stmt);
+        assert_eq!(
+            result.reason,
+            "git isn't on longline's allowlist — confirm to run it"
+        );
     }
 
     #[test]

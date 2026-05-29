@@ -62,6 +62,8 @@ allowlists:
     - { command: "pnpm ls", trust: minimal }
     - { command: "pnpm why", trust: minimal }
     - { command: "pnpm audit", trust: minimal }
+    - { command: "pnpm view", trust: minimal }
+    - { command: "pnpm outdated", trust: minimal }
     - { command: "pnpm run", trust: standard, reason: "Runs a script defined in package.json" }
     - { command: "pnpm test", trust: standard, reason: "Runs the project's test suite" }
     - { command: "pnpm build", trust: standard, reason: "Runs the project's build script" }

@@ -237,19 +237,17 @@ fn args_match_prefix(required_args: &[&str], argv: &[Arg]) -> bool {
     true
 }
 
-/// Find the first allowlist entry matching the command.
-/// If `check_trust` is true, skip entries requiring a higher trust level than configured.
-fn find_matching_entry<'a>(
-    config: &'a RulesConfig,
-    cmd: &SimpleCommand,
-    check_trust: bool,
-) -> Option<&'a AllowlistEntry> {
+/// The argv to match against allowlist entries after stripping leading
+/// global value-flag pairs that don't change which subcommand runs:
+/// git's `-C`/`-c`/... , codex's `--profile`/`--model`/... , and per-command
+/// value-flags. So `git -C /repo reset` is matched as if it were `git reset`.
+fn effective_argv(cmd: &SimpleCommand) -> Cow<'_, [Arg]> {
     let cmd_name = match &cmd.name {
         Some(n) => n.as_str(),
-        None => return None,
+        None => return Cow::Borrowed(&cmd.argv),
     };
 
-    let argv: Cow<[Arg]> = if cmd_name == "git"
+    if cmd_name == "git"
         && cmd.argv.iter().any(|a| {
             matches!(
                 a.text.as_str(),
@@ -260,7 +258,8 @@ fn find_matching_entry<'a>(
                     | "--config-env"
                     | "--super-prefix"
             )
-        }) {
+        })
+    {
         Cow::Owned(strip_git_global_options(&cmd.argv))
     } else if cmd_name == "codex"
         && cmd.argv.iter().any(|a| {
@@ -284,7 +283,60 @@ fn find_matching_entry<'a>(
         } else {
             Cow::Borrowed(&cmd.argv)
         }
+    }
+}
+
+/// True when longline knows this command family — some allowlist entry's
+/// first token is this command's basename — even though this specific
+/// invocation matched no entry. Lets the "not pre-approved" message name the
+/// operation (e.g. `git reset`) instead of calling a known command
+/// "unrecognized". Basename-normalizes both sides so a path invocation
+/// (`/usr/local/bin/git`) still counts as the `git` family.
+pub fn is_known_command_family(config: &RulesConfig, cmd: &SimpleCommand) -> bool {
+    let Some(name) = cmd.name.as_deref() else {
+        return false;
     };
+    let family = normalize_command_name(name);
+    config.allowlists.commands.iter().any(|e| {
+        e.command
+            .split_whitespace()
+            .next()
+            .map(normalize_command_name)
+            == Some(family)
+    })
+}
+
+/// Display label for a not-pre-approved command: `<family> <subcommand>` using
+/// the first non-flag positional after stripping global value-flag pairs (so
+/// `git -C /repo reset --soft` renders `git reset`), or the bare `<family>`
+/// when there is no positional subcommand.
+pub fn command_label(cmd: &SimpleCommand) -> String {
+    let Some(name) = cmd.name.as_deref() else {
+        return String::new();
+    };
+    let family = normalize_command_name(name);
+    match effective_argv(cmd)
+        .iter()
+        .find(|a| !a.text.starts_with('-'))
+    {
+        Some(arg) => format!("{family} {}", arg.text),
+        None => family.to_string(),
+    }
+}
+
+/// Find the first allowlist entry matching the command.
+/// If `check_trust` is true, skip entries requiring a higher trust level than configured.
+fn find_matching_entry<'a>(
+    config: &'a RulesConfig,
+    cmd: &SimpleCommand,
+    check_trust: bool,
+) -> Option<&'a AllowlistEntry> {
+    let cmd_name = match &cmd.name {
+        Some(n) => n.as_str(),
+        None => return None,
+    };
+
+    let argv = effective_argv(cmd);
 
     for entry in &config.allowlists.commands {
         if check_trust && entry.trust > config.trust_level {

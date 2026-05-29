@@ -274,3 +274,30 @@ tests:
     expected:
       decision: allow
     note: "No inner command — wrapper itself is allowlisted"
+
+  # ════════════════════════════════════════════════════════════════
+  # : (colon no-op). Allowlisted as a builtin. There is NO fork-bomb
+  # rule: the old `command: ":"` rule flagged every benign no-op while
+  # catching no real fork bomb (see filesystem.yaml + README). These
+  # lock in that the no-op is allowed.
+  # ════════════════════════════════════════════════════════════════
+  - id: colon-noop-bare
+    command: ":"
+    expected:
+      decision: allow
+    note: "Shell no-op — must not be flagged as a fork bomb"
+  - id: colon-noop-loop-body
+    command: "for f in a b; do : ; done"
+    expected:
+      decision: allow
+    note: "Benign no-op loop body — was a fork-bomb false positive"
+  - id: colon-noop-while
+    command: "while :; do sleep 1; done"
+    expected:
+      decision: allow
+    note: "`while :` infinite-loop idiom — was a fork-bomb false positive"
+  - id: colon-self-pipe
+    command: ": | :"
+    expected:
+      decision: allow
+    note: "Self-pipe of no-ops — harmless; was a fork-bomb false positive"

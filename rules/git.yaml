@@ -50,6 +50,10 @@ allowlists:
     - { command: "git checkout", trust: standard, reason: "Switches branches or restores files" }
     - { command: "git switch", trust: standard, reason: "Switches to a different branch" }
     - { command: "git restore", trust: standard, reason: "Restores working tree files from a source" }
+    # git reset (soft/mixed) only moves HEAD / unstages — recoverable via
+    # reflog. `git reset --hard` discards uncommitted work and still ASKs via
+    # the git-reset-hard rule (rules evaluate before the allowlist).
+    - { command: "git reset", trust: standard, reason: "Moves HEAD or unstages changes (--hard still asks)" }
     - { command: "git merge", trust: standard, reason: "Merges another branch into the current branch" }
     - { command: "git cherry-pick", trust: standard, reason: "Applies changes from specific commits" }
     - { command: "git worktree", trust: standard, reason: "Manages multiple working trees" }

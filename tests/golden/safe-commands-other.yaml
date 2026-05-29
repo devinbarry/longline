@@ -8,3 +8,83 @@ tests:
     command: "javac Main.java"
     expected:
       decision: allow
+
+  # ── Core read-only tools (allowlisted in core-allowlist.yaml) ───
+  # Representative allow-coverage for read-only system/text tools that
+  # were allowlisted but previously had no golden assertion.
+  - id: uname-safe
+    command: "uname -a"
+    expected:
+      decision: allow
+  - id: uptime-safe
+    command: "uptime"
+    expected:
+      decision: allow
+  - id: hostname-safe
+    command: "hostname"
+    expected:
+      decision: allow
+  - id: df-safe
+    command: "df -h"
+    expected:
+      decision: allow
+  - id: id-safe
+    command: "id -un"
+    expected:
+      decision: allow
+  - id: ps-safe
+    command: "ps aux"
+    expected:
+      decision: allow
+  - id: lsof-safe
+    command: "lsof -i :8080"
+    expected:
+      decision: allow
+  - id: pgrep-safe
+    command: "pgrep -fl python"
+    expected:
+      decision: allow
+  - id: nproc-safe
+    command: "nproc"
+    expected:
+      decision: allow
+  - id: base64-safe
+    command: "base64 README.md"
+    expected:
+      decision: allow
+  - id: xxd-safe
+    command: "xxd file.bin"
+    expected:
+      decision: allow
+  - id: hexdump-safe
+    command: "hexdump -C file.bin"
+    expected:
+      decision: allow
+  - id: strings-safe
+    command: "strings binary"
+    expected:
+      decision: allow
+  - id: cmp-safe
+    command: "cmp a.txt b.txt"
+    expected:
+      decision: allow
+  - id: comm-safe
+    command: "comm -12 a.txt b.txt"
+    expected:
+      decision: allow
+  - id: paste-safe
+    command: "paste a.txt b.txt"
+    expected:
+      decision: allow
+  - id: tac-safe
+    command: "tac file.txt"
+    expected:
+      decision: allow
+  - id: rev-safe
+    command: "rev file.txt"
+    expected:
+      decision: allow
+  - id: column-safe
+    command: "column -t data.txt"
+    expected:
+      decision: allow

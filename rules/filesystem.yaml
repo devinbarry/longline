@@ -60,12 +60,15 @@ rules:
     decision: deny
     reason: "Formatting a filesystem"
 
-  - id: fork-bomb
-    level: critical
-    match:
-      command: ":"
-    decision: ask
-    reason: "Potential fork bomb pattern"
+  # NOTE: there is intentionally no "fork bomb" rule. The classic pattern
+  # (`:(){ :|:& };:`) is a function *named* `:` that recursively pipes itself
+  # into the background — but tree-sitter discards function names before policy
+  # runs, so no matcher can see it, and renaming the function defeats any
+  # name-based match. A `command: ":"` rule only ever flagged the benign `:`
+  # no-op (`while :`, `: ${VAR:=default}`, empty loop bodies) while missing
+  # every real bomb. The correct defense against an accidental fork bomb is an
+  # OS process cap (`ulimit -u`), which holds regardless of how the bomb is
+  # written. See SECURITY.md "Accepted Risks → Fork Bombs".
 
   # ============================================================
   # HIGH: Disk / partition

@@ -29,6 +29,7 @@ allowlists:
     - { command: cksum, trust: minimal }
     - { command: "true", trust: minimal }
     - { command: "false", trust: minimal }
+    - { command: ":", trust: minimal }  # shell no-op (`while :`, `: ${VAR:=x}`)
     - { command: sleep, trust: minimal }
     - { command: grep, trust: minimal }
     - { command: rg, trust: minimal }

@@ -313,7 +313,7 @@ fn opaque_shell_message_is_actionable() {
     assert_eq!(result.rule_id, None);
     assert_eq!(
         result.reason,
-        "Shell syntax is too complex to analyze safely"
+        "Couldn't fully parse this shell syntax — confirm to run it"
     );
 }
 
@@ -412,7 +412,8 @@ fn find_exec_inner_unknown_uses_inner_command_prefix() {
     let result = evaluate("find . -exec unknown_cmd_xyz {} \\;");
     assert_eq!(result.decision, Decision::Ask);
     assert_eq!(
-        result.reason, "Unrecognized inner command: unknown_cmd_xyz",
+        result.reason,
+        "unknown_cmd_xyz isn't on longline's allowlist (inside a wrapper or pipeline) — confirm to run it",
         "find -exec inner uncovered should surface as inner command: {}",
         result.reason
     );
@@ -426,7 +427,8 @@ fn process_substitution_in_redirect_target_names_inner() {
     let result = evaluate("cat > >(unknown_cmd_xyz)");
     assert_eq!(result.decision, Decision::Ask);
     assert_eq!(
-        result.reason, "Unrecognized command substitution: unknown_cmd_xyz",
+        result.reason,
+        "unknown_cmd_xyz isn't on longline's allowlist (in a command substitution) — confirm to run it",
         "<() in redirect target should surface as command substitution: {}",
         result.reason
     );

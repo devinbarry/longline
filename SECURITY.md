@@ -154,3 +154,15 @@ Why accepted:
 - Two-step attack is visible in session history
 - Human review would catch suspicious symlink creation
 - This is part of the broader cross-command tracking limitation
+
+### Fork Bombs
+
+longline does **not** attempt to detect fork bombs. The classic pattern (`:(){ :|:& };:`) is a function *named* `:` that recursively pipes itself into the background, but tree-sitter discards function names before policy runs — the recursion is invisible to every matcher, and renaming the function defeats any name-based match. The most plausible *accidental* case, a runaway `while true; do worker & done` loop, is likewise not statically distinguishable from legitimate parallelism (and longline flattens loops to their body leaves).
+
+longline previously shipped a `command: ":"` rule. It flagged every benign use of the `:` no-op (`while :`, `: ${VAR:=default}`, empty loop bodies) while catching no real bomb, so it was removed.
+
+Why accepted:
+
+- A fork bomb is disruptive but recoverable (kill the processes / reboot); it is not catastrophic-and-irreversible, so it does not meet the bar for a deny rule.
+- The danger is emergent runtime behavior (unbounded process spawning), not a statically matchable command. A bomb hidden inside a script is doubly invisible — longline sees `bash deploy.sh`, never the script's contents.
+- The correct defense is an OS process cap, which holds regardless of how the bomb is written: `ulimit -u <N>` in your shell profile caps the number of processes a user can spawn, so any fork bomb hits the ceiling and fails gracefully.

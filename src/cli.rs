@@ -575,7 +575,7 @@ fn run_check(
                     None => match result.decision {
                         Decision::Allow => "(allowlist)".to_string(),
                         Decision::Ask => {
-                            if result.reason == "Shell syntax is too complex to analyze safely" {
+                            if result.reason == policy::OPAQUE_REASON {
                                 "(opaque)".to_string()
                             } else {
                                 "(default)".to_string()

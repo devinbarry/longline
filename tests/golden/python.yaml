@@ -162,3 +162,25 @@ tests:
     command: 'uv run --project /Users/a/proj ruff --version 2>/dev/null || echo "cannot run ruff"'
     expected:
       decision: allow
+
+  # ════════════════════════════════════════════════════════════════
+  # Python dev tools invoked directly (allowlisted; representative
+  # allow-coverage for entries that previously had no golden assertion).
+  # ════════════════════════════════════════════════════════════════
+  - id: ruff-check-bare-safe
+    command: "ruff check src/"
+    expected:
+      decision: allow
+  - id: mypy-bare-safe
+    command: "mypy src/"
+    expected:
+      decision: allow
+  - id: black-check-bare-safe
+    command: "black --check ."
+    expected:
+      decision: allow
+  - id: pytest-bare-safe
+    command: "pytest tests/"
+    expected:
+      decision: allow
+    note: "Bare pytest (not via `python -m pytest`) is allowlisted"

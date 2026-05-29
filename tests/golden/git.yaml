@@ -2327,3 +2327,45 @@ tests:
     expected:
       decision: deny
       rule_id: git-replace
+
+  # ── git reset: soft/mixed allowed, --hard still asks ──────────
+  # `git reset` is allowlisted (moves HEAD / unstages, recoverable via
+  # reflog). The git-reset-hard rule evaluates BEFORE the allowlist, so
+  # --hard still asks — the paired cases below prove the rule still wins.
+  - id: git-reset-soft-allow
+    command: "git reset --soft HEAD~1"
+    expected:
+      decision: allow
+  - id: git-reset-mixed-allow
+    command: "git reset --mixed HEAD~1"
+    expected:
+      decision: allow
+  - id: git-reset-bare-allow
+    command: "git reset"
+    expected:
+      decision: allow
+  - id: git-reset-unstage-path-allow
+    command: "git reset HEAD path/to/file.py"
+    expected:
+      decision: allow
+  - id: git-reset-C-flag-allow
+    command: "git -C /some/repo reset --soft HEAD~1"
+    expected:
+      decision: allow
+    note: "Global -C flag stripped; still matches the git reset allowlist entry"
+  - id: git-reset-hard-still-asks
+    command: "git reset --hard HEAD~1"
+    expected:
+      decision: ask
+      rule_id: git-reset-hard
+    note: "Falsifiable: proves the git-reset-hard rule overrides the new allowlist entry"
+
+  # ── git checkout: branch-switch path (allowlisted, was untested) ──
+  - id: git-checkout-branch-allow
+    command: "git checkout main"
+    expected:
+      decision: allow
+  - id: git-checkout-new-branch-allow
+    command: "git checkout -b feature/x"
+    expected:
+      decision: allow
