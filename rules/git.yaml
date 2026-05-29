@@ -50,10 +50,11 @@ allowlists:
     - { command: "git checkout", trust: standard, reason: "Switches branches or restores files" }
     - { command: "git switch", trust: standard, reason: "Switches to a different branch" }
     - { command: "git restore", trust: standard, reason: "Restores working tree files from a source" }
-    # git reset (soft/mixed) only moves HEAD / unstages — recoverable via
-    # reflog. `git reset --hard` discards uncommitted work and still ASKs via
-    # the git-reset-hard rule (rules evaluate before the allowlist).
-    - { command: "git reset", trust: standard, reason: "Moves HEAD or unstages changes (--hard still asks)" }
+    # git reset (soft/mixed/unstage) only moves HEAD / the index — recoverable
+    # via reflog. Working-tree-mutating modes still ASK via rules (which
+    # evaluate before the allowlist): --hard (git-reset-hard) and --merge/--keep
+    # (git-reset-merge-keep).
+    - { command: "git reset", trust: standard, reason: "Moves HEAD or unstages changes (--hard/--merge/--keep still ask)" }
     - { command: "git merge", trust: standard, reason: "Merges another branch into the current branch" }
     - { command: "git cherry-pick", trust: standard, reason: "Applies changes from specific commits" }
     - { command: "git worktree", trust: standard, reason: "Manages multiple working trees" }
@@ -1093,6 +1094,21 @@ rules:
         any_of: ["--hard"]
     decision: ask
     reason: "git reset --hard discards uncommitted changes"
+
+  # The `git reset` allowlist entry blesses soft/mixed/unstage resets.
+  # --merge/--keep also rewrite the working tree (they abort on conflicting
+  # local changes but overwrite files that differ from the target), so they
+  # were not part of the vetted set and keep asking. `all_of: [reset]` pins
+  # this to git reset, so `git checkout --merge` is unaffected.
+  - id: git-reset-merge-keep
+    level: high
+    match:
+      command: git
+      args:
+        all_of: ["reset"]
+        any_of: ["--merge", "--keep"]
+    decision: ask
+    reason: "git reset --merge/--keep can overwrite working-tree files"
 
   - id: git-clean-force
     level: high

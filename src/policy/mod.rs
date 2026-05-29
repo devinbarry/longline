@@ -529,7 +529,7 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
         Statement::Opaque(_) => PolicyResult {
             decision: Decision::Ask,
             rule_id: None,
-            reason: "Couldn't fully parse this shell syntax — confirm to run it".to_string(),
+            reason: OPAQUE_REASON.to_string(),
         },
         Statement::SimpleCommand(cmd) => {
             // Check rules first -- rules always take priority
