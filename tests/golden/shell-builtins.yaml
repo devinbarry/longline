@@ -278,7 +278,7 @@ tests:
   # ════════════════════════════════════════════════════════════════
   # : (colon no-op). Allowlisted as a builtin. There is NO fork-bomb
   # rule: the old `command: ":"` rule flagged every benign no-op while
-  # catching no real fork bomb (see filesystem.yaml + README). These
+  # catching no real fork bomb (see filesystem.yaml + SECURITY.md). These
   # lock in that the no-op is allowed.
   # ════════════════════════════════════════════════════════════════
   - id: colon-noop-bare
