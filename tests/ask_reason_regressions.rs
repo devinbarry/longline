@@ -453,3 +453,48 @@ fn outer_and_inner_both_unknown_surfaces_outer_first() {
         result.reason
     );
 }
+
+#[test]
+fn known_family_unlisted_operation_names_the_operation() {
+    // The headline message fix: a known command family (git) whose specific
+    // operation isn't allowlisted names the operation rather than reporting
+    // "Unrecognized command: git" (which read as "longline is broken").
+    let result = evaluate("git reset --soft HEAD~1");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(result.rule_id, None);
+    assert_eq!(
+        result.reason,
+        "git reset isn't on longline's allowlist — confirm to run it"
+    );
+}
+
+#[test]
+fn git_reset_abbreviated_destructive_modes_must_ask() {
+    // SAFETY REGRESSION GUARD (Codex xhigh review, dual-model gate).
+    //
+    // git accepts abbreviated long options, so `git reset --h` performs a
+    // HARD reset, `--me` a merge reset, `--k` a keep reset — all rewrite the
+    // working tree. longline's args matcher is bag-of-words: it cannot pin the
+    // subcommand position or expand abbreviations. A naive `git reset`
+    // allowlist entry therefore let these destructive abbreviated forms slip
+    // through to ALLOW. That is why `git reset` is intentionally NOT
+    // allowlisted (see the NOTE in rules/git.yaml + SECURITY.md).
+    //
+    // If anyone re-allowlists `git reset` without modelling abbreviated modes,
+    // these assertions flip from ask to allow and fail — exactly the bug we hit.
+    for cmd in [
+        "git reset --h HEAD~1",        // --hard
+        "git reset --ha HEAD~1",       // --hard
+        "git reset --har HEAD~1",      // --hard
+        "git reset --me HEAD~1",       // --merge
+        "git reset --k HEAD~1",        // --keep
+        "git reset --soft --h HEAD~1", // safe-mode literal + abbreviated --hard
+    ] {
+        let result = evaluate(cmd);
+        assert_eq!(
+            result.decision,
+            Decision::Ask,
+            "destructive abbreviated reset must ask, never allow: {cmd} -> {result:?}"
+        );
+    }
+}

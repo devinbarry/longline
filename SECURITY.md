@@ -136,6 +136,14 @@ cp /tmp/evil.py manage.py && python manage.py test
 
 Each leaf command passes individually (`cp` is allowlisted, `python manage.py test` matches the Django allowlist). The policy engine evaluates commands statelessly — there is no cross-command semantic analysis or session history tracking.
 
+### 4. Flag Abbreviations and Bag-of-Words Argument Matching
+
+The argument matcher (`args.any_of` / `all_of` / `none_of`) checks whether a token appears **anywhere** in argv — it is bag-of-words and does not pin the subcommand position. Combined with tools that accept **abbreviated long options** (git resolves `--h` → `--hard`, `--me` → `--merge`, `--k` → `--keep`), this creates a sharp edge:
+
+**Do not allowlist a command whose dangerous behavior is selected by a flag, and rely on an ask-rule to gate the dangerous flag.** A rule matching the literal `--hard` does not catch `--h` / `--ha`; broadening to a glob like `--h*` then false-matches unrelated flags (`--help`) on *other* subcommands because matching is not position-aware (`git log --grep reset --merge` would match a `reset`+`--merge` rule). `git reset` is the canonical example: allowlisting it while asking only on `--hard` let `git reset --h` (a destructive hard reset) through. It is therefore intentionally **not** allowlisted; it asks with a clear "not on the allowlist" message, and `git reset --hard` is additionally named by the `git-reset-hard` rule.
+
+Safe patterns: allowlist whole commands, or specific safe **subcommands** (`git status`, `pnpm view`); gate dangerous operations as standalone **commands by name** (`rm`, `dd`), not as a flag on an otherwise-safe command. Robustly gating flag-selected modes would require a position-aware "effective subcommand" matcher, which the DSL does not currently have. Regression guard: `git_reset_abbreviated_destructive_modes_must_ask` in `tests/ask_reason_regressions.rs`.
+
 ## Accepted Risks
 
 ### Symlink Attacks

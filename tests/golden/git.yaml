@@ -2328,53 +2328,60 @@ tests:
       decision: deny
       rule_id: git-replace
 
-  # ── git reset: soft/mixed allowed, --hard still asks ──────────
-  # `git reset` is allowlisted (moves HEAD / unstages, recoverable via
-  # reflog). The git-reset-hard rule evaluates BEFORE the allowlist, so
-  # --hard still asks — the paired cases below prove the rule still wins.
-  - id: git-reset-soft-allow
+  # ── git reset: NOT allowlisted (asks with a clear message) ─────────
+  # `git reset` is intentionally not allowlisted. SAFETY REGRESSION GUARD:
+  # an earlier attempt to allowlist soft/mixed opened a hole — git accepts
+  # abbreviated flags (`git reset --h` == `--hard`) and the args matcher is
+  # bag-of-words, so a naive `git reset` allowlist entry let destructive
+  # `git reset --h` / `--ha` / `--me` / `--k` resets slip through to ALLOW.
+  # These cases lock that shut: every git reset form must ask. If someone
+  # re-allowlists `git reset` without modelling abbreviated modes, the
+  # abbreviation cases below flip to allow and fail. See SECURITY.md and the
+  # NOTE on the git reset entry in rules/git.yaml.
+  - id: git-reset-soft-asks
     command: "git reset --soft HEAD~1"
     expected:
-      decision: allow
-  - id: git-reset-mixed-allow
+      decision: ask
+    note: "Not allowlisted — asks with 'git reset isn't on longline's allowlist' (see ask_reason_regressions)"
+  - id: git-reset-mixed-asks
     command: "git reset --mixed HEAD~1"
     expected:
-      decision: allow
-  - id: git-reset-bare-allow
+      decision: ask
+  - id: git-reset-bare-asks
     command: "git reset"
     expected:
-      decision: allow
-  - id: git-reset-unstage-path-allow
-    command: "git reset HEAD path/to/file.py"
-    expected:
-      decision: allow
-  - id: git-reset-C-flag-allow
-    command: "git -C /some/repo reset --soft HEAD~1"
-    expected:
-      decision: allow
-    note: "Global -C flag stripped; still matches the git reset allowlist entry"
-  - id: git-reset-hard-still-asks
+      decision: ask
+  - id: git-reset-hard-asks
     command: "git reset --hard HEAD~1"
     expected:
       decision: ask
       rule_id: git-reset-hard
-    note: "Falsifiable: proves the git-reset-hard rule overrides the new allowlist entry"
-  - id: git-reset-merge-still-asks
-    command: "git reset --merge HEAD~1"
+    note: "Falsifiable: the git-reset-hard rule names this destructive mode"
+  # --- abbreviated-mode hole: these MUST ask (regression guard) ---
+  - id: git-reset-hard-abbrev-h-asks
+    command: "git reset --h HEAD~1"
     expected:
       decision: ask
-      rule_id: git-reset-merge-keep
-    note: "--merge rewrites the working tree — not in the vetted soft/mixed set"
-  - id: git-reset-keep-still-asks
-    command: "git reset --keep HEAD~1"
+    note: "REGRESSION GUARD: `--h` is git's abbreviation for --hard (destructive). Must never allow."
+  - id: git-reset-hard-abbrev-ha-asks
+    command: "git reset --ha HEAD~1"
     expected:
       decision: ask
-      rule_id: git-reset-merge-keep
-  - id: git-checkout-merge-unaffected
-    command: "git checkout --merge other-branch"
+  - id: git-reset-merge-abbrev-me-asks
+    command: "git reset --me HEAD~1"
     expected:
-      decision: allow
-    note: "git-reset-merge-keep is pinned to `reset` via all_of, so checkout --merge is unaffected"
+      decision: ask
+    note: "REGRESSION GUARD: `--me` abbreviates --merge (rewrites working tree)."
+  - id: git-reset-keep-abbrev-k-asks
+    command: "git reset --k HEAD~1"
+    expected:
+      decision: ask
+    note: "REGRESSION GUARD: `--k` abbreviates --keep (rewrites working tree)."
+  - id: git-reset-soft-then-hard-abbrev-asks
+    command: "git reset --soft --h HEAD~1"
+    expected:
+      decision: ask
+    note: "REGRESSION GUARD: a safe-mode literal followed by an abbreviated --hard still performs a hard reset; must ask."
 
   # ── git checkout: branch-switch path (allowlisted, was untested) ──
   - id: git-checkout-branch-allow
