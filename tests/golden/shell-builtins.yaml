@@ -509,3 +509,21 @@ tests:
     command: "./setopt NULL_GLOB"
     expected: { decision: ask }
     note: "exact-name rule: path-named setopt is external"
+  # R10 regression: `-o`/`+o` must not swallow a signed flag as its option name.
+  # Bash parses `set -o -a` as `set -o` + `-a` (allexport on), so the consumed
+  # token starting with -/+ must reject (sign-blind deny still applies).
+  - id: set-o-consumes-signed-flag-bypass-asks
+    command: "set -o -a; GIT_SSH_COMMAND=evil; git fetch"
+    expected: { decision: ask }
+    note: "Codex R2 P0: set -o -a enables allexport -> the cross-leaf env bypass must stay ask"
+  - id: set-o-dash-a-asks
+    command: "set -o -a"
+    expected: { decision: ask }
+  - id: set-euo-dash-a-asks
+    command: "set -euo -a"
+    expected: { decision: ask }
+    note: "trailing-o cluster must not consume -a as a benign option name"
+  - id: set-long-option-asks
+    command: "set --help"
+    expected: { decision: ask }
+    note: "set takes no --long options; malformed -> ask (fail-closed)"

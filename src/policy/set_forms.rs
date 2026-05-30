@@ -84,6 +84,20 @@ pub fn classify_set_forms(cmd: &SimpleCommand) -> Option<PolicyResult> {
     }
 }
 
+/// Validate the option-name token that `-o`/`+o` consumes. Returns `false`
+/// (→ caller asks) when the token is itself a signed flag: bash parses
+/// `set -o -a` as `set -o` (list, no arg) PLUS a separate `-a` that enables
+/// `allexport`, so the consumed token is NOT a benign option name and must not
+/// suppress the sign-blind `a`/`k` deny check. Also returns `false` when the
+/// name normalizes into the `-o` denylist. Benign bash option names are never
+/// `-`/`+`-prefixed, so this rejects no legitimate form.
+fn set_o_name_ok(name: &str) -> bool {
+    if name.starts_with('-') || name.starts_with('+') {
+        return false;
+    }
+    !SET_O_DENY_NAMES.contains(&normalize_option_name(name).as_str())
+}
+
 /// `set` recognizer. Walks argv left to right, allowing only pure benign
 /// option forms. Denylist letters `a`/`k` (sign-blind); `-o`/`+o` consumes the
 /// next token as a normalized option name checked against the `-o` denylist;
@@ -99,8 +113,10 @@ fn classify_set(argv: &[Arg]) -> Option<PolicyResult> {
     while i < argv.len() {
         let t = argv[i].text.as_str();
 
-        // End-of-options / positional reset.
-        if t == "--" {
+        // End-of-options / positional reset (`--`) and unsupported long options
+        // (`--help`, `--errexit`): `set` takes no `--`-prefixed forms, so any
+        // double-dash token is not a recognized pure-option form -> ask.
+        if t.starts_with("--") {
             return None;
         }
 
@@ -113,8 +129,7 @@ fn classify_set(argv: &[Arg]) -> Option<PolicyResult> {
         // Standalone `-o` / `+o`: next token is the option name.
         if t == "-o" || t == "+o" {
             let name = argv.get(i + 1)?; // missing name -> None
-            let norm = normalize_option_name(name.text.as_str());
-            if SET_O_DENY_NAMES.contains(&norm.as_str()) {
+            if !set_o_name_ok(name.text.as_str()) {
                 return None;
             }
             i += 2;
@@ -139,8 +154,7 @@ fn classify_set(argv: &[Arg]) -> Option<PolicyResult> {
                     return None;
                 }
                 let name = argv.get(i + 1)?; // missing name -> None
-                let norm = normalize_option_name(name.text.as_str());
-                if SET_O_DENY_NAMES.contains(&norm.as_str()) {
+                if !set_o_name_ok(name.text.as_str()) {
                     return None;
                 }
                 i += 1; // skip the consumed name token
@@ -318,6 +332,34 @@ mod tests {
     fn set_deny_letter_before_trailing_o_asks() {
         // `a` is hit before the trailing `o` is processed -> reject the whole form.
         assert!(classify_set_forms(&sc("set -eao pipefail")).is_none());
+    }
+
+    #[test]
+    fn set_o_consuming_a_signed_flag_asks() {
+        // Bash parses `set -o -a` as `set -o` (list) PLUS a separate `-a` that
+        // enables allexport. The `-o` consumer must NOT swallow `-a`/`-k`/`--`
+        // as a benign option name and thereby skip the sign-blind deny check —
+        // doing so reopened the cross-leaf env-export bypass (Codex R2 P0).
+        for input in [
+            "set -o -a", // standalone -o consuming a deny flag
+            "set -o -k",
+            "set +o -a",           // sign-blind on the +o form too
+            "set -e -o -a",        // earlier benign cluster, then the bypass
+            "set -euo -a",         // trailing-o cluster consuming a deny flag
+            "set -o -o allexport", // -o consumes -o; allexport never reached as name
+            "set -o --",           // -o consuming the end-of-options token
+        ] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
+    }
+
+    #[test]
+    fn set_long_option_forms_ask() {
+        // `set` takes no `--`-prefixed long options; treat them as malformed
+        // (fail-closed), not as short-flag clusters.
+        for input in ["set --help", "set --errexit", "set --version=x"] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
     }
 
     #[test]
