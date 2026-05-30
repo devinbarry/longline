@@ -2585,3 +2585,34 @@ tests:
       override_trust_level: full
     command: "git push origin main"
     expected: { decision: allow }
+
+  # --- git -C <path> <subcmd>: global -C must NOT read as a subcommand force
+  #     flag (regression: `git -C` is used constantly and must stay allow) ---
+  - id: git-C-branch-list-allow
+    command: "git -C /repo branch --list"
+    expected: { decision: allow }
+    note: "REGRESSION GUARD: the global -C must not be counted as branch's force-copy -C. git -C <path> is extremely common and must stay allow."
+  - id: git-C-branch-all-allow
+    command: "git -C /repo branch -a"
+    expected: { decision: allow }
+  - id: git-C-switch-plain-allow
+    command: "git -C /repo switch topic"
+    expected: { decision: allow }
+    note: "REGRESSION GUARD: global -C must not read as switch's force-create -C."
+  - id: git-C-checkout-branch-allow
+    command: "git -C /repo checkout main"
+    expected: { decision: allow }
+  - id: git-C-status-allow
+    command: "git -C /repo status"
+    expected: { decision: allow }
+  # Genuine destructive flags AFTER the subcommand are still gated under -C:
+  - id: git-C-branch-D-asks
+    command: "git -C /repo branch -D feature"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-C-branch-force-copy-asks
+    command: "git -C /repo branch -C old new"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+    note: "The branch's own -C (force-copy, after the subcommand) IS gated; only the leading global -C is ignored."
+  - id: git-C-switch-force-asks
+    command: "git -C /repo switch --force topic"
+    expected: { decision: ask, rule_id: git-switch-force-abbrev }

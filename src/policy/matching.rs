@@ -1,6 +1,7 @@
 //! Matching logic for policy rules.
 
 use crate::parser::{self, Arg, SimpleCommand, Statement};
+use std::borrow::Cow;
 
 use super::config::{
     EnvMatcher, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList,
@@ -101,6 +102,52 @@ pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
     }
 
     SubcommandResolution::Absent
+}
+
+/// For a **subcommand-pinned** rule, flag matching must ignore the command's
+/// leading global value-flag pairs (git `-C <path>` / `-c <k=v>` / …) and
+/// boolean global flags — otherwise the global `-C` in the ubiquitous
+/// `git -C <path> branch …` is wrongly counted as the branch force-copy `-C`
+/// flag. Returns `cmd.argv` from the effective subcommand onward.
+///
+/// Strips global value-flag pairs UNCONDITIONALLY (including `UnsafeString`
+/// values like `git -C "$REPO" …`) — unlike the allowlist's `effective_argv`,
+/// which retains them for fail-closed safety. That retention is correct for
+/// allowlist matching but wrong here: a global flag's value is never the
+/// subcommand's own flag, so for flag scanning we always skip it.
+fn argv_from_subcommand<'a>(cmd: &'a SimpleCommand) -> Cow<'a, [Arg]> {
+    let Some(name) = cmd.name.as_deref() else {
+        return Cow::Borrowed(&cmd.argv);
+    };
+    let cmd_name = normalize_command_name(name);
+    let first_arg = cmd.argv.first().map(|a| a.text.as_str());
+    let value_flags = global_value_flags_for(cmd_name, first_arg);
+
+    let mut i = 0;
+    while i < cmd.argv.len() {
+        let t = &cmd.argv[i].text;
+        if t == "--" {
+            // End of options; the subcommand follows.
+            i += 1;
+            break;
+        }
+        if value_flags.contains(&t.as_str()) {
+            i += 2; // skip the flag and its value token (unconditionally)
+            continue;
+        }
+        if t.starts_with('-') {
+            i += 1; // boolean global flag (e.g. `git --paginate`)
+            continue;
+        }
+        break; // first positional = the effective subcommand
+    }
+
+    let start = i.min(cmd.argv.len());
+    if start == 0 {
+        Cow::Borrowed(&cmd.argv)
+    } else {
+        Cow::Owned(cmd.argv[start..].to_vec())
+    }
 }
 
 fn arg_matches_flag(arg: &str, flag: &str) -> bool {
@@ -209,8 +256,21 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             if !command.matches(normalize_command_name(cmd_name)) {
                 return false;
             }
+            // A rule with a `subcommand` pin matches its `flags` against the
+            // argv from the effective subcommand onward — so the command's
+            // leading global value-flags (`git -C <path>`) are NOT counted as
+            // the subcommand's flags. This keeps safe `git -C <path> branch …`
+            // / `… switch …` out of the force gates (the global `-C` must not
+            // read as the branch/switch force-create `-C`). Non-pinned rules
+            // keep raw-argv flag matching (the `-c` RCE deny rules need it).
+            let has_subcommand_pin = args.as_ref().is_some_and(|a| !a.subcommand.is_empty());
             if let Some(ref flags_matcher) = flags {
-                if !flags_match(flags_matcher, &cmd.argv) {
+                let flag_argv = if has_subcommand_pin {
+                    argv_from_subcommand(cmd)
+                } else {
+                    Cow::Borrowed(cmd.argv.as_slice())
+                };
+                if !flags_match(flags_matcher, &flag_argv) {
                     return false;
                 }
             }
@@ -221,9 +281,8 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                         return false;
                     }
                 }
-                // Positive subcommand pin: the effective subcommand must be
-                // one of the listed names. Gate-biased — an unresolvable
-                // subcommand (`None`) matches any pin (see `resolve_subcommand`).
+                // Positive subcommand pin: the effective subcommand must be one
+                // of the listed names.
                 if !args_matcher.subcommand.is_empty() {
                     match resolve_subcommand(cmd) {
                         SubcommandResolution::Resolved(sub) => {
@@ -243,10 +302,27 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                                 return false;
                             }
                         }
-                        // Ambiguous ($VAR global) → matches any pinned
-                        // subcommand (gate-biased over-ask).
-                        SubcommandResolution::Ambiguous => {}
-                        // No subcommand at all → nothing to gate.
+                        // Ambiguous ($VAR global, e.g. `git -C "$REPO" …`):
+                        // gate-biased over-ask — match any pin, but ONLY when
+                        // the rule has another discriminator that also matched
+                        // (a `flags` constraint, already checked above, or an
+                        // `args` any_of/all_of/none_of checked below). A rule
+                        // whose ONLY constraint is the subcommand pin (e.g.
+                        // `git-rebase`) must NOT fire on an unresolvable
+                        // subcommand: doing so would attach a destructive
+                        // reason to a safe `git -C "$REPO" status`. Such
+                        // commands still ask via the normal not-allowlisted
+                        // path, with a clear message.
+                        SubcommandResolution::Ambiguous => {
+                            let has_other_discriminator = flags.is_some()
+                                || !args_matcher.any_of.is_empty()
+                                || !args_matcher.all_of.is_empty()
+                                || !args_matcher.none_of.is_empty();
+                            if !has_other_discriminator {
+                                return false;
+                            }
+                        }
+                        // No subcommand at all (`git --version`) → nothing to gate.
                         SubcommandResolution::Absent => return false,
                     }
                 }
@@ -487,6 +563,36 @@ mod tests {
             resolve_subcommand(&parse_cmd("codex --profile p exec foo")),
             resolved("exec")
         );
+    }
+
+    #[test]
+    fn test_argv_from_subcommand_strips_leading_globals() {
+        use super::argv_from_subcommand;
+        let texts = |cmd: &str| -> Vec<String> {
+            argv_from_subcommand(&parse_cmd(cmd))
+                .iter()
+                .map(|a| a.text.clone())
+                .collect()
+        };
+        // Leading `-C <path>` global is stripped so the global -C is not seen
+        // as the branch force-copy -C; the branch's own -C survives.
+        assert_eq!(
+            texts("git -C /repo branch --list"),
+            vec!["branch", "--list"]
+        );
+        assert_eq!(
+            texts("git -C /repo branch -C old new"),
+            vec!["branch", "-C", "old", "new"]
+        );
+        // UnsafeString global value is stripped too (unlike effective_argv).
+        assert_eq!(
+            texts("git -C \"$REPO\" branch --list"),
+            vec!["branch", "--list"]
+        );
+        // Boolean global flags are skipped.
+        assert_eq!(texts("git --paginate log"), vec!["log"]);
+        // No leading globals → returned unchanged.
+        assert_eq!(texts("git checkout --force"), vec!["checkout", "--force"]);
     }
 
     fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {
