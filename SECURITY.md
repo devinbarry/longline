@@ -48,7 +48,7 @@ The AI judge can only return `Allow` or `Ask` — never `Deny`. If the AI model 
 Configured via `~/.config/longline/ai-judge.yaml` with three fields:
 
 - `command`: the AI command to invoke (default: `codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium`)
-- `timeout`: seconds before falling back to ask (default: 30)
+- `timeout`: seconds before falling back to ask (default: 45)
 - `triggers`: which interpreters and runners activate the judge
   - Default interpreters: python/python3 (`-c`), node (`-e`), ruby (`-e`), perl (`-e`)
   - Default runners: uv, poetry, pipenv, pdm, rye
