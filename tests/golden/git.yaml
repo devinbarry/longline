@@ -428,6 +428,27 @@ tests:
     expected:
       decision: deny
       rule_id: git-config-corrupting-core-flags
+  # Space-form `--git-dir <path>` (value-flag PAIR, start index 2) — distinct
+  # strip path from the joined `--git-dir=…` boolean-skip form above.
+  - id: git-gitdir-space-config-hookspath-read-allow
+    command: "git --git-dir /r/.git config core.hooksPath"
+    expected:
+      decision: allow
+  - id: git-gitdir-space-config-hookspath-write-deny
+    command: "git --git-dir /r/.git config core.hooksPath /tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  # Multiple stacked leading globals — the strip loop iterates more than once.
+  - id: git-stacked-globals-config-hookspath-read-allow
+    command: "git -C /a -C /b config core.hooksPath"
+    expected:
+      decision: allow
+  - id: git-stacked-globals-config-hookspath-write-deny
+    command: "git -C /a -C /b config core.hooksPath /tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
   # rce-keys-spaceform
   - id: git-C-config-sshcommand-read-allow
     command: "git -C /repo config core.sshCommand"
