@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.1] - 2026-05-30
+
+### Fixed
+
+- **Reading corrupting / RCE / exfil / TLS-downgrade `git config` keys is no
+  longer denied as a write.** Bare reads such as `git config core.hooksPath`
+  (and `core.bare`, `core.worktree`, `core.repositoryformatversion`,
+  `core.sshCommand`, `credential.helper`, `http.proxy`, `http.sslVerify`, …)
+  print the configured value and are harmless — only *setting* these keys can
+  corrupt the repo or substitute the program git runs, so only the write form
+  still denies. This now also holds when the read carries leading git globals
+  (`git -C <path> config <key>`, `git --git-dir=<path> config <key>`), which
+  previously over-counted the read as a write and over-denied it.
+
 ## [0.19.0] - 2026-05-30
 
 ### Added
