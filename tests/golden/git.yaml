@@ -2039,24 +2039,24 @@ tests:
     command: "git push --force origin feature-branch"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
   - id: git-force-push-feature-short
     command: "git push -f origin feature-branch"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-short
 
   # --- Force push to non-main branches (--force-with-lease) ---
   - id: git-force-with-lease-push-feature
     command: "git push --force-with-lease origin feature-branch"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
   - id: git-force-with-lease-push-refspec
     command: "git push --force-with-lease=origin/main origin feature-branch"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
     # --force-with-lease=<refspec> variant
 
   # --- Force push with --force-if-includes (Git 2.30+) ---
@@ -2069,7 +2069,7 @@ tests:
     command: "git push --force-if-includes origin feature-branch"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
 
   # --- Combined force flags ---
   - id: git-force-with-lease-and-force-push-main
@@ -2083,17 +2083,17 @@ tests:
     command: "git push --force"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
   - id: git-force-push-bare-short
     command: "git push -f"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-short
   - id: git-force-with-lease-bare
     command: "git push --force-with-lease"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
 
   # --- Force push with -C flag ---
   - id: git-C-force-push-main
@@ -2105,7 +2105,7 @@ tests:
     command: "git -C /tmp push --force-with-lease origin feature"
     expected:
       decision: ask
-      rule_id: git-force-push-any
+      rule_id: git-force-push-abbrev
 
   # --- Plain push (no force) - ask at default standard trust ---
   - id: git-push-plain
@@ -2392,3 +2392,196 @@ tests:
     command: "git checkout -b feature/x"
     expected:
       decision: allow
+
+  # ============================================================
+  # 20. SUBCOMMAND-PINNED DESTRUCTIVE FLAG GATING (2026-05-30)
+  #     New `args.subcommand` matcher + abbreviation-aware force
+  #     flags. See docs/plans/2026-05-30-git-destructive-flag-gating.
+  # ============================================================
+
+  # --- checkout --force / -f / -B (discard / force-overwrite) ---
+  - id: git-checkout-force-long-asks
+    command: "git checkout --force feature"
+    expected: { decision: ask, rule_id: git-checkout-force-abbrev }
+  - id: git-checkout-force-f-asks
+    command: "git checkout -f feature"
+    expected: { decision: ask, rule_id: git-checkout-force-short }
+  - id: git-checkout-force-abbrev-fo-asks
+    command: "git checkout --fo feature"
+    expected: { decision: ask, rule_id: git-checkout-force-abbrev }
+  - id: git-checkout-force-abbrev-f-asks
+    command: "git checkout --f feature"
+    expected: { decision: ask, rule_id: git-checkout-force-abbrev }
+    note: "git accepts --f as the unambiguous abbreviation of --force on checkout."
+  - id: git-checkout-force-create-B-asks
+    command: "git checkout -B feature main"
+    expected: { decision: ask, rule_id: git-checkout-force-short }
+  - id: git-checkout-ours-out-of-scope-allow
+    command: "git checkout --ours path/to/file"
+    expected: { decision: allow }
+    note: "Documented non-goal: --ours/--theirs (deliberate conflict resolution) is NOT gated. Locks the scope decision."
+  - id: git-checkout-theirs-out-of-scope-allow
+    command: "git checkout --theirs path/to/file"
+    expected: { decision: allow }
+
+  # --- global-flag strip: subcommand survives `git -C` / abs path / $VAR ---
+  - id: git-C-checkout-force-asks
+    command: "git -C /repo checkout --force feature"
+    expected: { decision: ask }
+    note: "Subcommand pin survives a literal `git -C <path>` global."
+  - id: git-abspath-checkout-force-asks
+    command: "/usr/bin/git -C /repo checkout --force feature"
+    expected: { decision: ask }
+    note: "Resolver basename-normalizes before git-family detection (R2 P0)."
+  - id: git-var-checkout-force-asks
+    command: "git -C \"$REPO\" checkout --force feature"
+    expected: { decision: ask }
+    note: "Gate-biased: `-C $VAR` is an UnsafeString global -> Ambiguous -> matches any pin (over-ask). Reason may not name checkout precisely; asking is the point."
+
+  # --- branch force ops (delete/move/copy/create), `--for` guard ---
+  - id: git-branch-force-delete-D-asks
+    command: "git branch -D feature"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-branch-delete-force-long-asks
+    command: "git branch --delete --force feature"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-branch-force-move-M-asks
+    command: "git branch -M old new"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-branch-force-copy-C-asks
+    command: "git branch -C old new"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-branch-force-create-asks
+    command: "git branch -f feature main"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+  - id: git-branch-df-combined-short-asks
+    command: "git branch -df feature"
+    expected: { decision: ask, rule_id: git-branch-delete-force }
+    note: "Combined short -df contains -f (force)."
+  - id: git-branch-safe-delete-merged-allow
+    command: "git branch -d feature"
+    expected: { decision: allow }
+    note: "Non-force merged-delete stays allow (no force flag)."
+  - id: git-branch-safe-rename-allow
+    command: "git branch -m old new"
+    expected: { decision: allow }
+  - id: git-branch-format-allow
+    command: "git branch --format='%(refname)'"
+    expected: { decision: allow }
+    note: "FALSIFIABLE GUARD: --format starts with --for; must NOT be gated (R1 P0-2). `--for` is deliberately not a force prefix on branch."
+  - id: git-branch-list-all-allow
+    command: "git branch -a"
+    expected: { decision: allow }
+
+  # --- pull --force: --fo abbrev (not --f, which collides with --ff-only) ---
+  - id: git-pull-force-fo-asks
+    command: "git pull --fo"
+    expected: { decision: ask, rule_id: git-pull-force-abbrev }
+  - id: git-pull-force-forc-asks
+    command: "git pull --forc origin main"
+    expected: { decision: ask, rule_id: git-pull-force-abbrev }
+  - id: git-pull-force-f-asks
+    command: "git pull -f"
+    expected: { decision: ask, rule_id: git-pull-force-short }
+  - id: git-pull-plain-allow
+    command: "git pull origin main"
+    expected: { decision: allow }
+  - id: git-pull-ff-only-allow
+    command: "git pull --ff-only"
+    expected: { decision: allow }
+    note: "FALSIFIABLE GUARD: --ff-only must NOT match the force gate (R2 P1). This is why pull uses --fo not --f."
+  - id: git-pull-no-ff-allow
+    command: "git pull --no-ff"
+    expected: { decision: allow }
+  - id: git-pull-force-main-reason-flip
+    command: "git pull --force origin main"
+    expected: { decision: ask, rule_id: git-pull-force-abbrev }
+    note: "REASON-FLIP GUARD (R3 P2-1): used to mislabel as git-force-push-main; now correctly a pull-force, pinned to subcommand pull."
+
+  # --- switch force / -C / --discard-changes (closes the switch bypass) ---
+  - id: git-switch-force-asks
+    command: "git switch --force topic"
+    expected: { decision: ask, rule_id: git-switch-force-abbrev }
+  - id: git-switch-force-create-C-asks
+    command: "git switch -C topic"
+    expected: { decision: ask, rule_id: git-switch-force-short }
+  - id: git-switch-discard-asks
+    command: "git switch --discard-changes topic"
+    expected: { decision: ask, rule_id: git-switch-force-abbrev }
+  - id: git-switch-force-f-asks
+    command: "git switch -f topic"
+    expected: { decision: ask, rule_id: git-switch-force-short }
+  - id: git-switch-plain-allow
+    command: "git switch topic"
+    expected: { decision: allow }
+  - id: git-switch-detach-allow
+    command: "git switch --detach HEAD"
+    expected: { decision: allow }
+    note: "GUARD: --detach (--det) must NOT match --discard-changes (--disc)."
+
+  # --- bag-of-words falsifiable partners (one per pinned subcommand) ---
+  # Each is allowlisted (git log/show/commit) and must stay allow: proves the
+  # subcommand pin defeats the old bag-of-words false-match.
+  - id: git-bow-checkout-allow
+    command: "git log --grep checkout --format=oneline"
+    expected: { decision: allow }
+    note: "FALSIFIABLE: 'checkout' as a --grep value must not fire the checkout-force pin."
+  - id: git-bow-reset-hard-allow
+    command: "git log --grep reset --hard"
+    expected: { decision: allow }
+    note: "FALSIFIABLE (R3 P1-2): pre-pin this wrongly fired git-reset-hard via bag-of-words on --hard; the subcommand:reset pin flips it to allow. Uniquely isolates the pin."
+  - id: git-bow-push-allow
+    command: "git log --grep push --format=full"
+    expected: { decision: allow }
+    note: "FALSIFIABLE: 'push' as a --grep value must not fire the force-push pin."
+  - id: git-bow-pull-allow
+    command: "git show --format='%H pull'"
+    expected: { decision: allow }
+  - id: git-bow-commit-msg-allow
+    command: "git commit -m \"push --force\""
+    expected: { decision: allow }
+    note: "FALSIFIABLE: a commit message mentioning 'push --force' must not fire force-push rules."
+
+  # --- push force ops (require full trust; otherwise push asks anyway) ---
+  - id: git-push-force-for-abbrev-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push --for"
+    expected: { decision: ask, rule_id: git-force-push-abbrev }
+  - id: git-push-force-with-lease-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push --force-with-lease origin feature"
+    expected: { decision: ask, rule_id: git-force-push-abbrev }
+  - id: git-push-force-with-lease-refspec-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push --force-with-lease=origin/main origin feature"
+    expected: { decision: ask, rule_id: git-force-push-abbrev }
+  - id: git-push-delete-pinned-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push --delete origin feature"
+    expected: { decision: ask, rule_id: git-push-delete }
+  - id: git-push-plus-refspec-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push origin +main"
+    expected: { decision: ask, rule_id: git-force-push-plus }
+  - id: git-push-plus-slash-refspec-asks
+    overlay: |
+      override_trust_level: full
+    command: "git push origin +refs/heads/main"
+    expected: { decision: ask, rule_id: git-force-push-plus }
+    note: "Slash refspec needs +** (the glob * does not cross /); R2 P0-2."
+  - id: git-push-follow-tags-allow
+    overlay: |
+      override_trust_level: full
+    command: "git push --follow-tags"
+    expected: { decision: allow }
+    note: "FALSIFIABLE GUARD: --follow-tags (--fol) must NOT match the force gate (--for). This eliminates the over-ask R1 was willing to accept."
+  - id: git-push-plain-full-trust-allow
+    overlay: |
+      override_trust_level: full
+    command: "git push origin main"
+    expected: { decision: allow }

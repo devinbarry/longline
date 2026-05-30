@@ -1083,6 +1083,7 @@ rules:
       flags:
         any_of: ["--force", "-f", "--force-with-lease", "--force-if-includes"]
       args:
+        subcommand: ["push"]
         any_of: ["main", "master"]
     decision: ask
     reason: "Force pushing to main/master branch"
@@ -1092,6 +1093,8 @@ rules:
     match:
       command: git
       args:
+        subcommand: ["reset"]
+      flags:
         any_of: ["--hard"]
     decision: ask
     reason: "git reset --hard discards uncommitted changes"
@@ -1101,22 +1104,29 @@ rules:
     match:
       command: git
       args:
-        any_of: ["clean"]
+        subcommand: ["clean"]
       flags:
         any_of: ["-f", "--force"]
     decision: ask
     reason: "git clean -f permanently removes untracked files"
 
+  # Branch force operations: force-delete (-D), force-move/rename (-M),
+  # force-copy (-C), and force-create/reset (-f/--force, incl. the force half
+  # of `--delete --force` / `-d -f`). Every destructive branch mode carries a
+  # force flag, so a single any_of covers them; bare `git branch -d <merged>`
+  # and non-force `-m`/`-c` stay un-gated. `--for` is deliberately NOT used
+  # (it would false-fire on the common safe `git branch --format=…`); the
+  # doubly-abbreviated `git branch --del --for` is an accepted gap.
   - id: git-branch-delete-force
     level: high
     match:
       command: git
       args:
-        any_of: ["branch"]
+        subcommand: ["branch"]
       flags:
-        any_of: ["-D"]
+        any_of: ["-D", "-M", "-C", "-f", "--force"]
     decision: ask
-    reason: "Force deleting a git branch"
+    reason: "Force branch op (delete/move/copy/create) can discard commits or clobber a ref"
 
   - id: git-commit-amend
     level: high
@@ -1134,7 +1144,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["remote"]
+        subcommand: ["remote"]
       flags:
         any_of: ["add", "remove", "rm", "set-url", "rename"]
     decision: ask
@@ -1145,7 +1155,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["tag"]
+        subcommand: ["tag"]
       flags:
         any_of: ["-d", "--delete"]
     decision: ask
@@ -1156,7 +1166,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["push"]
+        subcommand: ["push"]
       flags:
         any_of: ["--delete", "-d"]
     decision: ask
@@ -1167,7 +1177,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["config"]
+        subcommand: ["config"]
       flags:
         any_of: ["--global", "--system"]
     decision: ask
@@ -1178,7 +1188,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["stash"]
+        subcommand: ["stash"]
       flags:
         any_of: ["drop", "clear"]
     decision: ask
@@ -1189,7 +1199,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["reflog"]
+        subcommand: ["reflog"]
       flags:
         any_of: ["delete", "expire"]
     decision: ask
@@ -1200,7 +1210,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["gc"]
+        subcommand: ["gc"]
       flags:
         starts_with: ["--prune"]
     decision: ask
@@ -1211,7 +1221,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["worktree"]
+        subcommand: ["worktree"]
       flags:
         any_of: ["remove", "prune"]
     decision: ask
@@ -1222,20 +1232,34 @@ rules:
     match:
       command: git
       args:
-        any_of: ["bisect"]
+        subcommand: ["bisect"]
       flags:
         any_of: ["reset"]
     decision: ask
     reason: "Exiting bisect mode (changes HEAD)"
 
-  - id: git-pull-force
+  # git pull --force: split into two rules because one FlagsMatcher ANDs its
+  # fields. `--fo` (not `--f`) is the minimal unambiguous force abbreviation on
+  # pull — `--f` is ambiguous with the common safe `--ff-only`/`--ff`.
+  - id: git-pull-force-abbrev
     level: high
     match:
       command: git
       args:
-        any_of: ["pull"]
+        subcommand: ["pull"]
       flags:
-        any_of: ["--force", "-f"]
+        starts_with: ["--fo"]
+    decision: ask
+    reason: "git pull --force can overwrite local changes"
+
+  - id: git-pull-force-short
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["pull"]
+      flags:
+        any_of: ["-f"]
     decision: ask
     reason: "git pull --force can overwrite local changes"
 
@@ -1244,7 +1268,7 @@ rules:
     match:
       command: git
       args:
-        any_of: ["rebase"]
+        subcommand: ["rebase"]
     decision: ask
     reason: "git rebase rewrites history and can cause data loss"
 
@@ -1253,22 +1277,48 @@ rules:
     match:
       command: git
       args:
-        any_of: ["symbolic-ref"]
+        subcommand: ["symbolic-ref"]
       flags:
         any_of: ["--delete", "-d"]
     decision: ask
     reason: "git symbolic-ref --delete removes symbolic references"
 
-  - id: git-force-push-any
+  # Force push (any branch). Split per OR-arm. `--for` is the minimal
+  # unambiguous force abbreviation on push (catches --force / --force-with-lease
+  # / --force-if-includes incl. =<refspec> joined forms) and excludes the safe
+  # --follow-tags (--fol). `+<refspec>` force-push is a positional, matched via
+  # `+**` (the glob `*` does not cross `/`, so `+*` would miss `+refs/heads/x`).
+  - id: git-force-push-abbrev
     level: high
     match:
       command: git
-      flags:
-        any_of: ["--force", "-f", "--force-with-lease", "--force-if-includes"]
       args:
-        any_of: ["push"]
+        subcommand: ["push"]
+      flags:
+        starts_with: ["--for"]
     decision: ask
     reason: "Force pushing (any branch)"
+
+  - id: git-force-push-short
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["push"]
+      flags:
+        any_of: ["-f"]
+    decision: ask
+    reason: "Force pushing (any branch)"
+
+  - id: git-force-push-plus
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["push"]
+        any_of: ["+**"]
+    decision: ask
+    reason: "Force pushing via +<refspec>"
 
   # ============================================================
   # STRICT: Cautionary git operations
@@ -1278,8 +1328,58 @@ rules:
     match:
       command: git
       args:
-        any_of: ["checkout", "restore"]
+        subcommand: ["checkout", "restore"]
       flags:
         any_of: [".", "--"]
     decision: ask
     reason: "Discarding all local changes"
+
+  # git checkout --force / -f / -B discards uncommitted changes or
+  # force-overwrites a branch ref. Two rules per OR-arm. checkout's only `--f*`
+  # long option is --force, so `--f` is the minimal unambiguous abbreviation.
+  - id: git-checkout-force-abbrev
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["checkout"]
+      flags:
+        starts_with: ["--f"]
+    decision: ask
+    reason: "git checkout --force discards uncommitted local changes"
+
+  - id: git-checkout-force-short
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["checkout"]
+      flags:
+        any_of: ["-f", "-B"]
+    decision: ask
+    reason: "git checkout -f/-B discards uncommitted changes or force-overwrites a branch ref"
+
+  # git switch --force / -f / --discard-changes / -C: same data-loss surface as
+  # checkout (closes the "use git switch --force instead" bypass). switch is
+  # allowlisted at trust: standard. --disc is distinct from the safe --detach.
+  - id: git-switch-force-abbrev
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["switch"]
+      flags:
+        starts_with: ["--f", "--disc"]
+    decision: ask
+    reason: "git switch --force/--discard-changes discards uncommitted local changes"
+
+  - id: git-switch-force-short
+    level: high
+    match:
+      command: git
+      args:
+        subcommand: ["switch"]
+      flags:
+        any_of: ["-f", "-C"]
+    decision: ask
+    reason: "git switch -f/-C discards uncommitted changes or force-creates a branch"

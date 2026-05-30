@@ -231,8 +231,33 @@ pub struct ArgsMatcher {
     /// specific subcommand without accidentally suppressing the rule on
     /// invocations where the same word appears as a positional argument
     /// later in argv. Patterns are literal exact-match (no glob).
+    ///
+    /// NOTE: `argv_first_not` matches the RAW `argv.first()`, whereas
+    /// `subcommand` (below) matches the GLOBAL-STRIPPED effective
+    /// subcommand. They intentionally diverge on `git -C x checkout`:
+    /// `argv_first_not` sees `-C`, `subcommand` sees `checkout`. This is
+    /// deliberate — `argv_first_not` only excludes a known-leading token
+    /// (its callers never pass globaled forms), while `subcommand`
+    /// positively pins a gate that must survive git global options.
     #[serde(default)]
     pub argv_first_not: Vec<String>,
+    /// Positively pin the rule to the command's *effective subcommand* —
+    /// the first positional after stripping leading global value-flag
+    /// pairs (git's `-C`/`-c`/`--git-dir`/…, codex's `--profile`/…, known
+    /// wrapper value-flags). Unlike `any_of`/`all_of` (bag-of-words over
+    /// ALL argv tokens), this matches ONLY the resolved subcommand, so a
+    /// rule pinned to `subcommand: [push]` does not false-fire on
+    /// `git log --grep push`. Literal exact-match (no glob); honors
+    /// `case_insensitive`.
+    ///
+    /// Gate-biased on ambiguity: when the subcommand cannot be resolved
+    /// (a global value-flag whose value is a shell expansion, e.g.
+    /// `git -C "$REPO" …`, or no positional at all) the resolver yields
+    /// `None`, which MATCHES ANY pinned subcommand. This is intentional
+    /// over-ask for destructive-flag gates — missing a real `--force`
+    /// because the repo path is a variable is the failure to prevent.
+    #[serde(default)]
+    pub subcommand: Vec<String>,
     /// When true, lowercase both pattern and argument before matching.
     /// Used for git config keys whose section / variable names are
     /// case-insensitive (e.g. `core.sshCommand` ≡ `CORE.SSHCOMMAND`).

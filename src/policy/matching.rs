@@ -12,6 +12,97 @@ pub fn normalize_command_name(name: &str) -> &str {
     name.rsplit('/').next().unwrap_or(name)
 }
 
+/// The leading global value-flags (each consuming a following value token)
+/// for a command family, keyed by basename. Used to skip `--flag VALUE`
+/// global-option pairs when resolving the effective subcommand.
+fn global_value_flags_for(cmd_name: &str, first_arg: Option<&str>) -> &'static [&'static str] {
+    match cmd_name {
+        "git" => super::allowlist::GIT_GLOBAL_VALUE_FLAGS,
+        "codex" => super::allowlist::CODEX_GLOBAL_VALUE_FLAGS,
+        _ => crate::parser::wrappers::value_flags_for(cmd_name, first_arg),
+    }
+}
+
+/// Outcome of resolving a command's effective subcommand for the
+/// `ArgsMatcher::subcommand` pin.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SubcommandResolution {
+    /// The effective subcommand was found.
+    Resolved(String),
+    /// A subcommand exists but is unknowable — a global value-flag's value is
+    /// a shell expansion/substitution (`git -C "$REPO" …`) or is dangling, so
+    /// we cannot locate the subcommand. Gate-biased: MATCHES ANY pinned
+    /// subcommand (over-ask is safe; missing a real `--force` is the failure).
+    Ambiguous,
+    /// There is no positional subcommand at all (`git --version`, `git -h`,
+    /// bare `git`). MATCHES NO pin — there is nothing to gate.
+    Absent,
+}
+
+/// Resolve a command's *effective subcommand* — the first positional argv
+/// token after skipping leading global value-flag pairs and boolean global
+/// flags. Basename-normalizes the command name before family detection (so
+/// `/usr/bin/git -C x checkout` resolves to `checkout`).
+///
+/// Returns [`SubcommandResolution::Ambiguous`] (⇒ match any pin) when a
+/// recognized global value-flag's value token is an `UnsafeString`
+/// (`git -C "$REPO" …`) or is dangling. Returns
+/// [`SubcommandResolution::Absent`] (⇒ match no pin) when there is no
+/// positional token at all.
+///
+/// This is intentionally a dedicated raw-argv scan and NOT a reuse of
+/// `effective_argv().find(...)`: that helper *retains* an `UnsafeString`
+/// value pair, so `.find(!starts_with('-'))` would return the `$REPO` token
+/// rather than signalling ambiguity, silently missing the gate.
+pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
+    let Some(name) = cmd.name.as_deref() else {
+        return SubcommandResolution::Absent;
+    };
+    let cmd_name = normalize_command_name(name);
+    let first_arg = cmd.argv.first().map(|a| a.text.as_str());
+    let value_flags = global_value_flags_for(cmd_name, first_arg);
+
+    let mut i = 0;
+    while i < cmd.argv.len() {
+        let arg = &cmd.argv[i];
+
+        // `--` ends option processing; the next token (if any) is the
+        // first positional / subcommand.
+        if arg.text == "--" {
+            return match cmd.argv.get(i + 1) {
+                Some(a) => SubcommandResolution::Resolved(a.text.clone()),
+                None => SubcommandResolution::Absent,
+            };
+        }
+
+        if value_flags.contains(&arg.text.as_str()) {
+            match cmd.argv.get(i + 1) {
+                // Unknowable value → cannot locate the subcommand.
+                Some(v) if matches!(v.meta, crate::parser::ArgMeta::UnsafeString) => {
+                    return SubcommandResolution::Ambiguous;
+                }
+                Some(_) => {
+                    i += 2;
+                    continue;
+                }
+                // Dangling value-flag at end of argv.
+                None => return SubcommandResolution::Ambiguous,
+            }
+        }
+
+        // Other leading boolean global flag (e.g. `git --paginate`): skip.
+        if arg.text.starts_with('-') {
+            i += 1;
+            continue;
+        }
+
+        // First non-flag positional = the effective subcommand.
+        return SubcommandResolution::Resolved(arg.text.clone());
+    }
+
+    SubcommandResolution::Absent
+}
+
 fn arg_matches_flag(arg: &str, flag: &str) -> bool {
     if arg == flag {
         return true;
@@ -128,6 +219,35 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
                 if let Some(min) = args_matcher.min_args {
                     if cmd.argv.len() < min {
                         return false;
+                    }
+                }
+                // Positive subcommand pin: the effective subcommand must be
+                // one of the listed names. Gate-biased — an unresolvable
+                // subcommand (`None`) matches any pin (see `resolve_subcommand`).
+                if !args_matcher.subcommand.is_empty() {
+                    match resolve_subcommand(cmd) {
+                        SubcommandResolution::Resolved(sub) => {
+                            let sub_cmp = if args_matcher.case_insensitive {
+                                sub.to_lowercase()
+                            } else {
+                                sub
+                            };
+                            let matched = args_matcher.subcommand.iter().any(|p| {
+                                if args_matcher.case_insensitive {
+                                    p.to_lowercase() == sub_cmp
+                                } else {
+                                    p == &sub_cmp
+                                }
+                            });
+                            if !matched {
+                                return false;
+                            }
+                        }
+                        // Ambiguous ($VAR global) → matches any pinned
+                        // subcommand (gate-biased over-ask).
+                        SubcommandResolution::Ambiguous => {}
+                        // No subcommand at all → nothing to gate.
+                        SubcommandResolution::Absent => return false,
                     }
                 }
                 let arg_match = |pattern: &str, arg: &str| -> bool {
@@ -267,8 +387,107 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
 mod tests {
     use super::arg_matches_flag;
     use super::matches_pipeline;
+    use super::{resolve_subcommand, SubcommandResolution};
     use crate::parser::Arg;
     use crate::policy::config::{FlagsMatcher, PipelineMatcher, StageMatcher, StringOrList};
+
+    fn parse_cmd(s: &str) -> crate::parser::SimpleCommand {
+        match crate::parser::parse(s).unwrap() {
+            crate::parser::Statement::SimpleCommand(c) => c,
+            other => panic!("expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    fn resolved(s: &str) -> SubcommandResolution {
+        SubcommandResolution::Resolved(s.to_string())
+    }
+
+    #[test]
+    fn test_resolve_subcommand_plain() {
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git checkout --force")),
+            resolved("checkout")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git push origin main")),
+            resolved("push")
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_skips_git_globals() {
+        // `-C <path>` and `-c <key=val>` value pairs are skipped.
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -C /repo checkout --force")),
+            resolved("checkout")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -c user.name=x commit --amend")),
+            resolved("commit")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git --git-dir /tmp/.git status")),
+            resolved("status")
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_basename_normalized() {
+        // Absolute-path git still has its globals stripped (basename detection).
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("/usr/bin/git -C /repo checkout --force")),
+            resolved("checkout")
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_skips_boolean_globals() {
+        // `--paginate` / `--no-pager` are boolean globals (not value-flags).
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git --paginate log")),
+            resolved("log")
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_ambiguous_on_unsafe_global() {
+        // `-C "$REPO"` value is an UnsafeString -> cannot locate the subcommand.
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -C \"$REPO\" checkout --force")),
+            SubcommandResolution::Ambiguous
+        );
+        // Command substitution value is equally unknowable.
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -C \"$(pwd)\" checkout --force")),
+            SubcommandResolution::Ambiguous
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_absent() {
+        // No positional subcommand -> Absent (matches no pin).
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git --version")),
+            SubcommandResolution::Absent
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -h")),
+            SubcommandResolution::Absent
+        );
+    }
+
+    #[test]
+    fn test_resolve_subcommand_non_git() {
+        // Generic: resolves the first positional for any command family.
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("docker rm -f x")),
+            resolved("rm")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("codex --profile p exec foo")),
+            resolved("exec")
+        );
+    }
 
     fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {
         crate::parser::Pipeline {

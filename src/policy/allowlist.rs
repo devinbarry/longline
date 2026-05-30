@@ -6,6 +6,24 @@ use super::config::{AllowlistEntry, RulesConfig};
 use super::matching::normalize_command_name;
 use std::borrow::Cow;
 
+/// Git global value-flags (each consumes a separate following value token)
+/// that may appear before the subcommand. Shared by `strip_git_global_options`
+/// (allowlist) and the subcommand resolver (`matching::resolve_subcommand`).
+pub(crate) const GIT_GLOBAL_VALUE_FLAGS: &[&str] = &[
+    "-C",
+    "-c",
+    "--git-dir",
+    "--work-tree",
+    "--namespace",
+    "--config-env",
+    "--super-prefix",
+];
+
+/// Codex global value-flags that may appear before the subcommand. Shared by
+/// `strip_codex_global_flags` and the subcommand resolver.
+pub(crate) const CODEX_GLOBAL_VALUE_FLAGS: &[&str] =
+    &["--profile", "--model", "-m", "--config", "-c"];
+
 /// Check if a leaf node is allowlisted (or is a bare version check).
 pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
@@ -76,15 +94,7 @@ fn strip_wrapper_value_flag_pairs(argv: &[Arg], value_flags: &[&str]) -> Vec<Arg
 /// strip ever runs — rules evaluate against the original argv. The strip only
 /// affects allowlist matching, not rule matching.
 fn strip_git_global_options(argv: &[Arg]) -> Vec<Arg> {
-    const VALUE_FLAGS: &[&str] = &[
-        "-C",
-        "-c",
-        "--git-dir",
-        "--work-tree",
-        "--namespace",
-        "--config-env",
-        "--super-prefix",
-    ];
+    const VALUE_FLAGS: &[&str] = GIT_GLOBAL_VALUE_FLAGS;
 
     let mut out = Vec::with_capacity(argv.len());
     let mut i = 0;
@@ -147,7 +157,7 @@ fn strip_git_global_options(argv: &[Arg]) -> Vec<Arg> {
 /// subcommand. Strip those so allowlist entries like `codex exec` still match
 /// `codex --profile review exec …` or `codex -c model="gpt-5.4" exec …`.
 fn strip_codex_global_flags(argv: &[Arg]) -> Vec<Arg> {
-    const VALUE_FLAGS: &[&str] = &["--profile", "--model", "-m", "--config", "-c"];
+    const VALUE_FLAGS: &[&str] = CODEX_GLOBAL_VALUE_FLAGS;
     let mut out = Vec::with_capacity(argv.len());
     let mut i = 0;
     let mut in_global_opts = true;
@@ -248,26 +258,17 @@ fn effective_argv(cmd: &SimpleCommand) -> Cow<'_, [Arg]> {
     };
 
     if cmd_name == "git"
-        && cmd.argv.iter().any(|a| {
-            matches!(
-                a.text.as_str(),
-                "-C" | "-c"
-                    | "--git-dir"
-                    | "--work-tree"
-                    | "--namespace"
-                    | "--config-env"
-                    | "--super-prefix"
-            )
-        })
+        && cmd
+            .argv
+            .iter()
+            .any(|a| GIT_GLOBAL_VALUE_FLAGS.contains(&a.text.as_str()))
     {
         Cow::Owned(strip_git_global_options(&cmd.argv))
     } else if cmd_name == "codex"
-        && cmd.argv.iter().any(|a| {
-            matches!(
-                a.text.as_str(),
-                "--profile" | "--model" | "-m" | "--config" | "-c"
-            )
-        })
+        && cmd
+            .argv
+            .iter()
+            .any(|a| CODEX_GLOBAL_VALUE_FLAGS.contains(&a.text.as_str()))
     {
         Cow::Owned(strip_codex_global_flags(&cmd.argv))
     } else {
