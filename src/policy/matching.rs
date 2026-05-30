@@ -104,20 +104,21 @@ pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
     SubcommandResolution::Absent
 }
 
-/// For a **subcommand-pinned** rule, flag matching must ignore the command's
-/// leading global value-flag pairs (git `-C <path>` / `-c <k=v>` / …) and
-/// boolean global flags — otherwise the global `-C` in the ubiquitous
-/// `git -C <path> branch …` is wrongly counted as the branch force-copy `-C`
-/// flag. Returns `cmd.argv` from the effective subcommand onward.
+/// Index of the effective subcommand in `cmd.argv` — the first token after any
+/// leading global value-flag pairs (git `-C <path>` / `-c <k=v>` / `--git-dir
+/// <path>` …), boolean global flags (`--paginate`), and an optional `--`.
+/// Returns 0 when `argv[0]` is already a positional (no leading globals).
 ///
-/// Strips global value-flag pairs UNCONDITIONALLY (including `UnsafeString`
-/// values like `git -C "$REPO" …`) — unlike the allowlist's `effective_argv`,
-/// which retains them for fail-closed safety. That retention is correct for
-/// allowlist matching but wrong here: a global flag's value is never the
-/// subcommand's own flag, so for flag scanning we always skip it.
-fn argv_from_subcommand<'a>(cmd: &'a SimpleCommand) -> Cow<'a, [Arg]> {
+/// CLAMPED to `cmd.argv.len()`. A recognized global value-flag as the LAST
+/// token advances the cursor past the end (the `i += 2` is unconditional), so
+/// without the clamp a dangling `git -C` would yield an out-of-range index and
+/// `argv.len() - index` would underflow (debug panic). Generic across command
+/// families: strips git / codex / wrapper leading value-flags via
+/// `global_value_flags_for`. Shared by `argv_from_subcommand` (slice) and the
+/// `min_args` value-presence count, so both see argv the same way.
+fn subcommand_start_index(cmd: &SimpleCommand) -> usize {
     let Some(name) = cmd.name.as_deref() else {
-        return Cow::Borrowed(&cmd.argv);
+        return 0;
     };
     let cmd_name = normalize_command_name(name);
     let first_arg = cmd.argv.first().map(|a| a.text.as_str());
@@ -127,8 +128,7 @@ fn argv_from_subcommand<'a>(cmd: &'a SimpleCommand) -> Cow<'a, [Arg]> {
     while i < cmd.argv.len() {
         let t = &cmd.argv[i].text;
         if t == "--" {
-            // End of options; the subcommand follows.
-            i += 1;
+            i += 1; // end of options; the subcommand follows
             break;
         }
         if value_flags.contains(&t.as_str()) {
@@ -141,8 +141,22 @@ fn argv_from_subcommand<'a>(cmd: &'a SimpleCommand) -> Cow<'a, [Arg]> {
         }
         break; // first positional = the effective subcommand
     }
+    i.min(cmd.argv.len())
+}
 
-    let start = i.min(cmd.argv.len());
+/// For a **subcommand-pinned** rule, flag matching must ignore the command's
+/// leading global value-flag pairs (git `-C <path>` / `-c <k=v>` / …) and
+/// boolean global flags — otherwise the global `-C` in the ubiquitous
+/// `git -C <path> branch …` is wrongly counted as the branch force-copy `-C`
+/// flag. Returns `cmd.argv` from the effective subcommand onward.
+///
+/// Strips global value-flag pairs UNCONDITIONALLY (including `UnsafeString`
+/// values like `git -C "$REPO" …`) — unlike the allowlist's `effective_argv`,
+/// which retains them for fail-closed safety. That retention is correct for
+/// allowlist matching but wrong here: a global flag's value is never the
+/// subcommand's own flag, so for flag scanning we always skip it.
+fn argv_from_subcommand<'a>(cmd: &'a SimpleCommand) -> Cow<'a, [Arg]> {
+    let start = subcommand_start_index(cmd);
     if start == 0 {
         Cow::Borrowed(&cmd.argv)
     } else {
@@ -593,6 +607,29 @@ mod tests {
         assert_eq!(texts("git --paginate log"), vec!["log"]);
         // No leading globals → returned unchanged.
         assert_eq!(texts("git checkout --force"), vec!["checkout", "--force"]);
+    }
+
+    #[test]
+    fn test_subcommand_start_index() {
+        use super::subcommand_start_index;
+        let idx = |cmd: &str| subcommand_start_index(&parse_cmd(cmd));
+        // No leading globals: the subcommand is argv[0].
+        assert_eq!(idx("git config core.hooksPath"), 0);
+        assert_eq!(idx("git config core.hooksPath /tmp/x"), 0);
+        // Space-form global value pair (`-C <path>`) is stripped (2 tokens).
+        assert_eq!(idx("git -C /repo config core.hooksPath"), 2);
+        // Joined global flag (`--git-dir=…`) is skipped as ONE token.
+        assert_eq!(idx("git --git-dir=/r/.git config core.hooksPath"), 1);
+        // UnsafeString global value (`-C "$REPO"`) is stripped unconditionally.
+        assert_eq!(idx("git -C \"$REPO\" config core.hooksPath"), 2);
+        // `--` ends option processing; the subcommand follows.
+        assert_eq!(idx("git -- config core.hooksPath"), 1);
+        // Dangling trailing value-flag: cursor jumps past the end but is CLAMPED
+        // to argv.len() — guards the min_args underflow (argv=["-C"], len 1).
+        assert_eq!(idx("git -C"), 1);
+        assert_eq!(idx("git -c"), 1);
+        // Non-git command: no git globals, first positional at index 0.
+        assert_eq!(idx("docker rm -f x"), 0);
     }
 
     fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {
