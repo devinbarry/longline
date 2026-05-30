@@ -92,7 +92,9 @@ pub fn classify_set_forms(cmd: &SimpleCommand) -> Option<PolicyResult> {
 /// name normalizes into the `-o` denylist. Benign bash option names are never
 /// `-`/`+`-prefixed, so this rejects no legitimate form.
 fn set_o_name_ok(name: &str) -> bool {
-    if name.starts_with('-') || name.starts_with('+') {
+    // Empty (`set -o ""`) or signed (`set -o -a`) names are not valid option
+    // names — fail-closed (ask), consistent with the malformed-form contract.
+    if name.is_empty() || name.starts_with('-') || name.starts_with('+') {
         return false;
     }
     !SET_O_DENY_NAMES.contains(&normalize_option_name(name).as_str())
@@ -353,6 +355,8 @@ mod tests {
             "set -euo -a",         // trailing-o cluster consuming a deny flag
             "set -o -o allexport", // -o consumes -o; allexport never reached as name
             "set -o --",           // -o consuming the end-of-options token
+            "set -o \"\"",         // empty -o name is invalid/malformed -> ask
+            "set -euo \"\"",       // empty name consumed by trailing-o cluster
         ] {
             assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
         }
