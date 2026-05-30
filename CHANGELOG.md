@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0] - 2026-05-30
+
+### Added
+
+- **New `args.subcommand` rule matcher.** Positively pins a rule to a
+  command's *effective subcommand* — the first positional after stripping
+  leading global value-flags (git's `-C`/`-c`/`--git-dir`/…, codex's
+  `--profile`/…, wrapper value-flags), basename-normalized. Unlike
+  `any_of` (which matches any token), it matches only the resolved
+  subcommand, so `subcommand: [push]` does not fire on
+  `git log --grep push`. Use it to gate flag-selected destructive modes
+  on otherwise-allowlisted subcommands.
+
+### Changed
+
+- **Destructive git flags now ask in abbreviated forms too, scoped to the
+  right subcommand.** git accepts unambiguous prefixes of long options
+  (`git checkout --fo` ≡ `--force`); these previously slipped through.
+  Now asks on:
+  - `git checkout --force`/`-f`/`--f…`/`-B` (discard / force-overwrite ref).
+  - `git switch --force`/`-f`/`--discard-changes`/`-C` — closes the
+    "use `git switch --force` instead of `git checkout --force`" bypass.
+  - `git branch` force delete/move/copy/create (`-D`/`-M`/`-C`/`-f`/`--force`).
+  - `git pull --force` including the `--fo`/`--forc` abbreviations.
+  - `git push` force including `--for…` abbreviations
+    (`--force`/`--force-with-lease`/`--force-if-includes`), `+<refspec>`
+    force-pushes, and `--delete`.
+- **`git -C <path> <subcmd>` stays allowed for safe operations.**
+  `git -C /repo branch --list`, `git -C /repo status`,
+  `git -C /repo switch <branch>`, absolute-path `/usr/bin/git -C …`, etc.
+  remain `allow`; only the subcommand's own destructive flags gate.
+- **Clearer "not pre-approved" messages.** A not-allowlisted command from a
+  known family is named by its operation (e.g. `git reset`) instead of
+  being called an unrecognized command.
+- **`git reset` is no longer allowlisted** — it asks with a clear
+  "not on the allowlist" message (allowlisting it safely is not yet
+  expressible, since git accepts `git reset --h` as `--hard`).
+  `git reset --hard`/`--merge`/`--keep` continue to ask.
+- **Fewer false-positive asks from bag-of-words matching.** Pinning the
+  destructive git rules to their subcommand stops them firing when the
+  subcommand word appears as a value — e.g. `git log --grep reset --hard`
+  and `git commit -m "push --force"` now correctly allow, and
+  `git pull --force origin main` is labeled as a pull (it used to claim
+  it was a force-push to main).
+- **Still asks (unchanged):** `git checkout .` / `git restore .`
+  (wholesale discard), `git clean -f`, `git branch -D`, force-push,
+  history-rewrite operations.
+
+### Fixed
+
+- **Dropped the false-positive fork-bomb rule** that matched the bare
+  no-op `:` command.
+
+### Notes
+
+- Out of scope (deliberate non-goals): `git checkout --ours`/`--theirs`
+  (conflict resolution) and `git restore`'s default worktree-discard are
+  not gated — common, low-catastrophe operations under longline's
+  dev-speed threat model.
+
 ## [0.18.5] - 2026-05-26
 
 ### Added
