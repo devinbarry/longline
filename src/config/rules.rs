@@ -250,12 +250,14 @@ pub struct ArgsMatcher {
     /// `git log --grep push`. Literal exact-match (no glob); honors
     /// `case_insensitive`.
     ///
-    /// Gate-biased on ambiguity: when the subcommand cannot be resolved
-    /// (a global value-flag whose value is a shell expansion, e.g.
-    /// `git -C "$REPO" …`, or no positional at all) the resolver yields
-    /// `None`, which MATCHES ANY pinned subcommand. This is intentional
-    /// over-ask for destructive-flag gates — missing a real `--force`
-    /// because the repo path is a variable is the failure to prevent.
+    /// Gate-biased on ambiguity (`SubcommandResolution`, see
+    /// `policy::matching::resolve_subcommand`): when a global value-flag's
+    /// value is a shell expansion (`git -C "$REPO" …`) the subcommand is
+    /// `Ambiguous` and MATCHES ANY pin, but only when the rule has another
+    /// discriminator that also matched (a `flags` or `args` any_of/all_of/
+    /// none_of constraint) — over-ask for destructive-flag gates. When there
+    /// is no positional subcommand at all (`git --version`) it is `Absent`
+    /// and matches NO pin.
     #[serde(default)]
     pub subcommand: Vec<String>,
     /// When true, lowercase both pattern and argument before matching.

@@ -252,8 +252,11 @@ fn args_match_prefix(required_args: &[&str], argv: &[Arg]) -> bool {
 /// git's `-C`/`-c`/... , codex's `--profile`/`--model`/... , and per-command
 /// value-flags. So `git -C /repo reset` is matched as if it were `git reset`.
 fn effective_argv(cmd: &SimpleCommand) -> Cow<'_, [Arg]> {
+    // Basename-normalize so an absolute-path invocation (`/usr/bin/git -C /p
+    // status`) gets its globals stripped the same as bare `git` — otherwise
+    // safe `/usr/bin/git -C <path> <subcmd>` would fall through to ask.
     let cmd_name = match &cmd.name {
-        Some(n) => n.as_str(),
+        Some(n) => normalize_command_name(n),
         None => return Cow::Borrowed(&cmd.argv),
     };
 

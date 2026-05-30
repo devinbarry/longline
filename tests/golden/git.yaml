@@ -2602,7 +2602,11 @@ tests:
   - id: git-C-checkout-branch-allow
     command: "git -C /repo checkout main"
     expected: { decision: allow }
-  - id: git-C-status-allow
+  - id: git-abspath-C-status-allow
+    command: "/usr/bin/git -C /repo status"
+    expected: { decision: allow }
+    note: "REGRESSION GUARD: absolute-path git -C must basename-normalize before global-strip in effective_argv, else safe abs-path `git -C` falls through to ask."
+  - id: git-C-status-repo-allow
     command: "git -C /repo status"
     expected: { decision: allow }
   # Genuine destructive flags AFTER the subcommand are still gated under -C:
