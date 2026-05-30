@@ -26,7 +26,6 @@ use allowlist::{
 };
 use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
-#[allow(unused_imports)]
 use set_forms::classify_set_forms;
 
 /// Walk a statement tree like `parser::flatten`, but DO NOT descend into a
@@ -348,7 +347,9 @@ fn shell_c_covered_via_extras(leaf: &Statement, extra_stmts: &[Statement]) -> bo
 /// `gh-readonly-classifier` is permissive (Allow), not restrictive.
 fn classifier_covers(leaf: &Statement, is_extra: bool) -> bool {
     match leaf {
-        Statement::SimpleCommand(cmd) => classify_gh(cmd, is_extra).is_some(),
+        Statement::SimpleCommand(cmd) => {
+            classify_gh(cmd, is_extra).is_some() || (!is_extra && classify_set_forms(cmd).is_some())
+        }
         _ => false,
     }
 }
@@ -582,6 +583,16 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                     rule_id: Some("gh-readonly-classifier".to_string()),
                     reason: format!("read-only gh: {}", shape),
                 };
+            }
+
+            // R10: benign `set`/`setopt` option preambles. Non-extra leaves
+            // only (an extracted/external `set` is not the current-shell
+            // builtin). Synthetic rule_id is load-bearing for the all-covered
+            // gate; see classifier_covers and the design spec.
+            if !is_extra {
+                if let Some(result) = set_forms::classify_set_forms(cmd) {
+                    return result;
+                }
             }
 
             // No rule matched -- check allowlist as fallback

@@ -359,22 +359,33 @@ tests:
       rule_id: cat-env-file
     note: "exit allowlist must not lift the cat .env ask on the sibling leaf"
 
-  # ── Guard: set/setopt are NOT allowlisted (env-RCE bypass closed) ──
-  # `set -a`/`setopt allexport` export later assignments; allowlisting set
+  # ── Guard: set/setopt are NOT bare-allowlisted (env-RCE bypass closed) ──
+  # `set -a`/`setopt allexport` export later assignments; bare-allowlisting set
   # would let GIT_SSH_COMMAND=evil reach `git fetch` across leaves and bypass
-  # the git-env-rce-vars deny rule. These lock that set/setopt stay at ask.
+  # the git-env-rce-vars deny rule. R10 instead lifts only the provably benign
+  # option forms via the set_forms classifier (rule_id set-safe-forms); the
+  # dangerous export forms stay at ask (see set-allexport-env-bypass-asks).
   - id: set-not-allowlisted-asks
     command: "set -e"
     expected:
-      decision: ask
-    note: "set is deliberately not allowlisted; bare set -e asks"
+      decision: allow
+      rule_id: set-safe-forms
+    note: "R10: benign set -e lifted by the set_forms classifier, not a bare allowlist"
   - id: setopt-not-allowlisted-asks
     command: "setopt NULL_GLOB"
     expected:
-      decision: ask
-    note: "setopt is deliberately not allowlisted"
+      decision: allow
+      rule_id: set-safe-forms
+    note: "R10: benign setopt option name lifted by the set_forms classifier"
   - id: set-allexport-env-bypass-asks
     command: "set -a; GIT_SSH_COMMAND=evil; git fetch"
     expected:
       decision: ask
     note: "regression guard: set -a env-export bypass must not reach allow"
+
+  - id: set-e-classifier-allow
+    command: "set -e"
+    expected:
+      decision: allow
+      rule_id: set-safe-forms
+    note: "R10: benign set preamble lifted to allow by the set_forms classifier"

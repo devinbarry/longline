@@ -8,12 +8,10 @@
 //! Fail-closed: every branch that is not provably benign falls through to
 //! `None`, so a parse gap can only over-ask, never over-allow.
 //!
-//! The `!is_extra` gate and exact-bare-name match keep this from lifting an
-//! external `set`/`setopt` (e.g. `env set -e`, `find -exec set`, `/tmp/set`).
+//! The exact-bare-name match (here) plus the `!is_extra` gate at the call-site
+//! keep this from lifting an external `set`/`setopt` (e.g. `env set -e`,
+//! `find -exec set`, `/tmp/set`).
 //! See `docs/plans/2026-05-30-r10-safe-set-forms-design.md`.
-
-// Constants, helpers, and recognizer stubs are all used in Tasks 2/3/4.
-#![allow(dead_code)]
 
 use crate::domain::{Decision, PolicyResult};
 use crate::parser::{Arg, ArgMeta, SimpleCommand};
