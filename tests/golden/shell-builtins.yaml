@@ -400,6 +400,10 @@ tests:
     command: "set -x"
     expected: { decision: allow, rule_id: set-safe-forms }
     note: "xtrace allowed; cross-leaf trace-to-stderr is an accepted tradeoff (see spec)"
+  - id: set-o-pipefail-allow
+    command: "set -o pipefail"
+    expected: { decision: allow, rule_id: set-safe-forms }
+    note: "standalone -o benign name; pairs with set-o-posix-asks"
   - id: set-euo-pipefail-then-git-status-allow
     command: "set -euo pipefail; git status"
     expected: { decision: allow }
@@ -416,6 +420,7 @@ tests:
   - id: setopt-bare-allow
     command: "setopt"
     expected: { decision: allow, rule_id: set-safe-forms }
+    note: "bare setopt lists current options — no mutation"
 
   # R10 falsifiable ask-pairs (minimal mutation flips allow -> ask)
   - id: set-ea-asks
