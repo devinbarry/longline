@@ -3,9 +3,12 @@
 //!
 //! Every `command` here is a (lightly trimmed) real entry pulled from the
 //! longline audit log that was decided `ask` under the old rules *solely*
-//! because a flattened builtin leaf (`exit`/`break`/`continue`/`set`/`setopt`)
-//! had no allowlist entry and poisoned an otherwise all-safe statement. After
-//! adding those builtins to `core-allowlist.yaml` they decide `allow`.
+//! because a flattened builtin leaf (`exit`/`break`/`continue`) had no
+//! allowlist entry and poisoned an otherwise all-safe statement. After adding
+//! those control-flow builtins to `core-allowlist.yaml` they decide `allow`.
+//!
+//! `set`/`setopt` are intentionally NOT allowlisted (they change how sibling
+//! leaves execute), so the isolation test below uses a control-flow builtin.
 //!
 //! These run the full binary through the Claude hook contract (stdin JSON →
 //! decision JSON), not just the policy library, so they guard the end-to-end
@@ -34,16 +37,6 @@ fn test_break_in_pytest_retry_loop_allows() {
     result.assert_claude_decision("allow");
 }
 
-/// zsh `setopt NULL_GLOB` preamble + a glob loop using `continue`. Leaves:
-/// setopt, echo, `[ -d ]`/test, continue, wc, basename. (audit log, /tmp review-dir scan)
-#[test]
-fn test_setopt_and_continue_in_review_scan_allows() {
-    let cmd = r#"setopt NULL_GLOB 2>/dev/null; echo "=== review dirs ==="; for d in /tmp/codex-review.*; do [ -d "$d" ] || continue; o=$(wc -c < "$d/output.md"); echo "$(basename "$d"): ${o}B"; done"#;
-    let result = run_claude_hook("Bash", cmd);
-    assert_eq!(result.exit_code, 0);
-    result.assert_claude_decision("allow");
-}
-
 /// `cmd || exit 1` guard before more safe work. Leaves: cd, exit, echo.
 /// (audit log, review-harness preamble pattern)
 #[test]
@@ -54,14 +47,19 @@ fn test_cd_or_exit_guard_allows() {
     result.assert_claude_decision("allow");
 }
 
-/// Isolation guard: `set -e` no longer poisons, but the command still `ask`s
-/// because of the genuinely-gated `git merge --ff-only` leaf — proving the
-/// builtin allowlist did not lift the decision on a real sibling. (audit log,
-/// afterhours FF-merge + tag script)
+/// Isolation guard at the binary boundary: an allowlisted `exit` leaf must NOT
+/// lift the decision on a genuinely-gated sibling. `cat .env` is rule-gated
+/// (cat-env-file), so the whole command must still `ask`. Verified that the
+/// ask originates from cat .env, not from the builtin.
 #[test]
-fn test_set_e_does_not_lift_gated_git_merge() {
-    let cmd = r#"MAIN=REDACTED/git/tools/afterhours; set -e; echo "=== merge ==="; git -C "$MAIN" merge --ff-only somebranch; git -C "$MAIN" rev-parse --short develop"#;
+fn test_exit_guard_does_not_lift_gated_cat_env() {
+    let cmd = r#"cat .env || exit 1"#;
     let result = run_claude_hook("Bash", cmd);
     assert_eq!(result.exit_code, 0);
     result.assert_claude_decision("ask");
+    assert!(
+        result.stdout.contains("cat-env-file"),
+        "ask must come from the gated cat .env sibling, not the exit builtin; got: {}",
+        result.stdout
+    );
 }

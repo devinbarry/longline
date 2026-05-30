@@ -303,11 +303,15 @@ tests:
     note: "Self-pipe of no-ops — harmless; was a fork-bomb false positive"
 
   # ════════════════════════════════════════════════════════════════
-  # Control-flow builtins: exit / return / break / continue / set / setopt
-  # Allowlisted because they only manipulate shell state and surface as
-  # flattened leaves inside compound commands. Before they were allowlisted,
-  # a for-loop or `set -e` preamble poisoned the whole command to ask even
-  # when every real leaf was safe (observed in the audit log).
+  # Control-flow builtins: exit / return / break / continue
+  # Allowlisted because they only affect CONTROL FLOW (stop/skip execution)
+  # and surface as flattened leaves inside compound commands. Before, a
+  # for-loop body or `cmd || exit 1` guard poisoned the whole command to ask
+  # even when every real leaf was safe (observed in the audit log).
+  #
+  # `set` / `setopt` are intentionally NOT allowlisted — they change how later
+  # leaves execute (export, arg-as-env) and longline does not model cross-leaf
+  # shell-option state. See the env-bypass guards at the end of this section.
   # ════════════════════════════════════════════════════════════════
 
   # ── Bare / minimal ────────────────────────────────────────────
@@ -321,18 +325,6 @@ tests:
       decision: allow
   - id: return-zero-allow
     command: "return 0"
-    expected:
-      decision: allow
-  - id: set-errexit-allow
-    command: "set -e"
-    expected:
-      decision: allow
-  - id: set-pipefail-allow
-    command: "set -o pipefail"
-    expected:
-      decision: allow
-  - id: setopt-nullglob-allow
-    command: "setopt NULL_GLOB"
     expected:
       decision: allow
 
@@ -352,22 +344,37 @@ tests:
     expected:
       decision: allow
     note: "retry-style loop with break — was an ask false positive"
-  - id: set-e-preamble-allow
-    command: "set -e; echo start; ls"
-    expected:
-      decision: allow
-    note: "`set -e` script preamble — no longer poisons safe leaves"
 
   # ── Guard: control-flow builtins must NOT mask a dangerous sibling ─
-  - id: set-e-then-rm-root-deny
-    command: "set -e && rm -rf /"
+  - id: exit-then-rm-root-deny
+    command: "exit 0 && rm -rf /"
     expected:
       decision: deny
       rule_id: rm-recursive-root
-    note: "Allowlisting set must not weaken the rm rule on the other leaf"
+    note: "Allowlisting exit must not weaken the rm rule on the other leaf"
   - id: exit-after-dangerous-still-asks
     command: "cat .env || exit 1"
     expected:
       decision: ask
       rule_id: cat-env-file
     note: "exit allowlist must not lift the cat .env ask on the sibling leaf"
+
+  # ── Guard: set/setopt are NOT allowlisted (env-RCE bypass closed) ──
+  # `set -a`/`setopt allexport` export later assignments; allowlisting set
+  # would let GIT_SSH_COMMAND=evil reach `git fetch` across leaves and bypass
+  # the git-env-rce-vars deny rule. These lock that set/setopt stay at ask.
+  - id: set-not-allowlisted-asks
+    command: "set -e"
+    expected:
+      decision: ask
+    note: "set is deliberately not allowlisted; bare set -e asks"
+  - id: setopt-not-allowlisted-asks
+    command: "setopt NULL_GLOB"
+    expected:
+      decision: ask
+    note: "setopt is deliberately not allowlisted"
+  - id: set-allexport-env-bypass-asks
+    command: "set -a; GIT_SSH_COMMAND=evil; git fetch"
+    expected:
+      decision: ask
+    note: "regression guard: set -a env-export bypass must not reach allow"

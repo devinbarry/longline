@@ -32,15 +32,21 @@ allowlists:
     - { command: ":", trust: minimal }  # shell no-op (`while :`, `: ${VAR:=x}`)
     # ── Shell control-flow builtins ───────────────────────────────
     # These surface as flattened leaves inside compound commands (for-loops,
-    # `set -e` script preambles, `cmd || exit 1`). None can read/write files,
-    # spawn processes, or exfiltrate — they only manipulate shell state, and
-    # the real commands in the script are each evaluated as their own leaves.
+    # `cmd || exit 1`). They only affect CONTROL FLOW (stop/skip execution) —
+    # they cannot read/write files, spawn processes, exfiltrate, or change how
+    # a SIBLING leaf executes, and each real command in the statement is still
+    # evaluated as its own leaf.
+    #
+    # NOTE: `set`/`setopt` are deliberately NOT here. `set -a`/`set -k`/
+    # `setopt allexport` change how *later* leaves execute (export assignments,
+    # fold args into the environment), and longline evaluates leaves
+    # independently without modelling cross-leaf shell-option state. Allowing
+    # them let `set -a; GIT_SSH_COMMAND=evil; git fetch` bypass the
+    # `git-env-rce-vars` deny rule (see golden `set-allexport-env-bypass-asks`).
     - { command: exit, trust: minimal }       # `cmd || exit 1`
     - { command: "return", trust: minimal }   # function early-return
     - { command: "break", trust: minimal }    # loop control
     - { command: "continue", trust: minimal } # loop control
-    - { command: set, trust: minimal }        # `set -e`, `set -o pipefail`, `set -x`
-    - { command: setopt, trust: minimal }     # zsh `setopt NULL_GLOB`
     - { command: sleep, trust: minimal }
     - { command: grep, trust: minimal }
     - { command: rg, trust: minimal }
