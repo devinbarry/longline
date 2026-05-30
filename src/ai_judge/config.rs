@@ -39,7 +39,13 @@ fn default_command() -> String {
 }
 
 fn default_timeout() -> u64 {
-    30
+    // 45s, raised from 30s after audit-log analysis: every observed 30s
+    // timeout had the judge (codex exec) still alive — either mid-stream or
+    // stalled on first-token latency after an 8-15s cold start — never
+    // crashed. A timeout falls back to `ask` (safe but a friction prompt),
+    // so the extra headroom converts slow-but-completing runs into verdicts.
+    // Overridable via `timeout:` in ~/.config/longline/ai-judge.yaml.
+    45
 }
 
 fn default_interpreters() -> Vec<InterpreterTrigger> {
@@ -136,6 +142,15 @@ triggers:
     }
 
     #[test]
+    fn test_default_timeout_is_45s() {
+        // Deliberate: raised 30→45 after audit-log analysis showed every
+        // observed timeout had the judge still alive (mid-stream or stalled on
+        // cold-start first-token latency), never crashed. Guards against an
+        // accidental revert.
+        assert_eq!(default_timeout(), 45);
+    }
+
+    #[test]
     fn test_config_defaults() {
         let yaml = "{}";
         let config: AiJudgeConfig = serde_norway::from_str(yaml).unwrap();
@@ -143,7 +158,7 @@ triggers:
             config.command,
             "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
         );
-        assert_eq!(config.timeout, 30);
+        assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
     }
@@ -160,7 +175,7 @@ triggers:
             config.command,
             "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
         );
-        assert_eq!(config.timeout, 30);
+        assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
     }
@@ -211,7 +226,7 @@ triggers:
             config.command,
             "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
         );
-        assert_eq!(config.timeout, 30);
+        assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
         assert!(!config.triggers.runners.is_empty());
 
