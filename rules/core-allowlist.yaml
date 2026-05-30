@@ -30,6 +30,17 @@ allowlists:
     - { command: "true", trust: minimal }
     - { command: "false", trust: minimal }
     - { command: ":", trust: minimal }  # shell no-op (`while :`, `: ${VAR:=x}`)
+    # ── Shell control-flow builtins ───────────────────────────────
+    # These surface as flattened leaves inside compound commands (for-loops,
+    # `set -e` script preambles, `cmd || exit 1`). None can read/write files,
+    # spawn processes, or exfiltrate — they only manipulate shell state, and
+    # the real commands in the script are each evaluated as their own leaves.
+    - { command: exit, trust: minimal }       # `cmd || exit 1`
+    - { command: "return", trust: minimal }   # function early-return
+    - { command: "break", trust: minimal }    # loop control
+    - { command: "continue", trust: minimal } # loop control
+    - { command: set, trust: minimal }        # `set -e`, `set -o pipefail`, `set -x`
+    - { command: setopt, trust: minimal }     # zsh `setopt NULL_GLOB`
     - { command: sleep, trust: minimal }
     - { command: grep, trust: minimal }
     - { command: rg, trust: minimal }

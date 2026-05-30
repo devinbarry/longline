@@ -301,3 +301,73 @@ tests:
     expected:
       decision: allow
     note: "Self-pipe of no-ops — harmless; was a fork-bomb false positive"
+
+  # ════════════════════════════════════════════════════════════════
+  # Control-flow builtins: exit / return / break / continue / set / setopt
+  # Allowlisted because they only manipulate shell state and surface as
+  # flattened leaves inside compound commands. Before they were allowlisted,
+  # a for-loop or `set -e` preamble poisoned the whole command to ask even
+  # when every real leaf was safe (observed in the audit log).
+  # ════════════════════════════════════════════════════════════════
+
+  # ── Bare / minimal ────────────────────────────────────────────
+  - id: exit-bare-allow
+    command: "exit"
+    expected:
+      decision: allow
+  - id: exit-code-allow
+    command: "exit 1"
+    expected:
+      decision: allow
+  - id: return-zero-allow
+    command: "return 0"
+    expected:
+      decision: allow
+  - id: set-errexit-allow
+    command: "set -e"
+    expected:
+      decision: allow
+  - id: set-pipefail-allow
+    command: "set -o pipefail"
+    expected:
+      decision: allow
+  - id: setopt-nullglob-allow
+    command: "setopt NULL_GLOB"
+    expected:
+      decision: allow
+
+  # ── Realistic compound contexts that previously asked ─────────
+  - id: cmd-or-exit-allow
+    command: "ls /tmp || exit 1"
+    expected:
+      decision: allow
+    note: "`cmd || exit 1` — exit no longer poisons the safe leaf"
+  - id: loop-with-continue-allow
+    command: 'for f in a b c; do [ "$f" = "b" ] && continue; echo "$f"; done'
+    expected:
+      decision: allow
+    note: "for-loop with continue guard — was an ask false positive"
+  - id: loop-with-break-allow
+    command: "for i in 1 2 3 4 5; do echo run $i; break; done"
+    expected:
+      decision: allow
+    note: "retry-style loop with break — was an ask false positive"
+  - id: set-e-preamble-allow
+    command: "set -e; echo start; ls"
+    expected:
+      decision: allow
+    note: "`set -e` script preamble — no longer poisons safe leaves"
+
+  # ── Guard: control-flow builtins must NOT mask a dangerous sibling ─
+  - id: set-e-then-rm-root-deny
+    command: "set -e && rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+    note: "Allowlisting set must not weaken the rm rule on the other leaf"
+  - id: exit-after-dangerous-still-asks
+    command: "cat .env || exit 1"
+    expected:
+      decision: ask
+      rule_id: cat-env-file
+    note: "exit allowlist must not lift the cat .env ask on the sibling leaf"
