@@ -123,7 +123,8 @@ fn classify_set(argv: &[Arg]) -> Option<PolicyResult> {
             continue;
         }
 
-        // Short-flag cluster `-XYZ` / `+XYZ`.
+        // Short-flag cluster `-XYZ` / `+XYZ`. `t[1..]` is byte-safe: the first
+        // byte is the ASCII sign `-`/`+` confirmed by the is_flag check above.
         let letters: Vec<char> = t[1..].chars().collect();
         if letters.is_empty() {
             // Bare "-" or "+".
@@ -306,6 +307,12 @@ mod tests {
         ] {
             assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
         }
+    }
+
+    #[test]
+    fn set_deny_letter_before_trailing_o_asks() {
+        // `a` is hit before the trailing `o` is processed -> reject the whole form.
+        assert!(classify_set_forms(&sc("set -eao pipefail")).is_none());
     }
 
     #[test]
