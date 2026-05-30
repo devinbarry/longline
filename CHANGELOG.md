@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.2] - 2026-05-30
+
+### Added
+
+- **Shell control-flow builtins no longer poison compound commands.** `exit`,
+  `return`, `break`, and `continue` are now allowlisted, so an otherwise
+  all-safe `for`-loop body, `cmd || exit 1` guard, or early `return` no longer
+  forces the whole command to `ask`. For example `for i in 1 2 3; do echo $i;
+  break; done` and `ls /tmp || exit 1` now allow. They only affect control flow
+  (stop/skip execution) and cannot alter how a sibling command runs.
+
+### Changed
+
+- **AI judge default timeout raised 30s → 45s.** A judge call that exceeds the
+  limit still falls back to `ask`; the extra headroom lets a slow-but-completing
+  evaluation return a verdict instead of a friction prompt. Override with
+  `timeout:` in `~/.config/longline/ai-judge.yaml`.
+
+### Still asks
+
+- **`set` and `setopt` are intentionally not allowlisted.** Options such as
+  `set -a` / `set -k` / `setopt allexport` change how *later* commands in the
+  same statement execute (folding assignments into their environment), which
+  longline evaluates leaf-by-leaf and cannot model — allowlisting them would let
+  `set -a; GIT_SSH_COMMAND=evil; git fetch` slip past the git environment-RCE
+  deny rule. They continue to ask.
+
 ## [0.19.1] - 2026-05-30
 
 ### Fixed
