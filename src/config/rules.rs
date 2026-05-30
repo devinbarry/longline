@@ -266,9 +266,13 @@ pub struct ArgsMatcher {
     /// Defaults to false to preserve existing case-sensitive semantics.
     #[serde(default)]
     pub case_insensitive: bool,
-    /// If set, the rule only matches when `cmd.argv.len() >= min_args`.
-    /// Used to distinguish `git config <key>` (a read, len=2) from
-    /// `git config <key> <value>` (a set, len=3).
+    /// If set, the rule only matches when the argv length **from the effective
+    /// subcommand onward** is `>= min_args` — leading global value-flag pairs
+    /// (`git -C <path>` / `--git-dir <path>`) and boolean globals are stripped
+    /// first (via `subcommand_start_index`) so they don't inflate the count.
+    /// Used to distinguish `git config <key>` (a read, effective len 2) from
+    /// `git config <key> <value>` (a set, effective len 3) — including under
+    /// `git -C <path> config <key>`, which raw `argv.len()` would over-count.
     #[serde(default)]
     pub min_args: Option<usize>,
 }
