@@ -184,6 +184,14 @@ mod tests {
     }
 
     #[test]
+    fn setopt_mixed_benign_then_dangerous_asks() {
+        // A later dangerous token must reject the whole invocation, not just
+        // its own position — the loop's core safety invariant.
+        assert!(classify_set_forms(&sc("setopt errexit allexport")).is_none());
+        assert!(classify_set_forms(&sc("setopt nullglob posix_builtins")).is_none());
+    }
+
+    #[test]
     fn setopt_flag_forms_ask() {
         // Single-letter and -m glob-pattern forms are rejected wholesale.
         for input in ["setopt -m 'all*'", "setopt -o", "setopt +o"] {
