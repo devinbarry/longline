@@ -91,9 +91,26 @@ fn classify_set(_argv: &[Arg]) -> Option<PolicyResult> {
     None
 }
 
-/// `setopt` recognizer — implemented in Task 2.
-fn classify_setopt(_argv: &[Arg]) -> Option<PolicyResult> {
-    None
+/// `setopt` recognizer. zsh `setopt` takes option *names*; reject any flag
+/// form (`-m`, single letters, `+o`) wholesale and deny the export/resolution
+/// options. Bare `setopt` lists options (benign).
+fn classify_setopt(argv: &[Arg]) -> Option<PolicyResult> {
+    if argv.is_empty() {
+        return Some(allow("setopt"));
+    }
+    for arg in argv {
+        let t = arg.text.as_str();
+        // Any flag form (`-m 'all*'`, single-letter, `+o`) is not a plain
+        // option-name form — refuse to classify (FP cost ~0).
+        if t.starts_with('-') || t.starts_with('+') {
+            return None;
+        }
+        let norm = normalize_option_name(t);
+        if SETOPT_DENY_NAMES.contains(&norm.as_str()) {
+            return None;
+        }
+    }
+    Some(allow("setopt <names>"))
 }
 
 #[cfg(test)]
@@ -128,5 +145,49 @@ mod tests {
         assert_eq!(normalize_option_name("all_export"), "allexport");
         assert_eq!(normalize_option_name("POSIX_BUILTINS"), "posixbuiltins");
         assert_eq!(normalize_option_name("pipefail"), "pipefail");
+    }
+
+    #[test]
+    fn setopt_benign_names_allow() {
+        for input in [
+            "setopt",
+            "setopt errexit",
+            "setopt extended_glob nullglob",
+            "setopt noallexport",
+        ] {
+            let r = classify_set_forms(&sc(input));
+            assert_eq!(
+                r.as_ref().map(|p| p.decision),
+                Some(Decision::Allow),
+                "{input}"
+            );
+            assert_eq!(
+                r.unwrap().rule_id.as_deref(),
+                Some("set-safe-forms"),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn setopt_dangerous_names_ask() {
+        // allexport (env export) and posixbuiltins (persistence/resolution),
+        // case/underscore-insensitive.
+        for input in [
+            "setopt allexport",
+            "setopt ALL_EXPORT",
+            "setopt posix_builtins",
+            "setopt POSIX_BUILTINS",
+        ] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
+    }
+
+    #[test]
+    fn setopt_flag_forms_ask() {
+        // Single-letter and -m glob-pattern forms are rejected wholesale.
+        for input in ["setopt -m 'all*'", "setopt -o", "setopt +o"] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
     }
 }
