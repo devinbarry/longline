@@ -309,9 +309,9 @@ tests:
   # for-loop body or `cmd || exit 1` guard poisoned the whole command to ask
   # even when every real leaf was safe (observed in the audit log).
   #
-  # `set` / `setopt` are intentionally NOT allowlisted — they change how later
-  # leaves execute (export, arg-as-env) and longline does not model cross-leaf
-  # shell-option state. See the env-bypass guards at the end of this section.
+  # `set` / `setopt` are classifier-gated by `src/policy/set_forms.rs` (R10):
+  # benign option forms allow, export/resolution-affecting forms ask. See the
+  # set_forms cases and env-bypass guards at the end of this section.
   # ════════════════════════════════════════════════════════════════
 
   # ── Bare / minimal ────────────────────────────────────────────
@@ -365,27 +365,142 @@ tests:
   # the git-env-rce-vars deny rule. R10 instead lifts only the provably benign
   # option forms via the set_forms classifier (rule_id set-safe-forms); the
   # dangerous export forms stay at ask (see set-allexport-env-bypass-asks).
-  - id: set-not-allowlisted-asks
+  - id: set-flag-form-allow
     command: "set -e"
     expected:
       decision: allow
       rule_id: set-safe-forms
-    note: "R10: benign set -e lifted by the set_forms classifier, not a bare allowlist"
-  - id: setopt-not-allowlisted-asks
+    note: "R10: benign set preamble allows (was ask)"
+  - id: setopt-name-form-allow
     command: "setopt NULL_GLOB"
     expected:
       decision: allow
       rule_id: set-safe-forms
-    note: "R10: benign setopt option name lifted by the set_forms classifier"
+    note: "R10: benign setopt name allows (was ask)"
   - id: set-allexport-env-bypass-asks
     command: "set -a; GIT_SSH_COMMAND=evil; git fetch"
     expected:
       decision: ask
     note: "regression guard: set -a env-export bypass must not reach allow"
 
-  - id: set-e-classifier-allow
-    command: "set -e"
-    expected:
-      decision: allow
-      rule_id: set-safe-forms
-    note: "R10: benign set preamble lifted to allow by the set_forms classifier"
+  # R10 positives — benign option forms (assert rule_id for falsifiability)
+  - id: set-eu-allow
+    command: "set -eu"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: set-euo-pipefail-allow
+    command: "set -euo pipefail"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: set-e-o-pipefail-allow
+    command: "set -e -o pipefail"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: set-plus-e-allow
+    command: "set +e"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: set-x-allow
+    command: "set -x"
+    expected: { decision: allow, rule_id: set-safe-forms }
+    note: "xtrace allowed; cross-leaf trace-to-stderr is an accepted tradeoff (see spec)"
+  - id: set-euo-pipefail-then-git-status-allow
+    command: "set -euo pipefail; git status"
+    expected: { decision: allow }
+    note: "the motivating case — set preamble no longer poisons the safe sibling"
+  - id: setopt-errexit-allow
+    command: "setopt errexit"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: setopt-multi-name-allow
+    command: "setopt extended_glob nullglob"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: setopt-noallexport-allow
+    command: "setopt noallexport"
+    expected: { decision: allow, rule_id: set-safe-forms }
+  - id: setopt-bare-allow
+    command: "setopt"
+    expected: { decision: allow, rule_id: set-safe-forms }
+
+  # R10 falsifiable ask-pairs (minimal mutation flips allow -> ask)
+  - id: set-ea-asks
+    command: "set -ea"
+    expected: { decision: ask }
+    note: "pairs with set -e allow; -a (allexport) in cluster must ask"
+  - id: set-euo-allexport-asks
+    command: "set -euo allexport"
+    expected: { decision: ask }
+    note: "pairs with set -euo pipefail; trailing -o consumes allexport -> ask"
+  - id: set-ak-asks
+    command: "set -ak"
+    expected: { decision: ask }
+    note: "pairs with set -eu; a/k cluster letters ask"
+  - id: set-o-posix-asks
+    command: "set -o posix"
+    expected: { decision: ask }
+    note: "pairs with set -o pipefail; posix mode enables assignment persistence"
+  - id: setopt-allexport-asks
+    command: "setopt allexport"
+    expected: { decision: ask }
+    note: "pairs with setopt errexit"
+  - id: setopt-posixbuiltins-asks
+    command: "setopt posix_builtins"
+    expected: { decision: ask }
+    note: "pairs with setopt errexit; posixbuiltins persistence/resolution"
+  - id: set-dashdash-asks
+    command: "set --"
+    expected: { decision: ask }
+  - id: set-positional-asks
+    command: "set foo"
+    expected: { decision: ask }
+  - id: set-substitution-asks
+    command: "set $(cmd)"
+    expected: { decision: ask }
+    note: "UnsafeString argv pre-guard"
+  - id: setopt-glob-match-asks
+    command: "setopt -m 'all*'"
+    expected: { decision: ask }
+    note: "flag-form (-m glob) rejected wholesale"
+
+  # R10 normalization guards (case/underscore variants of denylisted names ask)
+  - id: set-o-allexport-upper-asks
+    command: "set -o ALL_EXPORT"
+    expected: { decision: ask }
+  - id: set-o-allexport-underscore-asks
+    command: "set -o all_export"
+    expected: { decision: ask }
+  - id: set-o-posix-upper-asks
+    command: "set -o POSIX"
+    expected: { decision: ask }
+  - id: setopt-posixbuiltins-upper-asks
+    command: "setopt POSIX_BUILTINS"
+    expected: { decision: ask }
+
+  # R10 regression guards — must stay ask
+  - id: set-env-prefixed-persistence-asks
+    command: "GIT_SSH_COMMAND=evil set -e; git fetch"
+    expected: { decision: ask }
+    note: "inline env on set persists under posix mode; assignment pre-guard"
+  - id: set-o-posix-persistence-bypass-asks
+    command: "set -o posix; GIT_SSH_COMMAND=evil :; git fetch"
+    expected: { decision: ask }
+    note: "posix mode persistence bypass; closed by the posix denylist"
+  - id: set-a-version-no-bypass-asks
+    command: "set -a --version"
+    expected: { decision: ask }
+    note: "is_version_check needs argv.len()==1; -a must not slip through"
+  - id: set-via-find-exec-asks
+    command: "find . -exec set -e ;"
+    expected: { decision: ask }
+    note: "extra leaf — non-extra gate keeps it ask (bare ; terminator, no YAML escape)"
+  - id: set-via-bash-c-asks
+    command: 'bash -c "set -e"'
+    expected: { decision: ask }
+    note: "extra leaf via shell-c reparse — non-extra gate keeps it ask"
+  - id: set-via-xargs-asks
+    command: "echo x | xargs set -e"
+    expected: { decision: ask }
+    note: "extra leaf via xargs — non-extra gate keeps it ask"
+  - id: set-external-path-asks
+    command: "/tmp/set -e"
+    expected: { decision: ask }
+    note: "exact-name rule: path-named set is external, not the builtin"
+  - id: setopt-external-path-asks
+    command: "./setopt NULL_GLOB"
+    expected: { decision: ask }
+    note: "exact-name rule: path-named setopt is external"
