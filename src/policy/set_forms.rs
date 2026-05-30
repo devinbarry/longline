@@ -323,6 +323,11 @@ mod tests {
             "set -o all_export",
             "set -o POSIX",
             "set +o allexport",
+            // Clusters reaching allexport without a separate `-o` consumer:
+            // `-ao` (a denied before o-handling) and `-oa` (o-not-last). Both
+            // enable allexport in bash; both must ask.
+            "set -ao",
+            "set -oa",
         ] {
             assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
         }
