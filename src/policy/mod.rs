@@ -4,6 +4,7 @@ mod descriptive_asks;
 pub mod gh_classifier;
 mod matching;
 pub(crate) mod redirects;
+mod set_forms;
 
 #[allow(unused_imports)]
 pub use config::{
@@ -25,6 +26,8 @@ use allowlist::{
 };
 use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
+#[allow(unused_imports)]
+use set_forms::classify_set_forms;
 
 /// Walk a statement tree like `parser::flatten`, but DO NOT descend into a
 /// SimpleCommand's `embedded_substitutions`. The caller then collects the
