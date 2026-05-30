@@ -258,6 +258,13 @@ mod tests {
         for input in ["setopt -m 'all*'", "setopt -o", "setopt +o"] {
             assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
         }
+        // Path isolation: `setopt -m 'nullglob'` must reject via the leading
+        // `-`/`+` flag guard, NOT the name denylist — neither `-m` nor the
+        // benign glob arg `nullglob` is a denylisted name, so the only thing
+        // that can return None here is the flag guard. If that guard regressed,
+        // this would wrongly Allow. Pins the reject path the design spec calls
+        // for (Tests §Unit).
+        assert!(classify_set_forms(&sc("setopt -m 'nullglob'")).is_none());
     }
 
     #[test]
