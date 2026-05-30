@@ -86,9 +86,71 @@ pub fn classify_set_forms(cmd: &SimpleCommand) -> Option<PolicyResult> {
     }
 }
 
-/// `set` recognizer — implemented in Task 3.
-fn classify_set(_argv: &[Arg]) -> Option<PolicyResult> {
-    None
+/// `set` recognizer. Walks argv left to right, allowing only pure benign
+/// option forms. Denylist letters `a`/`k` (sign-blind); `-o`/`+o` consumes the
+/// next token as a normalized option name checked against the `-o` denylist;
+/// `o` inside a cluster must be the last char. Bare `set`, `--`, positional
+/// words, and any malformed/missing-name form -> `None` (ask).
+fn classify_set(argv: &[Arg]) -> Option<PolicyResult> {
+    // Bare `set` dumps all shell variables/functions -> ask (printenv parity).
+    if argv.is_empty() {
+        return None;
+    }
+
+    let mut i = 0;
+    while i < argv.len() {
+        let t = argv[i].text.as_str();
+
+        // End-of-options / positional reset.
+        if t == "--" {
+            return None;
+        }
+
+        let is_flag = t.starts_with('-') || t.starts_with('+');
+        if !is_flag {
+            // Positional word (`set foo`).
+            return None;
+        }
+
+        // Standalone `-o` / `+o`: next token is the option name.
+        if t == "-o" || t == "+o" {
+            let name = argv.get(i + 1)?; // missing name -> None
+            let norm = normalize_option_name(name.text.as_str());
+            if SET_O_DENY_NAMES.contains(&norm.as_str()) {
+                return None;
+            }
+            i += 2;
+            continue;
+        }
+
+        // Short-flag cluster `-XYZ` / `+XYZ`.
+        let letters: Vec<char> = t[1..].chars().collect();
+        if letters.is_empty() {
+            // Bare "-" or "+".
+            return None;
+        }
+        for (idx, &c) in letters.iter().enumerate() {
+            if DENY_CLUSTER_LETTERS.contains(&c) {
+                return None;
+            }
+            if c == 'o' {
+                // `o` must be the last char of the cluster; it consumes the
+                // NEXT argv token as its option name (e.g. `-euo pipefail`).
+                if idx != letters.len() - 1 {
+                    return None;
+                }
+                let name = argv.get(i + 1)?; // missing name -> None
+                let norm = normalize_option_name(name.text.as_str());
+                if SET_O_DENY_NAMES.contains(&norm.as_str()) {
+                    return None;
+                }
+                i += 1; // skip the consumed name token
+            }
+        }
+        i += 1; // advance past the cluster token
+    }
+
+    Some(allow("set <options>"))
 }
 
 /// `setopt` recognizer. zsh `setopt` takes option *names*; reject any flag
@@ -197,5 +259,85 @@ mod tests {
         for input in ["setopt -m 'all*'", "setopt -o", "setopt +o"] {
             assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
         }
+    }
+
+    #[test]
+    fn set_benign_forms_allow() {
+        for input in [
+            "set -e",
+            "set -eu",
+            "set -euo pipefail",
+            "set -e -o pipefail",
+            "set +e",
+            "set -x",
+            "set -o pipefail",
+        ] {
+            let r = classify_set_forms(&sc(input));
+            assert_eq!(
+                r.as_ref().map(|p| p.decision),
+                Some(Decision::Allow),
+                "{input}"
+            );
+            assert_eq!(
+                r.unwrap().rule_id.as_deref(),
+                Some("set-safe-forms"),
+                "{input}"
+            );
+        }
+    }
+
+    #[test]
+    fn set_export_keyword_forms_ask() {
+        // Sign-blind on a/k; -o names normalized; posix denied.
+        for input in [
+            "set -a",
+            "set -ea",
+            "set -ak",
+            "set +a",
+            "set +k",
+            "set -o allexport",
+            "set -o keyword",
+            "set -o posix",
+            "set -euo allexport",
+            "set -o ALL_EXPORT",
+            "set -o all_export",
+            "set -o POSIX",
+            "set +o allexport",
+        ] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
+    }
+
+    #[test]
+    fn set_positional_and_malformed_forms_ask() {
+        for input in [
+            "set",      // bare set dumps variables -> ask (printenv parity)
+            "set --",   // positional reset
+            "set foo",  // positional
+            "set -oe",  // o-not-last in cluster
+            "set -o",   // -o with no name
+            "set -euo", // trailing o with no name token
+        ] {
+            assert!(classify_set_forms(&sc(input)).is_none(), "{input}");
+        }
+    }
+
+    #[test]
+    fn set_multiple_o_rejects_on_later_dangerous_name() {
+        assert!(classify_set_forms(&sc("set -o errexit -o allexport")).is_none());
+        let r = classify_set_forms(&sc("set -o errexit -o pipefail"));
+        assert_eq!(r.map(|p| p.decision), Some(Decision::Allow));
+    }
+
+    #[test]
+    fn set_env_prefixed_form_asks() {
+        // Assignment pre-guard: inline env on `set` persists under posix mode.
+        assert!(classify_set_forms(&sc("GIT_SSH_COMMAND=evil set -e")).is_none());
+    }
+
+    #[test]
+    fn set_unsafe_argv_form_asks() {
+        // UnsafeString pre-guard: runtime argv may diverge.
+        assert!(classify_set_forms(&sc("set $(ls)")).is_none());
     }
 }
