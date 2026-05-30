@@ -37,12 +37,15 @@ allowlists:
     # a SIBLING leaf executes, and each real command in the statement is still
     # evaluated as its own leaf.
     #
-    # NOTE: `set`/`setopt` are deliberately NOT here. `set -a`/`set -k`/
-    # `setopt allexport` change how *later* leaves execute (export assignments,
-    # fold args into the environment), and longline evaluates leaves
-    # independently without modelling cross-leaf shell-option state. Allowing
-    # them let `set -a; GIT_SSH_COMMAND=evil; git fetch` bypass the
-    # `git-env-rce-vars` deny rule (see golden `set-allexport-env-bypass-asks`).
+    # NOTE: `set`/`setopt` are NOT allowlisted here — they are classifier-gated
+    # by `src/policy/set_forms.rs` (R10). Benign option forms (`set -euo pipefail`,
+    # `setopt errexit`) allow; export/resolution-affecting forms stay ask:
+    # `set -a`/`-k`/`-o allexport|keyword|posix`, `setopt allexport|posixbuiltins`,
+    # positional/`--`, env-prefixed `set`, and external/extracted forms. This is
+    # because `set -a`/`setopt allexport` export later assignments — allowlisting
+    # bare `set` would let `set -a; GIT_SSH_COMMAND=evil; git fetch` reach
+    # `git fetch` across leaves and bypass the `git-env-rce-vars` deny rule
+    # (see golden `set-allexport-env-bypass-asks`).
     - { command: exit, trust: minimal }       # `cmd || exit 1`
     - { command: "return", trust: minimal }   # function early-return
     - { command: "break", trust: minimal }    # loop control
