@@ -111,8 +111,9 @@ pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
 ///
 /// CLAMPED to `cmd.argv.len()`. A recognized global value-flag as the LAST
 /// token advances the cursor past the end (the `i += 2` is unconditional), so
-/// without the clamp a dangling `git -C` would yield an out-of-range index and
-/// `argv.len() - index` would underflow (debug panic). Generic across command
+/// without the clamp a dangling `git -C` would yield an out-of-range index — an
+/// out-of-bounds slice in `argv_from_subcommand`, and an `argv.len() - index`
+/// underflow at the `min_args` call site (debug panic). Generic across command
 /// families: strips git / codex / wrapper leading value-flags via
 /// `global_value_flags_for`. Shared by `argv_from_subcommand` (slice) and the
 /// `min_args` value-presence count, so both see argv the same way.
@@ -291,7 +292,16 @@ pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
             // Check args with glob matching
             if let Some(args_matcher) = args {
                 if let Some(min) = args_matcher.min_args {
-                    if cmd.argv.len() < min {
+                    // Count argv from the EFFECTIVE subcommand onward, so leading
+                    // git globals (`git -C <path> config <key>`, `--git-dir=…`)
+                    // don't inflate the read-vs-write count and over-deny bare
+                    // config READS. `subcommand_start_index` is clamped, and
+                    // `saturating_sub` is belt-and-suspenders: this check runs
+                    // before the `all_of:["config"]` constraint below, so a bare
+                    // `git -C` (dangling value-flag) reaches here with start ==
+                    // argv.len().
+                    let effective_len = cmd.argv.len().saturating_sub(subcommand_start_index(cmd));
+                    if effective_len < min {
                         return false;
                     }
                 }
@@ -618,7 +628,8 @@ mod tests {
         assert_eq!(idx("git config core.hooksPath /tmp/x"), 0);
         // Space-form global value pair (`-C <path>`) is stripped (2 tokens).
         assert_eq!(idx("git -C /repo config core.hooksPath"), 2);
-        // Joined global flag (`--git-dir=…`) is skipped as ONE token.
+        // Joined `=value` form of the `--git-dir` value-flag: not matched as a
+        // value-flag token as-is, so skipped as one boolean-style token.
         assert_eq!(idx("git --git-dir=/r/.git config core.hooksPath"), 1);
         // UnsafeString global value (`-C "$REPO"`) is stripped unconditionally.
         assert_eq!(idx("git -C \"$REPO\" config core.hooksPath"), 2);

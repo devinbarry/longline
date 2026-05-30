@@ -405,6 +405,126 @@ tests:
     expected:
       decision: allow
 
+  # ── Globals-aware min_args (design 2026-05-30) ────────────────────────
+  # Leading git globals (-C <path>, --git-dir=…) must NOT inflate the
+  # read-vs-write count and over-deny bare config READS. Reads allow
+  # (literal / unsafe-joined) or ask (unsafe space-form); writes always deny.
+  # corrupting-core, space + joined literal global
+  - id: git-C-config-hookspath-read-allow
+    command: "git -C /repo config core.hooksPath"
+    expected:
+      decision: allow
+  - id: git-C-config-hookspath-write-deny
+    command: "git -C /repo config core.hooksPath /tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  - id: git-gitdir-joined-config-hookspath-read-allow
+    command: "git --git-dir=/r/.git config core.hooksPath"
+    expected:
+      decision: allow
+  - id: git-gitdir-joined-config-hookspath-write-deny
+    command: "git --git-dir=/r/.git config core.hooksPath /tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  # rce-keys-spaceform
+  - id: git-C-config-sshcommand-read-allow
+    command: "git -C /repo config core.sshCommand"
+    expected:
+      decision: allow
+  - id: git-C-config-sshcommand-write-deny
+    command: "git -C /repo config core.sshCommand evil"
+    expected:
+      decision: deny
+      rule_id: git-config-rce-keys-spaceform
+  # exfil-keys
+  - id: git-C-config-httpproxy-read-allow
+    command: "git -C /repo config http.proxy"
+    expected:
+      decision: allow
+  - id: git-C-config-httpproxy-write-deny
+    command: "git -C /repo config http.proxy http://evil"
+    expected:
+      decision: deny
+      rule_id: git-config-exfil-keys
+  # tls-downgrade
+  - id: git-C-config-sslverify-read-allow
+    command: "git -C /repo config http.sslVerify"
+    expected:
+      decision: allow
+  - id: git-C-config-sslverify-write-deny
+    command: "git -C /repo config http.sslVerify false"
+    expected:
+      decision: deny
+      rule_id: git-config-tls-downgrade
+  # Unsafe SPACE-form global -> ask (allowlist retains the unsafe -C "$REPO" pair)
+  - id: git-C-unsafe-config-hookspath-read-ask
+    command: 'git -C "$REPO" config core.hooksPath'
+    expected:
+      decision: ask
+  - id: git-C-unsafe-config-hookspath-write-deny
+    command: 'git -C "$REPO" config core.hooksPath x'
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  - id: git-C-unsafe-config-useremail-read-ask
+    command: 'git -C "$REPO" config user.email'
+    expected:
+      decision: ask
+  # Unsafe JOINED-form global -> allow (joined token skipped, NOT retained)
+  - id: git-gitdir-unsafe-config-hookspath-read-allow
+    command: 'git --git-dir="$REPO" config core.hooksPath'
+    expected:
+      decision: allow
+  - id: git-gitdir-unsafe-config-hookspath-write-deny
+    command: 'git --git-dir="$REPO" config core.hooksPath /tmp/x'
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  - id: git-gitdir-unsafe-config-useremail-read-allow
+    command: 'git --git-dir="$REPO" config user.email'
+    expected:
+      decision: allow
+  # Dangling leading global (no config token) -> ask; MUST NOT panic.
+  # Exercises the clamped subcommand_start_index on a trailing value-flag,
+  # reached because min_args is checked before the all_of:[config] constraint.
+  - id: git-C-dangling-ask
+    command: "git -C"
+    expected:
+      decision: ask
+  - id: git-c-dangling-ask
+    command: "git -c"
+    expected:
+      decision: ask
+  # `--` boundary
+  - id: git-ddash-config-hookspath-read-allow
+    command: "git -- config core.hooksPath"
+    expected:
+      decision: allow
+  - id: git-ddash-config-hookspath-write-deny
+    command: "git -- config core.hooksPath /tmp/x"
+    expected:
+      decision: deny
+      rule_id: git-config-corrupting-core-flags
+  # Transport space-form: leading global strips so the RCE gate stays intact;
+  # the valueless `-C` form flips to allow; intervening-positional form (no
+  # PROG, `origin` inflates the count) stays deny (documented non-goal).
+  - id: git-C-fetch-uploadpack-write-deny
+    command: "git -C /repo fetch --upload-pack /tmp/evil"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags-spaceform
+  - id: git-C-fetch-uploadpack-novalue-allow
+    command: "git -C /repo fetch --upload-pack"
+    expected:
+      decision: allow
+  - id: git-fetch-origin-uploadpack-novalue-deny
+    command: "git fetch origin --upload-pack"
+    expected:
+      decision: deny
+      rule_id: git-transport-program-flags-spaceform
+
   # --- Joined key=value form (key and value as a single positional) ---
   - id: git-config-core-bare-joined-deny
     command: "git config core.bare=true"
