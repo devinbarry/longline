@@ -381,19 +381,44 @@ tests:
       decision: deny
       rule_id: git-config-corrupting-core-flags
     # Critical (deny) wins over global (ask) — most-restrictive ordering
+  # Bare READS of these keys (no value) are safe and must stay allow — only
+  # SETTING them is dangerous. Regression guard for the min_args:3 fix.
+  - id: git-config-core-hookspath-read-allow
+    command: "git config core.hooksPath"
+    expected:
+      decision: allow
+    # Reading the configured hooks path is harmless; the deny is for writes.
+  - id: git-config-core-bare-read-allow
+    command: "git config core.bare"
+    expected:
+      decision: allow
+  - id: git-config-core-worktree-read-allow
+    command: "git config core.worktree"
+    expected:
+      decision: allow
+  - id: git-config-core-repofmt-read-allow
+    command: "git config core.repositoryformatversion"
+    expected:
+      decision: allow
+  - id: git-config-core-hookspath-get-read-allow
+    command: "git config --get core.hooksPath"
+    expected:
+      decision: allow
 
   # --- Joined key=value form (key and value as a single positional) ---
   - id: git-config-core-bare-joined-deny
     command: "git config core.bare=true"
     expected:
       decision: deny
-      rule_id: git-config-corrupting-core-flags
-    # `key=value` joined-positional form must not bypass
+      rule_id: git-c-corrupting-core-flags
+    # `key=value` joined-positional form (invalid git config syntax) is denied
+    # by git-c-corrupting-core-flags, not the config-write rule (which requires
+    # a separate value token via min_args:3). Decision unchanged: still deny.
   - id: git-config-core-hookspath-joined-deny
     command: "git config core.hooksPath=/tmp/evil"
     expected:
       decision: deny
-      rule_id: git-config-corrupting-core-flags
+      rule_id: git-c-corrupting-core-flags
 
   # --- `git -c key=value <subcommand>` ad-hoc override (the silent channel) ---
   - id: git-c-core-bare-commit-deny

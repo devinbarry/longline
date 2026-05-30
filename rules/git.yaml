@@ -85,13 +85,16 @@ rules:
         all_of: ["config"]
         any_of:
           - "core.bare"
-          - "core.bare=**"
           - "core.worktree"
-          - "core.worktree=**"
           - "core.repositoryformatversion"
-          - "core.repositoryformatversion=**"
           - "core.hookspath"
-          - "core.hookspath=**"
+        # Require a VALUE token (`git config <key> <value>`, argv.len() >= 3)
+        # so the bare READ form `git config core.hooksPath` stays allowed —
+        # only SETTING these keys is dangerous. Matches the read/write guard
+        # the sibling git-config-rce-keys rules already use. The joined
+        # `git config core.bare=true` form (invalid git config syntax) is
+        # covered by git-c-corrupting-core-flags, not here.
+        min_args: 3
       flags:
         none_of: ["--get", "--get-all", "--get-regexp", "--get-color", "--list", "-l", "--unset", "--unset-all"]
     decision: deny
