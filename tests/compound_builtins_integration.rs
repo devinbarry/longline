@@ -63,3 +63,24 @@ fn test_exit_guard_does_not_lift_gated_cat_env() {
         result.stdout
     );
 }
+
+/// Regression guard for the dropped-`set` env-RCE bypass, asserted at the
+/// binary boundary on the REASON (not just the decision). `set -a` exports the
+/// following `GIT_SSH_COMMAND=evil` assignment to the later `git fetch`, but
+/// longline cannot model that cross-leaf, so the only safe outcome is that
+/// `set` stays unrecognized → ask. The bare assignment and `git fetch` leaves
+/// each independently allow, so this proves the ask rests SOLELY on `set` being
+/// off the allowlist — if `set` were ever re-allowlisted the whole command
+/// would lift to allow and bypass the git-env-rce-vars deny rule.
+#[test]
+fn test_set_allexport_env_bypass_asks_due_to_set() {
+    let cmd = r#"set -a; GIT_SSH_COMMAND=evil; git fetch"#;
+    let result = run_claude_hook("Bash", cmd);
+    assert_eq!(result.exit_code, 0);
+    result.assert_claude_decision("ask");
+    assert!(
+        result.stdout.contains("set isn't on longline's allowlist"),
+        "ask must come from the unrecognized `set` leaf, not git fetch or the assignment; got: {}",
+        result.stdout
+    );
+}
