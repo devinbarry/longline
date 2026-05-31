@@ -1,5 +1,10 @@
-# Bare variable assignment tests — verify that assignments like VAR=$(cmd)
-# are treated as safe when all embedded substitutions are allowlisted.
+# Bare and inline variable assignment tests.
+# - Assignments whose embedded substitutions are all allowlisted are safe (allow).
+# - BUT an assignment (or `read`) to a command-resolution / code-injection env var
+#   (PATH, LD_*, DYLD_*, BASH_ENV, ENV, ZDOTDIR, PROMPT_COMMAND, interpreter/toolchain
+#   knobs, PAGER/MANPAGER/GIT_WEB_BROWSER, the git-env-rce-vars GIT_*/SSH_ASKPASS set)
+#   now ASKs via the sensitive_env classifier (rule_id: sensitive-env-assignment),
+#   because a LATER leaf can inherit it and run hijacked. Benign vars stay allow.
 tests:
   # -- Safe bare assignments (allow) ----------------------------------------
   - id: bare-assign-safe-date
@@ -30,7 +35,8 @@ tests:
   - id: bare-assign-plain-path
     command: "PATH=/usr/bin"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: sensitive-env-assignment
 
   - id: bare-assign-pipeline-subst
     command: "VAR=$(ls | grep foo | sort)"
@@ -97,3 +103,99 @@ tests:
     command: "VAR=$(unknown_tool | grep foo)"
     expected:
       decision: ask
+
+  # ── R11: sensitive env-assignment / read guard (ask) ──────────────────────
+  - id: r11-path-prefix-commandless
+    command: "PATH=.:$PATH; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-ld-preload-commandless
+    command: "LD_PRELOAD=/evil.so; ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-bash-env-commandless
+    command: "BASH_ENV=/tmp/x; ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-git-ssh-command-split-leaf
+    command: "GIT_SSH_COMMAND=x; git fetch"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-ld-preload-inline
+    command: "LD_PRELOAD=/evil.so ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-dyld-inline
+    command: "DYLD_INSERT_LIBRARIES=/e.dylib ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-git-config-key-glob
+    command: "GIT_CONFIG_KEY_0=core.sshCommand; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-wrapper-extra-leaf-command
+    command: "command LD_PRELOAD=/e.so ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-export-declaration-builtin
+    command: "export PATH=.:$PATH"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-rustc-wrapper-inline
+    command: "RUSTC_WRAPPER=/evil cargo build"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-manpager-inline
+    command: "MANPAGER=/evil man ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-read-path-subscript
+    command: "read PATH[0]"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-path-append-inline
+    command: "PATH+=(/evil) ls"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-version-check-ordering
+    command: "LD_PRELOAD=/x ls --version"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-read-herestring
+    command: "read PATH <<< '.:$PATH'; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-read-flag-positional
+    command: "read -r PATH foo"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-bash-c-inner-list
+    command: "bash -c 'PATH=.:$PATH; git status'"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-case-insensitive-path
+    command: "path=.:$PATH; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+
+  # ── R11: precedence guard — existing deny is NOT downgraded ────────────────
+  - id: r11-git-env-rce-inline-stays-deny
+    command: "GIT_SSH_COMMAND=x git fetch"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+
+  # ── R11: falsifiable benign partners (variable-scoped, not blanket) ────────
+  - id: r11-benign-foo
+    command: "FOO=bar; echo hi"
+    expected: { decision: allow }
+  - id: r11-benign-node-env
+    command: "NODE_ENV=production; echo hi"
+    expected: { decision: allow }
+  - id: r11-benign-environment-collision
+    command: "ENVIRONMENT=prod; echo hi"
+    expected: { decision: allow }
+  - id: r11-benign-my-env-collision
+    command: "MY_ENV=x; echo hi"
+    expected: { decision: allow }
+  - id: r11-benign-git-author
+    command: "GIT_AUTHOR_NAME=x git commit -m y"
+    expected: { decision: allow }
+  - id: r11-benign-ssh-auth-sock
+    command: "SSH_AUTH_SOCK=/tmp/s ls"
+    expected: { decision: allow }
+  - id: r11-benign-ldflags-boundary
+    command: "LDFLAGS=-O2 ls"
+    expected: { decision: allow }
+  - id: r11-excluded-ifs
+    command: "IFS=, echo hi"
+    expected: { decision: allow }
+  - id: r11-excluded-home
+    command: "HOME=/tmp git status"
+    expected: { decision: allow }
+  - id: r11-excluded-editor
+    command: "EDITOR=vim git commit -m y"
+    expected: { decision: allow }
+  - id: r11-benign-read-answer
+    command: "read answer"
+    expected: { decision: allow }

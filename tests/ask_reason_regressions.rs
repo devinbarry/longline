@@ -153,7 +153,16 @@ fn descriptive_rules_do_not_overmatch_existing_allows() {
     assert_allow("just check");
     assert_allow("tmux list-sessions");
     assert_allow("tmux capture-pane -t session -p");
-    assert_allow("PATH=/tmp gh pr view 123");
+    // NOTE (R11): `PATH=/tmp gh pr view 123` now ASKs via the sensitive_env
+    // classifier (rule_id: sensitive-env-assignment) — an inline PATH
+    // assignment can hijack command resolution for the leaf, so it is
+    // intentionally no longer a silent allow. The `command gh ...` wrapper
+    // form below carries no sensitive assignment and stays allow.
+    assert_eq!(
+        evaluate("PATH=/tmp gh pr view 123").rule_id.as_deref(),
+        Some("sensitive-env-assignment"),
+        "inline PATH assignment must ask via R11 sensitive_env guard"
+    );
     assert_allow("command gh pr view 123");
 }
 

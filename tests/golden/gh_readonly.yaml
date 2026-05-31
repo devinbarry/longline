@@ -489,9 +489,9 @@ tests:
   - id: gh-pr-view-with-path-override-still-allows
     command: "PATH=/tmp gh pr view 123"
     expected:
-      decision: allow
-      rule_id: gh-readonly-classifier
-    note: "pre-R7 minimal-trust allowlist matched by basename; preserve via classifier"
+      decision: ask
+      rule_id: sensitive-env-assignment
+    note: "R11: inline PATH override hijacks command resolution; sensitive_env asks before the gh classifier. (Was allow pre-R11.)"
 
   - id: gh-pr-view-absolute-path-still-allows
     command: "/usr/local/bin/gh pr view 123"

@@ -27,6 +27,7 @@ use allowlist::{
 };
 use gh_classifier::classify_gh;
 use matching::{matches_pipeline, matches_rule};
+use sensitive_env::classify_sensitive_env;
 use set_forms::classify_set_forms;
 
 /// Walk a statement tree like `parser::flatten`, but DO NOT descend into a
@@ -559,6 +560,18 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
             // If a rule matched, return the rule result
             if worst.rule_id.is_some() {
                 return worst;
+            }
+
+            // R11: sensitive cross-leaf env assignment / read. MUST run before
+            // every allow-producing shortcut below (is_version_check, the
+            // gh/set_forms classifiers, the allowlist fallback) — each returns
+            // Allow without inspecting cmd.assignments. Returns Ask, which
+            // dominates via most-restrictive-wins and skips the all_covered gate,
+            // so no coverage-predicate wiring is needed (inverse of set_forms).
+            // No is_extra gate: asking on an extra leaf is strictly conservative
+            // and is what covers `env VAR=x cmd` / `bash -c '...'`.
+            if let Some(result) = classify_sensitive_env(cmd) {
+                return result;
             }
 
             // Bare --version / -V is always safe, regardless of allowlist

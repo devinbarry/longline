@@ -278,22 +278,32 @@ tests:
       rule_id: shell-c-redirect
 
   # ── R2 P0-A: assignment-guard preserves ASK on devnull redirects ──
+  # R11: the GIT_SSH_COMMAND outer assignment on the bash wrapper now asks via
+  # the sensitive_env classifier (sensitive-env-assignment) — it fires before
+  # the shell-c-redirect attribution, so the rule_id is the stronger R11 hit.
+  # The benign FOO=bar partner still asks only via shell-c-redirect (its
+  # assignment is not sensitive), which keeps this pair falsifiable.
   - id: git-ssh-command-bash-c-2-devnull-still-asks
     command: "GIT_SSH_COMMAND=/tmp/evil bash -c 'git fetch' 2>/dev/null"
     expected:
       decision: ask
-      rule_id: shell-c-redirect
+      rule_id: sensitive-env-assignment
   - id: foo-bar-bash-c-2-devnull-still-asks
     command: "FOO=bar bash -c 'echo' 2>/dev/null"
     expected:
       decision: ask
       rule_id: shell-c-redirect
 
-  # ── Pre-existing-behavior pins (R4 scope discipline) ──
+  # ── R11: outer sensitive assignment on shell-c wrapper now asks ──
+  # Pre-R11 this allowed: unwrap_shell_c drops the outer GIT_SSH_COMMAND, so the
+  # inner `git fetch` re-parsed clean and the git-env-rce-vars deny never saw
+  # the assignment — a real cross-leaf env-RCE bypass. R11 catches the outer
+  # assignment leaf directly. The benign FOO=bar partner still allows.
   - id: git-ssh-command-bash-c-no-redirect-still-allows
     command: "GIT_SSH_COMMAND=/tmp/evil bash -c 'git fetch'"
     expected:
-      decision: allow
+      decision: ask
+      rule_id: sensitive-env-assignment
   - id: foo-bar-bash-c-no-redirect-still-allows
     command: "FOO=bar bash -c 'echo'"
     expected:

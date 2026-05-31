@@ -65,13 +65,17 @@ fn test_exit_guard_does_not_lift_gated_cat_env() {
 }
 
 /// Regression guard for the dropped-`set` env-RCE bypass, asserted at the
-/// binary boundary on the REASON (not just the decision). `set -a` exports the
-/// following `GIT_SSH_COMMAND=evil` assignment to the later `git fetch`, but
-/// longline cannot model that cross-leaf, so the only safe outcome is that
-/// `set` stays unrecognized → ask. The bare assignment and `git fetch` leaves
-/// each independently allow, so this proves the ask rests SOLELY on `set` being
-/// off the allowlist — if `set` were ever re-allowlisted the whole command
-/// would lift to allow and bypass the git-env-rce-vars deny rule.
+/// binary boundary. `set -a` exports the following `GIT_SSH_COMMAND=evil`
+/// assignment to the later `git fetch`, but longline cannot model that
+/// cross-leaf, so the safe outcome is `ask`.
+///
+/// Two independent leaves now anchor that ask: (1) `set` stays unrecognized
+/// (off the allowlist), and (2) R11's sensitive_env classifier flags the
+/// commandless `GIT_SSH_COMMAND=evil` assignment leaf directly
+/// (rule_id sensitive-env-assignment). Pre-R11 only (1) held; R11 closed the
+/// gap on the assignment leaf itself, so the surfaced reason is now the
+/// sensitive-env-assignment hit. Either anchor is sufficient — if `set` were
+/// re-allowlisted, the assignment leaf would still force the ask.
 #[test]
 fn test_set_allexport_env_bypass_asks_due_to_set() {
     let cmd = r#"set -a; GIT_SSH_COMMAND=evil; git fetch"#;
@@ -79,8 +83,10 @@ fn test_set_allexport_env_bypass_asks_due_to_set() {
     assert_eq!(result.exit_code, 0);
     result.assert_claude_decision("ask");
     assert!(
-        result.stdout.contains("set isn't on longline's allowlist"),
-        "ask must come from the unrecognized `set` leaf, not git fetch or the assignment; got: {}",
+        result.stdout.contains("sensitive-env-assignment")
+            || result.stdout.contains("set isn't on longline's allowlist"),
+        "ask must rest on the unrecognized `set` leaf OR the R11 sensitive assignment leaf, \
+         not on a lifted git fetch; got: {}",
         result.stdout
     );
 }

@@ -111,7 +111,6 @@ fn ask_for(var: &str) -> PolicyResult {
 }
 
 /// Classify a leaf. See module docs.
-#[allow(dead_code)] // wired into evaluate_leaf in Task 2
 pub fn classify_sensitive_env(cmd: &SimpleCommand) -> Option<PolicyResult> {
     // Assignment vector — any leaf, commandless or inline.
     for a in &cmd.assignments {
