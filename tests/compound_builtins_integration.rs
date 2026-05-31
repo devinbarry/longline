@@ -69,13 +69,12 @@ fn test_exit_guard_does_not_lift_gated_cat_env() {
 /// assignment to the later `git fetch`, but longline cannot model that
 /// cross-leaf, so the safe outcome is `ask`.
 ///
-/// Two independent leaves now anchor that ask: (1) `set` stays unrecognized
-/// (off the allowlist), and (2) R11's sensitive_env classifier flags the
-/// commandless `GIT_SSH_COMMAND=evil` assignment leaf directly
-/// (rule_id sensitive-env-assignment). Pre-R11 only (1) held; R11 closed the
-/// gap on the assignment leaf itself, so the surfaced reason is now the
-/// sensitive-env-assignment hit. Either anchor is sufficient — if `set` were
-/// re-allowlisted, the assignment leaf would still force the ask.
+/// Post-R11 the surfaced reason is deterministically `sensitive-env-assignment`:
+/// R11's sensitive_env classifier flags the commandless `GIT_SSH_COMMAND=evil`
+/// assignment leaf directly, and that reason wins over the unrecognized `set`
+/// leaf. This command therefore no longer isolates the `set` anchor — that
+/// isolation moves to the benign-assignment sibling test below, which proves the
+/// ask can rest solely on `set` staying off the allowlist.
 #[test]
 fn test_set_allexport_env_bypass_asks_due_to_set() {
     let cmd = r#"set -a; GIT_SSH_COMMAND=evil; git fetch"#;
@@ -83,10 +82,34 @@ fn test_set_allexport_env_bypass_asks_due_to_set() {
     assert_eq!(result.exit_code, 0);
     result.assert_claude_decision("ask");
     assert!(
-        result.stdout.contains("sensitive-env-assignment")
-            || result.stdout.contains("set isn't on longline's allowlist"),
-        "ask must rest on the unrecognized `set` leaf OR the R11 sensitive assignment leaf, \
-         not on a lifted git fetch; got: {}",
+        result.stdout.contains("sensitive-env-assignment"),
+        "ask must rest on the R11 sensitive-env-assignment leaf (the commandless \
+         GIT_SSH_COMMAND=evil assignment), which deterministically wins here; got: {}",
+        result.stdout
+    );
+}
+
+/// Falsifiable isolation of the `set` anchor (companion to the R11-anchored test
+/// above). With a BENIGN assignment (`FOO=bar`), R11's sensitive_env guard does
+/// NOT fire and `git fetch` is allowlisted — so the ask can rest ONLY on `set`
+/// being off longline's allowlist. If `set` were ever re-allowlisted this command
+/// would lift to allow, which this test would catch (the R11-anchored test above
+/// no longer can, since R11 dominates its reason).
+#[test]
+fn test_set_allexport_with_benign_assignment_asks_due_to_set_alone() {
+    let cmd = r#"set -a; FOO=bar; git fetch"#;
+    let result = run_claude_hook("Bash", cmd);
+    assert_eq!(result.exit_code, 0);
+    result.assert_claude_decision("ask");
+    assert!(
+        result.stdout.contains("set isn't on longline's allowlist"),
+        "ask must rest SOLELY on the unrecognized `set` leaf (FOO=bar is benign, \
+         git fetch is allowlisted); got: {}",
+        result.stdout
+    );
+    assert!(
+        !result.stdout.contains("sensitive-env-assignment"),
+        "benign FOO=bar must NOT trigger the R11 sensitive_env guard; got: {}",
         result.stdout
     );
 }
