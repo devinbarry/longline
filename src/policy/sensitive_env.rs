@@ -218,4 +218,34 @@ mod tests {
         // cannot see PATH — must NOT pretend to catch it (deferred to parser fix).
         assert!(classify_sensitive_env(&sc("PATH[0]=evil")).is_none());
     }
+
+    /// The R11 set must remain a superset of `git-env-rce-vars`'s `env.any_of`.
+    /// Asserts against a CONCRETE instance of each pattern (trailing `*` →
+    /// representative token), so storing `GIT_CONFIG_KEY_*` as a literal
+    /// exact-name (which would miss the runtime `GIT_CONFIG_KEY_0`) fails here.
+    #[test]
+    fn covers_all_git_env_rce_vars() {
+        use crate::policy::{load_embedded_rules, Matcher};
+        let cfg = load_embedded_rules().expect("load embedded rules");
+        let rule = cfg
+            .rules
+            .iter()
+            .find(|r| r.id == "git-env-rce-vars")
+            .expect("git-env-rce-vars rule present");
+        let Matcher::Command { env: Some(env), .. } = &rule.matcher else {
+            panic!("git-env-rce-vars should be a Command matcher with an env block");
+        };
+        assert!(
+            !env.any_of.is_empty(),
+            "git-env-rce-vars env.any_of is empty"
+        );
+        for pat in &env.any_of {
+            // Concrete instance: GIT_CONFIG_KEY_* -> GIT_CONFIG_KEY_0; plain names unchanged.
+            let concrete = pat.replace('*', "0");
+            assert!(
+                is_sensitive_var(&concrete),
+                "R11 sensitive set must cover git-env-rce-vars entry '{pat}' (concrete '{concrete}')",
+            );
+        }
+    }
 }
