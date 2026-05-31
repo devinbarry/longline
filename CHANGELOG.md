@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.5] - 2026-05-31
+
+### Changed
+
+- **The AI judge's default model is now `gpt-5.4` (was `gpt-5.4-mini`); reasoning
+  effort is unchanged at `medium`.** The previous mini model over-investigated
+  simple verdicts — reading files and running web searches to produce a one-line
+  answer — which made the optional judge a latency outlier. `gpt-5.4` is a
+  stronger, more capable model at the same effort and returns its verdict faster.
+  The judge remains **lift-only** (it is consulted only when a command is already
+  going to `ask`, and can only turn that `ask` into `allow`, never escalate to
+  `deny`), so in the default configuration the change cannot bypass a
+  deterministic `deny`, and any judge timeout or unparseable output still falls
+  back to `ask`.
+
+### Note
+
+- **The 45s judge timeout is now just a safety ceiling.** It is the
+  fallback-to-`ask` deadline, not a performance tuning knob — the model swap, not
+  the timeout, is what reduces typical judge latency. Override it via `timeout:`
+  in `~/.config/longline/ai-judge.yaml` as before.
+
+- **Watch the audit log's `reason` field to confirm the new model stays
+  healthy.** If `gpt-5.4` is ever unavailable to the local `codex` CLI, the judge
+  degrades silently to always-`ask` (it never wrongly allows). Degraded calls
+  show up in the JSONL audit log (`~/.claude/hooks-logs/longline.jsonl` /
+  `~/.codex/hooks-logs/longline.jsonl`) as `AI judge: unparseable response` or
+  `AI judge error: …` (e.g. `timed out after 45s`) in `reason`; a sustained rise
+  in those, or in `ask` on judge-eligible commands, means the model is not
+  resolving.
+
 ## [0.19.4] - 2026-05-31
 
 ### Changed
