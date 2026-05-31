@@ -156,9 +156,9 @@ tests:
   - id: r11-bash-c-inner-list
     command: "bash -c 'PATH=.:$PATH; git status'"
     expected: { decision: ask, rule_id: sensitive-env-assignment }
-  - id: r11-case-insensitive-path
+  - id: r11-lowercase-path-benign
     command: "path=.:$PATH; git status"
-    expected: { decision: ask, rule_id: sensitive-env-assignment }
+    expected: { decision: allow }
 
   # ── R11: precedence guard — existing deny is NOT downgraded ────────────────
   - id: r11-git-env-rce-inline-stays-deny

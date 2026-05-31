@@ -13,7 +13,7 @@
 use crate::domain::{Decision, PolicyResult};
 use crate::parser::SimpleCommand;
 
-/// Exact-match sensitive variable names (compared case-insensitively). Includes
+/// Exact-match sensitive variable names (compared case-sensitively). Includes
 /// the full `git-env-rce-vars` `env.any_of` plain names — the drift-guard test
 /// asserts this stays a superset of that rule.
 const SENSITIVE_EXACT: &[&str] = &[
@@ -69,7 +69,7 @@ const SENSITIVE_EXACT: &[&str] = &[
     "GIT_SSL_VERSION",
 ];
 
-/// Glob-pattern sensitive variable names (matched case-insensitively with
+/// Glob-pattern sensitive variable names (matched case-sensitively with
 /// `glob_match`, the same matcher the YAML rules use). The trailing `_*`
 /// carries the underscore boundary so `LDFLAGS` does not match `LD_*` and
 /// `GIT_CONFIG_KEYBOARD` does not match `GIT_CONFIG_KEY_*`.
@@ -86,17 +86,19 @@ fn strip_subscript(name: &str) -> &str {
     }
 }
 
-/// True if `name` (after subscript strip) is a sensitive variable.
+/// True if `name` (after subscript strip) is a sensitive variable. Matching is
+/// CASE-SENSITIVE: Unix env var names are case-sensitive, and lowercase/mixed
+/// forms (`path`, `ld_preload`) are distinct benign variables that cannot hijack
+/// a later command — matching them would be a pure false positive.
 fn is_sensitive_var(name: &str) -> bool {
     let name = strip_subscript(name);
     if name.is_empty() {
         return false;
     }
-    let lower = name.to_ascii_lowercase();
-    SENSITIVE_EXACT.iter().any(|p| p.eq_ignore_ascii_case(name))
+    SENSITIVE_EXACT.contains(&name)
         || SENSITIVE_GLOB
             .iter()
-            .any(|p| glob_match::glob_match(&p.to_ascii_lowercase(), &lower))
+            .any(|p| glob_match::glob_match(p, name))
 }
 
 /// Build the standard Ask result naming the offending variable.
@@ -166,12 +168,25 @@ mod tests {
         assert!(is_sensitive_var("DYLD_INSERT_LIBRARIES"));
         assert!(is_sensitive_var("GIT_CONFIG_KEY_0"));
         assert!(is_sensitive_var("GIT_CONFIG_VALUE_3"));
-        // Case-insensitive
-        assert!(is_sensitive_var("path"));
-        assert!(is_sensitive_var("Ld_Preload"));
         // Subscript stripped
         assert!(is_sensitive_var("PATH[0]"));
         assert!(is_sensitive_var("PATH[$i]"));
+    }
+
+    #[test]
+    fn names_are_case_sensitive() {
+        // Unix env var names are case-sensitive; lowercase/mixed-case are
+        // distinct, benign variables that do NOT hijack a later command.
+        assert!(!is_sensitive_var("path"));
+        assert!(!is_sensitive_var("Path"));
+        assert!(!is_sensitive_var("ld_preload"));
+        assert!(!is_sensitive_var("Ld_Preload"));
+        assert!(!is_sensitive_var("git_ssh_command"));
+        assert!(!is_sensitive_var("git_config_key_0"));
+        // Exact / glob uppercase forms still match.
+        assert!(is_sensitive_var("PATH"));
+        assert!(is_sensitive_var("LD_PRELOAD"));
+        assert!(is_sensitive_var("GIT_CONFIG_KEY_0"));
     }
 
     #[test]
