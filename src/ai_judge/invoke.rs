@@ -290,14 +290,14 @@ echo "ALLOW: safe computation"
             "exec".to_string(),
             "--ephemeral".to_string(),
             "-m".to_string(),
-            "gpt-5.4-mini".to_string(),
+            "gpt-5.4".to_string(),
         ];
         let stripped = maybe_strip_ephemeral(argv.clone(), true);
         assert!(
             !stripped.iter().any(|a| a == "--ephemeral"),
             "--ephemeral should be stripped when debug is enabled: {stripped:?}"
         );
-        assert_eq!(stripped, vec!["codex", "exec", "-m", "gpt-5.4-mini"]);
+        assert_eq!(stripped, vec!["codex", "exec", "-m", "gpt-5.4"]);
     }
 
     #[test]
@@ -307,7 +307,7 @@ echo "ALLOW: safe computation"
             "exec".to_string(),
             "--ephemeral".to_string(),
             "-m".to_string(),
-            "gpt-5.4-mini".to_string(),
+            "gpt-5.4".to_string(),
         ];
         let stripped = maybe_strip_ephemeral(argv.clone(), false);
         assert_eq!(stripped, argv, "argv should be unchanged when debug is off");
@@ -319,7 +319,7 @@ echo "ALLOW: safe computation"
             "codex".to_string(),
             "exec".to_string(),
             "-m".to_string(),
-            "gpt-5.4-mini".to_string(),
+            "gpt-5.4".to_string(),
         ];
         let stripped = maybe_strip_ephemeral(argv.clone(), true);
         assert_eq!(stripped, argv, "argv with no --ephemeral is unchanged");
