@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.3] - 2026-05-31
+
+### Added
+
+- **Benign `set` / `setopt` shell-option preambles now allow instead of
+  forcing the whole command to `ask`.** A leading `set -euo pipefail` (or
+  similar) no longer poisons an otherwise-safe compound command. Allowed forms
+  include the short-flag clusters `set -e` / `-u` / `-x` / `-n` / `-f` and
+  combinations (`set -eu`, `set -euo pipefail`), the `+`-unset forms
+  (`set +e`), `set -o <name>` with a benign option name (`set -o pipefail`,
+  `errexit`, `nounset`, `noglob`, …), benign `setopt` names (`setopt errexit`,
+  `setopt nullglob extended_glob`, `setopt noallexport`), and a bare `setopt`
+  (lists options). For example `set -euo pipefail; <safe command>` now allows.
+  `set -x` (xtrace) is allowed — note it traces later commands' expansions,
+  including any secret-valued variables, to stderr.
+
+### Still asks
+
+- **Options that change how *later* commands run still ask.** `set -a` / `-k`,
+  `set -o allexport` / `keyword` / `posix` (including the spaced forms such as
+  `set -o -a`), and `setopt allexport` / `posixbuiltins` fold assignments into
+  the environment or alter command resolution — allowing them would let
+  `set -a; GIT_SSH_COMMAND=evil; git fetch` slip past the git environment-RCE
+  deny rule. Also still asking: a bare `set` (dumps all shell variables, like
+  `printenv`); positional forms (`set foo`, `set --`); an env-prefixed `set`
+  (`FOO=bar set -e`); `set` / `setopt` reached through `env` / `find -exec` /
+  `xargs` / `bash -c` or an explicit path; and any form carrying a command
+  substitution.
+
 ## [0.19.2] - 2026-05-30
 
 ### Added
