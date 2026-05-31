@@ -29,7 +29,10 @@ pub fn is_allowlisted(config: &RulesConfig, leaf: &Statement) -> bool {
     match leaf {
         Statement::SimpleCommand(cmd) => {
             // Bare assignments (no command name, just VAR=val) are safe
-            // when all their embedded substitutions are also safe.
+            // when all their embedded substitutions are also safe — UNLESS the
+            // variable is command-resolution/code-injection-sensitive, which the
+            // R11 sensitive_env classifier asks on in evaluate_leaf *before* this
+            // allowlist branch is consulted (see src/policy/sensitive_env.rs).
             if cmd.name.is_none() && !cmd.assignments.is_empty() && cmd.argv.is_empty() {
                 return cmd.embedded_substitutions.iter().all(|sub| {
                     crate::parser::flatten(sub)
