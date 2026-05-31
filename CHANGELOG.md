@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.4] - 2026-05-31
+
+### Changed
+
+- **Assigning — or `read`ing / `printf -v`ing into — a command-resolution or
+  code-injection environment variable now asks instead of silently allowing.**
+  A standalone or inline assignment such as `PATH=.:$PATH`, `LD_PRELOAD=/evil.so`,
+  or `BASH_ENV=/tmp/x` can hijack how a *later* command in the same statement
+  resolves or executes — something longline evaluates leaf-by-leaf and cannot
+  otherwise model — so the assigning leaf now asks. This covers the commandless
+  form (`PATH=.:$PATH; git status`), the inline form (`LD_PRELOAD=/x ls`),
+  `export` / `declare` declarations, the append form (`PATH+=(…)`), `read PATH`,
+  and `printf -v PATH …`, including when they appear inside `bash -c '…'`. The
+  guarded set spans shell command/startup resolution (`PATH`, `CDPATH`,
+  `BASH_ENV`, `ENV`, `ZDOTDIR`, `PROMPT_COMMAND`), the dynamic-linker knobs
+  (`LD_*`, `DYLD_*`), interpreter/toolchain hooks (`PYTHONPATH`, `NODE_OPTIONS`,
+  `RUBYOPT`, `RUSTC_WRAPPER`, …), pager/browser program substitution (`PAGER`,
+  `MANPAGER`, `GIT_WEB_BROWSER`), and the full git environment-RCE set
+  (`GIT_SSH_COMMAND`, `GIT_CONFIG_KEY_*`, `SSH_ASKPASS`, …).
+
+### Fixed
+
+- **A sensitive assignment on a `bash -c` wrapper no longer slips through to
+  allow.** `GIT_SSH_COMMAND=/tmp/evil bash -c 'git fetch'` previously allowed —
+  the outer assignment was dropped when the inner `git fetch` was re-parsed, so
+  the git environment-RCE deny rule never saw it. The wrapper's outer assignment
+  now asks.
+
+### Still allows
+
+- **Benign and unrelated variables are unaffected.** Matching is case-sensitive,
+  so lowercase `path=`, `env=`, … (distinct, harmless variables on Unix) still
+  allow, as do common-benign names like `EDITOR`, `VISUAL`, `BROWSER`, `IFS`,
+  `HOME`, `NODE_ENV`, `GIT_AUTHOR_NAME`, and `SSH_AUTH_SOCK`. A `printf` whose
+  format string merely contains text like `PATH=%s` (with no `-v` target) also
+  still allows.
+
 ## [0.19.3] - 2026-05-31
 
 ### Added
