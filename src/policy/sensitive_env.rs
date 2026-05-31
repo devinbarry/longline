@@ -11,7 +11,7 @@
 //! See `docs/plans/2026-05-31-r11-sensitive-env-assignment-guard-design.md`.
 
 use crate::domain::{Decision, PolicyResult};
-use crate::parser::SimpleCommand;
+use crate::parser::{Arg, SimpleCommand};
 
 /// Exact-match sensitive variable names (compared case-sensitively). Includes
 /// the full `git-env-rce-vars` `env.any_of` plain names — the drift-guard test
@@ -101,6 +101,29 @@ fn is_sensitive_var(name: &str) -> bool {
             .any(|p| glob_match::glob_match(p, name))
 }
 
+/// Extract the target variable of a `printf -v NAME ...` invocation, handling
+/// both the separate (`-v NAME`) and combined (`-vNAME`) operand forms. Returns
+/// `None` if there is no `-v` flag or it has no operand. Precise on purpose:
+/// printf format strings/arguments routinely contain "PATH", so a coarse argv
+/// scan (like the `read` one) would false-positive here.
+fn printf_v_target(argv: &[Arg]) -> Option<&str> {
+    let mut i = 0;
+    while i < argv.len() {
+        let t = argv[i].text.as_str();
+        if t == "-v" {
+            return argv.get(i + 1).map(|a| a.text.as_str());
+        }
+        // Combined `-vNAME` (but not `--something`).
+        if let Some(rest) = t.strip_prefix("-v") {
+            if !rest.is_empty() && !t.starts_with("--") {
+                return Some(rest);
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
 /// Build the standard Ask result naming the offending variable.
 fn ask_for(var: &str) -> PolicyResult {
     PolicyResult {
@@ -125,6 +148,14 @@ pub fn classify_sensitive_env(cmd: &SimpleCommand) -> Option<PolicyResult> {
         for arg in &cmd.argv {
             if is_sensitive_var(&arg.text) {
                 return Some(ask_for(strip_subscript(&arg.text)));
+            }
+        }
+    }
+    // `printf -v NAME ...` assigns shell variable NAME (the `-v` operand only).
+    if cmd.name.as_deref() == Some("printf") {
+        if let Some(var) = printf_v_target(&cmd.argv) {
+            if is_sensitive_var(var) {
+                return Some(ask_for(strip_subscript(var)));
             }
         }
     }
@@ -213,6 +244,22 @@ mod tests {
         assert!(asks("LD_PRELOAD=/evil.so ls")); // inline on allowlisted
         assert!(asks("export PATH=.:$PATH")); // declaration builtin
         assert!(asks("PATH+=(/evil) ls")); // append form, name captured as PATH
+    }
+
+    #[test]
+    fn printf_v_vector_asks() {
+        assert!(asks("printf -v PATH /tmp")); // separate -v operand
+        assert!(asks("printf -vPATH /tmp")); // combined -vNAME form
+        assert!(asks("printf -v LD_PRELOAD /e.so"));
+    }
+
+    #[test]
+    fn printf_without_sensitive_v_target_returns_none() {
+        // PATH only in the format string / args, no -v target → not an assignment.
+        assert!(classify_sensitive_env(&sc("printf 'PATH=%s' /tmp")).is_none());
+        assert!(classify_sensitive_env(&sc("printf -v FOO bar")).is_none()); // benign target
+        assert!(classify_sensitive_env(&sc("printf hello")).is_none());
+        assert!(classify_sensitive_env(&sc("printf -v path x")).is_none()); // lowercase benign
     }
 
     #[test]

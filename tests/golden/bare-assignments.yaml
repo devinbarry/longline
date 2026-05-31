@@ -160,6 +160,23 @@ tests:
     command: "path=.:$PATH; git status"
     expected: { decision: allow }
 
+  # ── R11: printf -v NAME assigns shell variable NAME (ask) ─────────────────
+  - id: r11-printf-v-path
+    command: "printf -v PATH /tmp; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-printf-v-combined
+    command: "printf -vPATH /tmp"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-printf-v-bash-c
+    command: "bash -c 'printf -v PATH /tmp; git status'"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-printf-format-path-benign
+    command: "printf 'PATH=%s' /tmp"
+    expected: { decision: allow }
+  - id: r11-printf-v-benign-target
+    command: "printf -v FOO bar; echo hi"
+    expected: { decision: allow }
+
   # ── R11: precedence guard — existing deny is NOT downgraded ────────────────
   - id: r11-git-env-rce-inline-stays-deny
     command: "GIT_SSH_COMMAND=x git fetch"
