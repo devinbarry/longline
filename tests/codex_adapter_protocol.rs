@@ -1,7 +1,7 @@
 mod support;
 
 use serde_json::json;
-use support::bin::run_longline;
+use support::bin::{run_longline, run_longline_allow_stdin_write_error};
 use support::codex::CodexRunResultExt;
 use support::config::TestEnv;
 
@@ -68,7 +68,10 @@ fn corrupt_rules_manifest_claude_keeps_exit_2() {
         "tool_input": {"command": "ls"}
     })
     .to_string();
-    let result = run_longline(&["hook", "claude"], env.home_path(), Some(&input));
+    // EPIPE race: a corrupt manifest exits 2 (cli.rs:389->421) before stdin is
+    // read, so the stdin write can hit BrokenPipe. Tolerate it — this test only
+    // asserts the exit code. Do NOT revert to the strict run_longline helper.
+    let result = run_longline_allow_stdin_write_error(&["hook", "claude"], env.home_path(), &input);
 
     assert_eq!(result.exit_code, 2);
 }
@@ -80,7 +83,11 @@ fn corrupt_rules_manifest_check_keeps_exit_2() {
     std::fs::create_dir_all(&rules_dir).unwrap();
     std::fs::write(rules_dir.join("rules.yaml"), "this is: not [valid").unwrap();
 
-    let result = run_longline(&["check"], env.home_path(), Some("ls"));
+    // EPIPE race: a corrupt manifest exits 2 (cli.rs:389->421) before `check`
+    // reads its command from stdin, so the stdin write can hit BrokenPipe.
+    // Tolerate it — this test only asserts the exit code. Do NOT revert to the
+    // strict run_longline helper.
+    let result = run_longline_allow_stdin_write_error(&["check"], env.home_path(), "ls");
     assert_eq!(result.exit_code, 2);
 }
 
