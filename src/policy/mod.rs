@@ -4,6 +4,7 @@ mod descriptive_asks;
 pub mod gh_classifier;
 mod matching;
 pub(crate) mod redirects;
+mod sensitive_env;
 mod set_forms;
 
 #[allow(unused_imports)]
