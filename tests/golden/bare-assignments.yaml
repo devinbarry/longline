@@ -176,6 +176,12 @@ tests:
   - id: r11-printf-v-benign-target
     command: "printf -v FOO bar; echo hi"
     expected: { decision: allow }
+  - id: r11-printf-dashdash-terminates-options
+    command: "printf -- -v PATH"
+    expected: { decision: allow }
+  - id: r11-printf-v-after-format-benign
+    command: "printf '%s' -vPATH"
+    expected: { decision: allow }
 
   # ── R11: precedence guard — existing deny is NOT downgraded ────────────────
   - id: r11-git-env-rce-inline-stays-deny

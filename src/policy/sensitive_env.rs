@@ -101,25 +101,30 @@ fn is_sensitive_var(name: &str) -> bool {
             .any(|p| glob_match::glob_match(p, name))
 }
 
-/// Extract the target variable of a `printf -v NAME ...` invocation, handling
-/// both the separate (`-v NAME`) and combined (`-vNAME`) operand forms. Returns
-/// `None` if there is no `-v` flag or it has no operand. Precise on purpose:
-/// printf format strings/arguments routinely contain "PATH", so a coarse argv
-/// scan (like the `read` one) would false-positive here.
+/// Extract the target variable of a `printf -v NAME ...` invocation. `printf`
+/// parses options only BEFORE the format string, and `--` ends option parsing,
+/// so we scan only leading option tokens: stop at `--` or at the first token
+/// that is not an option (the format string). Handles separate (`-v NAME`) and
+/// combined (`-vNAME`) forms. Returns `None` if there is no `-v` option.
+/// Precise on purpose — printf format strings/args routinely contain "PATH".
 fn printf_v_target(argv: &[Arg]) -> Option<&str> {
-    let mut i = 0;
-    while i < argv.len() {
-        let t = argv[i].text.as_str();
+    for (i, a) in argv.iter().enumerate() {
+        let t = a.text.as_str();
+        if t == "--" {
+            return None; // option terminator, no -v among options
+        }
         if t == "-v" {
             return argv.get(i + 1).map(|a| a.text.as_str());
         }
-        // Combined `-vNAME` (but not `--something`).
         if let Some(rest) = t.strip_prefix("-v") {
             if !rest.is_empty() && !t.starts_with("--") {
-                return Some(rest);
+                return Some(rest); // combined -vNAME
             }
         }
-        i += 1;
+        if !t.starts_with('-') {
+            return None; // first non-option token = format string; options ended
+        }
+        // else: some other leading option (printf has none beyond -v/--help/--version) — skip
     }
     None
 }
@@ -260,6 +265,18 @@ mod tests {
         assert!(classify_sensitive_env(&sc("printf -v FOO bar")).is_none()); // benign target
         assert!(classify_sensitive_env(&sc("printf hello")).is_none());
         assert!(classify_sensitive_env(&sc("printf -v path x")).is_none()); // lowercase benign
+    }
+
+    #[test]
+    fn printf_v_respects_option_terminator_and_format_boundary() {
+        // `--` terminates printf options; `-v` after the format string is a
+        // positional arg — neither assigns the variable, so neither should ask.
+        assert!(classify_sensitive_env(&sc("printf -- -v PATH")).is_none());
+        assert!(classify_sensitive_env(&sc("printf '%s' -vPATH")).is_none());
+        assert!(classify_sensitive_env(&sc("printf foo -v PATH")).is_none());
+        // The real assignment forms must still be caught.
+        assert!(asks("printf -v PATH /tmp"));
+        assert!(asks("printf -vPATH /tmp"));
     }
 
     #[test]
