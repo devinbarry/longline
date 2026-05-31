@@ -35,7 +35,7 @@ pub struct InterpreterTrigger {
 }
 
 fn default_command() -> String {
-    "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium".to_string()
+    "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4 -c model_reasoning_effort=medium".to_string()
 }
 
 fn default_timeout() -> u64 {
@@ -156,7 +156,7 @@ triggers:
         let config: AiJudgeConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(
             config.command,
-            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
+            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4 -c model_reasoning_effort=medium"
         );
         assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
@@ -173,7 +173,7 @@ triggers:
         let config = load_config_from_path(&path);
         assert_eq!(
             config.command,
-            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
+            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4 -c model_reasoning_effort=medium"
         );
         assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
@@ -224,7 +224,7 @@ triggers:
         let config = load_config_from_path(&path);
         assert_eq!(
             config.command,
-            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4-mini -c model_reasoning_effort=medium"
+            "codex exec --full-auto --ephemeral --skip-git-repo-check --enable fast_mode -m gpt-5.4 -c model_reasoning_effort=medium"
         );
         assert_eq!(config.timeout, 45);
         assert!(!config.triggers.interpreters.is_empty());
