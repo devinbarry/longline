@@ -1103,10 +1103,13 @@ mod tests {
             // Lift-only judge preserves the original Ask when it exhausts.
             assert_eq!(outcome.decision, Decision::Ask);
 
+            // Falsifiable: the exhausted run MUST thread its report into the log.
             let entry = last_log_entry(&fake.home);
-            if !entry["judge"].is_null() {
-                assert_eq!(entry["judge"]["outcome"], "exhausted");
-            }
+            assert!(
+                !entry["judge"].is_null(),
+                "exhausted judge run must record a judge block: {entry:?}"
+            );
+            assert_eq!(entry["judge"]["outcome"], "exhausted");
         });
     }
 
