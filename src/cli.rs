@@ -945,6 +945,14 @@ fn run_init(force: bool) -> i32 {
         }
     }
 
+    let settings_path = target_dir.join("judge-claude-settings.json");
+    if !settings_path.exists() || force {
+        if let Err(e) = std::fs::write(&settings_path, longline::ai_judge::JUDGE_CLAUDE_SETTINGS) {
+            eprintln!("longline: failed to write {}: {e}", settings_path.display());
+            return 1;
+        }
+    }
+
     println!("Rules written to {}", target_dir.display());
     println!("Edit {} to customize.", rules_yaml_path.display());
 
