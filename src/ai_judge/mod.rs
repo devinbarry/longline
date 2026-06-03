@@ -2,6 +2,7 @@ mod config;
 mod extract;
 mod home;
 mod invoke;
+mod orchestrator;
 mod outcome;
 mod prompt;
 mod provider;
@@ -14,6 +15,8 @@ pub use config::{AiJudgeConfig, InterpreterTrigger, TriggersConfig};
 pub use extract::{extract_code, ExtractedCode};
 pub use home::{expand_tilde_token, home_dir};
 pub use invoke::{evaluate, evaluate_lenient};
+#[allow(unused_imports)]
+pub use orchestrator::{AttemptHandle, AttemptId, Clock, Event, Runner, Xorshift};
 #[allow(unused_imports)]
 pub use outcome::{
     classify, derive_failure_mode, outcome_tag, AttemptOutcome, AttemptRecord, JudgeReport, Phase,
