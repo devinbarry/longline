@@ -272,63 +272,79 @@ fn evaluate_shell_command_with_parse_result(
     };
 
     // Mirrors the legacy CLI hook flow until Task 7 removes that path.
-    let (final_decision, ai_reason) =
-        if request.ask_ai && final_decision == Decision::Ask && !request.cwd.is_empty() {
-            // Empty cwd skips AI extraction entirely. Earlier versions
-            // substituted "." here, but that caused read_safe_code_file and
-            // effective_cwd_for_extract to canonicalize against the longline
-            // process's own cwd — a real leak when a runtime sends `cwd: ""`
-            // (Codex). Falling through preserves the original policy ask
-            // without consulting any path the runtime didn't authorize.
-            let ai_config = ai_judge::load_config();
-            let extracted_with_cwd =
-                extract_code_with_cwd_following(request.command, &stmt, request.cwd, &ai_config);
+    // I3 structural guard: `LONGLINE_JUDGE_ACTIVE` is set in the judge's own
+    // child environment (the spawned `codex`/`claude` provider). If that child
+    // were itself hooked by longline with --ask-ai, a recursive judge launch
+    // would fork-bomb the host. The guard short-circuits before invoking the
+    // judge — load-bearing and independent of env propagation across the
+    // evaluator's own logic.
+    let judge_active = std::env::var_os("LONGLINE_JUDGE_ACTIVE").is_some();
+    let (final_decision, ai_reason, judge_report) = if request.ask_ai
+        && final_decision == Decision::Ask
+        && !request.cwd.is_empty()
+        && !judge_active
+    {
+        // Empty cwd skips AI extraction entirely. Earlier versions
+        // substituted "." here, but that caused read_safe_code_file and
+        // effective_cwd_for_extract to canonicalize against the longline
+        // process's own cwd — a real leak when a runtime sends `cwd: ""`
+        // (Codex). Falling through preserves the original policy ask
+        // without consulting any path the runtime didn't authorize.
+        let ai_config = ai_judge::load_config();
+        let extracted_with_cwd =
+            extract_code_with_cwd_following(request.command, &stmt, request.cwd, &ai_config);
 
-            match extracted_with_cwd {
-                Some((extracted, effective_cwd)) => {
-                    let ai_cwd = effective_cwd.as_str();
-                    let (ai_decision, reason) = if request.ask_ai_lenient {
-                        ai_judge::evaluate_lenient(
-                            &ai_config,
-                            &extracted.language,
-                            &extracted.code,
-                            ai_cwd,
-                            extracted.context.as_deref(),
-                            request.project_ai_prompt,
-                        )
-                    } else {
-                        ai_judge::evaluate(
-                            &ai_config,
-                            &extracted.language,
-                            &extracted.code,
-                            ai_cwd,
-                            extracted.context.as_deref(),
-                            request.project_ai_prompt,
-                        )
-                    };
-                    if request.project_ai_prompt.is_some() {
-                        eprintln!(
-                            "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
-                            extracted.language
-                        );
-                    } else if request.ask_ai_lenient {
-                        eprintln!(
-                            "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
-                            extracted.language
-                        );
-                    } else {
-                        eprintln!(
-                            "longline: ai-judge evaluated {} code: {ai_decision}",
-                            extracted.language
-                        );
-                    }
-                    (ai_decision, Some(reason))
+        match extracted_with_cwd {
+            Some((extracted, effective_cwd)) => {
+                let ai_cwd = effective_cwd.as_str();
+                let jv = if request.ask_ai_lenient {
+                    ai_judge::evaluate_lenient(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        ai_cwd,
+                        extracted.context.as_deref(),
+                        request.project_ai_prompt,
+                    )
+                } else {
+                    ai_judge::evaluate(
+                        &ai_config,
+                        &extracted.language,
+                        &extracted.code,
+                        ai_cwd,
+                        extracted.context.as_deref(),
+                        request.project_ai_prompt,
+                    )
+                };
+                // Verdict → Decision map exists ONLY at this boundary; everything
+                // downstream stays Decision-typed.
+                let ai_decision = match jv.verdict {
+                    ai_judge::Verdict::Allow => Decision::Allow,
+                    ai_judge::Verdict::Ask => Decision::Ask,
+                };
+                if request.project_ai_prompt.is_some() {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (project prompt): {ai_decision}",
+                        extracted.language
+                    );
+                } else if request.ask_ai_lenient {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code (lenient): {ai_decision}",
+                        extracted.language
+                    );
+                } else {
+                    eprintln!(
+                        "longline: ai-judge evaluated {} code: {ai_decision}",
+                        extracted.language
+                    );
                 }
-                None => (final_decision, None),
+                (ai_decision, Some(jv.reason), Some(jv.report))
             }
-        } else {
-            (final_decision, None)
-        };
+            None => (final_decision, None, None),
+        }
+    } else {
+        (final_decision, None, None)
+    };
 
     let reason = if let Some(ref ai_reason) = ai_reason {
         format!("longline: {}", ai_reason)
@@ -367,6 +383,11 @@ fn evaluate_shell_command_with_parse_result(
     if overridden {
         entry.original_decision = Some(result.decision);
         entry.overridden = true;
+    }
+    // A judge lift is Allow but NOT an override (I2): do not touch
+    // overridden/original_decision. We only attach the report for audit.
+    if let Some(report) = judge_report {
+        entry.judge = Some(report);
     }
     logger::log_decision_to(&entry, request.audit_log_path);
 
@@ -649,6 +670,35 @@ mod tests {
         called_path: PathBuf,
     }
 
+    impl FakeAiJudge {
+        fn was_called(&self) -> bool {
+            self.called_path.exists()
+        }
+    }
+
+    /// Mirrors `HomeEnvGuard` for the I3 recursion guard env var. Does NOT
+    /// re-lock `env_lock()` — the caller (`with_fake_ai_judge`) already holds it.
+    struct JudgeActiveGuard {
+        prev: Option<std::ffi::OsString>,
+    }
+
+    impl JudgeActiveGuard {
+        fn set() -> Self {
+            let prev = std::env::var_os("LONGLINE_JUDGE_ACTIVE");
+            std::env::set_var("LONGLINE_JUDGE_ACTIVE", "1");
+            JudgeActiveGuard { prev }
+        }
+    }
+
+    impl Drop for JudgeActiveGuard {
+        fn drop(&mut self) {
+            match self.prev.take() {
+                Some(v) => std::env::set_var("LONGLINE_JUDGE_ACTIVE", v),
+                None => std::env::remove_var("LONGLINE_JUDGE_ACTIVE"),
+            }
+        }
+    }
+
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
@@ -676,7 +726,14 @@ mod tests {
         std::fs::create_dir_all(&config_dir).unwrap();
         std::fs::write(
             config_dir.join("ai-judge.yaml"),
-            format!("command: {}\ntimeout: 10\n", script_path.display()),
+            // Hermetic R14 budget: disable the claude hedge (fallback_command: "")
+            // and keep budgets tiny so every judge test stays codex-only and fast.
+            // Without this, an exhausting/disabling codex would promote to the
+            // real `claude -p …` default fallback — a live model call.
+            format!(
+                "command: {}\ntimeout: 2\ntotal_budget_secs: 3\nfallback_command: \"\"\n",
+                script_path.display()
+            ),
         )
         .unwrap();
 
@@ -978,6 +1035,78 @@ mod tests {
                 !fake.called_path.exists(),
                 "AI judge command must not run when no code is extracted"
             );
+        });
+    }
+
+    #[test]
+    fn judge_active_env_takes_no_judge_path_regardless_of_config() {
+        with_fake_ai_judge("ALLOW: should never be consulted", |fake| {
+            let _g = JudgeActiveGuard::set();
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                r#"python -c "print(1)""#,
+                EvaluationOptions {
+                    ask_ai: true,
+                    ..Default::default()
+                },
+            );
+
+            // I3 structural guard short-circuits before invoking the judge: the
+            // policy Ask is preserved (NOT lifted to Allow) and the fake judge
+            // script never ran.
+            assert_eq!(outcome.decision, Decision::Ask);
+            assert!(
+                !fake.was_called(),
+                "judge must not run when LONGLINE_JUDGE_ACTIVE is set"
+            );
+        });
+    }
+
+    #[test]
+    fn judge_lift_records_judge_block_not_overridden() {
+        with_fake_ai_judge("ALLOW: lifted by judge", |fake| {
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                r#"python -c "print(1)""#,
+                EvaluationOptions {
+                    ask_ai: true,
+                    ..Default::default()
+                },
+            );
+
+            // I2: a judge lift is Allow but NOT an override.
+            assert_eq!(outcome.decision, Decision::Allow);
+            assert!(!outcome.overridden);
+            assert!(outcome.original_decision.is_none());
+
+            let entry = last_log_entry(&fake.home);
+            assert_eq!(entry["judge"]["outcome"], "verdict");
+            assert!(
+                entry["judge"]["provider_final"].is_string(),
+                "judge block must record provider_final: {entry:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn exhausted_judge_leaves_original_ask() {
+        with_fake_ai_judge("this is not a verdict line", |fake| {
+            let outcome = evaluate_shell_with_options(
+                fake.home.path(),
+                r#"python -c "print(1)""#,
+                EvaluationOptions {
+                    ask_ai: true,
+                    ..Default::default()
+                },
+            );
+
+            // Lift-only judge preserves the original Ask when it exhausts.
+            assert_eq!(outcome.decision, Decision::Ask);
+
+            let entry = last_log_entry(&fake.home);
+            if !entry["judge"].is_null() {
+                assert_eq!(entry["judge"]["outcome"], "exhausted");
+            }
         });
     }
 
