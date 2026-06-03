@@ -182,11 +182,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_empty_command_returns_ask() {
-        let config = AiJudgeConfig {
-            command: String::new(),
-            timeout: 1,
-            triggers: super::super::config::TriggersConfig::default(),
-        };
+        let config = AiJudgeConfig::for_test(String::new(), 1);
         let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);
         assert_eq!(reason, "AI judge error: command is empty");
@@ -194,11 +190,7 @@ mod tests {
 
     #[test]
     fn test_evaluate_missing_command_returns_ask_with_error_prefix() {
-        let config = AiJudgeConfig {
-            command: "/definitely-not-a-real-ai-judge-command-12345".to_string(),
-            timeout: 1,
-            triggers: super::super::config::TriggersConfig::default(),
-        };
+        let config = AiJudgeConfig::for_test("/definitely-not-a-real-ai-judge-command-12345", 1);
         let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);
         assert!(
@@ -247,12 +239,8 @@ fi
 echo "ALLOW: safe computation"
 "#,
         );
-        let config = AiJudgeConfig {
-            command: script.to_string_lossy().to_string(),
-            // Use generous timeout (10s) to avoid flakiness under CI load
-            timeout: 10,
-            triggers: super::super::config::TriggersConfig::default(),
-        };
+        // Generous timeout (10s) to avoid flakiness under CI load.
+        let config = AiJudgeConfig::for_test(script.to_string_lossy().to_string(), 10);
 
         let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Allow);
@@ -335,12 +323,8 @@ sleep 10
 echo "ALLOW: safe computation"
 "#,
         );
-        let config = AiJudgeConfig {
-            command: script.to_string_lossy().to_string(),
-            // Use 1s timeout with 10s sleep to reliably trigger timeout
-            timeout: 1,
-            triggers: super::super::config::TriggersConfig::default(),
-        };
+        // 1s timeout with a 10s sleep reliably triggers the timeout path.
+        let config = AiJudgeConfig::for_test(script.to_string_lossy().to_string(), 1);
 
         let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
         assert_eq!(decision, Decision::Ask);

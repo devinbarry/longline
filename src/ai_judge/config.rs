@@ -50,6 +50,21 @@ impl AiJudgeConfig {
     }
 }
 
+#[cfg(test)]
+impl AiJudgeConfig {
+    /// Throwaway test-only constructor bridging the legacy
+    /// `{command, timeout, triggers}` call sites in `invoke.rs` through the new
+    /// private-field struct, so the lib test target keeps compiling between
+    /// Task 5 and the Task 11 `invoke.rs` rewrite. Removed in Task 11.
+    pub(crate) fn for_test(command: impl Into<String>, timeout: u64) -> Self {
+        let mut c = default_config();
+        c.command = command.into();
+        c.timeout = timeout;
+        c.total_budget_secs = timeout;
+        c
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct TriggersConfig {
     #[serde(default = "default_interpreters")]
