@@ -30,16 +30,15 @@ pub fn is_inert_and_safe(v: &serde_json::Value) -> bool {
         Some(o) => o,
         None => return false,
     };
-    // Allowlist the known-inert top-level keys; reject anything else.
-    // Conservative: an unknown key -> reject.
-    const ALLOWED: &[&str] = &[
-        "includeCoAuthoredBy",
-        "cleanupPeriodDays",
-        "enableAllProjectMcpServers",
-        "enabledPlugins",
-        "env",
-    ];
-    obj.keys().all(|k| ALLOWED.contains(&k.as_str()))
+    // Allowlist the known-inert top-level keys AND pin their value types, so a
+    // tampered-but-cleanup-OK file (e.g. `{"env":"oops"}`, `{"enabledPlugins":42}`)
+    // is rejected and repaired rather than silently accepted. Unknown key -> reject.
+    obj.iter().all(|(k, val)| match k.as_str() {
+        "includeCoAuthoredBy" | "enableAllProjectMcpServers" => val.is_boolean(),
+        "cleanupPeriodDays" => val.is_i64() || val.is_u64(),
+        "enabledPlugins" | "env" => val.is_object(),
+        _ => false,
+    })
 }
 
 /// Validate the on-disk file; atomically repair from EMBEDDED if missing/unsafe.
@@ -67,8 +66,8 @@ fn atomic_write(path: &std::path::Path, content: &str) -> std::io::Result<()> {
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
     ));
     {
         let mut f = std::fs::File::create(&tmp)?;
@@ -106,6 +105,21 @@ mod tests {
     fn validate_rejects_destructive_keys() {
         assert!(!content_is_safe(
             r#"{"cleanupPeriodDays":3650,"history":{"delete":true}}"#
+        ));
+    }
+
+    #[test]
+    fn validate_rejects_wrong_typed_inert_keys() {
+        // Cleanup is fine but an allowlisted key carries the wrong type — the
+        // validator must reject (and repair) rather than launch claude with it.
+        assert!(!content_is_safe(
+            r#"{"cleanupPeriodDays":3650,"env":"oops"}"#
+        ));
+        assert!(!content_is_safe(
+            r#"{"cleanupPeriodDays":3650,"enabledPlugins":42}"#
+        ));
+        assert!(!content_is_safe(
+            r#"{"cleanupPeriodDays":3650,"includeCoAuthoredBy":"yes"}"#
         ));
     }
 

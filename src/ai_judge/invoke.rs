@@ -64,9 +64,12 @@ fn run(config: &AiJudgeConfig, prompt: String) -> JudgeVerdict {
     }
 
     let params = OrchestrateParams {
-        total_budget_ms: config.total_budget_secs * 1000,
-        per_attempt_timeout_ms: config.timeout * 1000,
-        hedge_after_ms: config.hedge_after_secs * 1000,
+        // saturating: an absurd (but syntactically valid) secs value must not
+        // overflow/panic here — fail-open (I4) before the orchestrator's own
+        // saturating math runs.
+        total_budget_ms: config.total_budget_secs.saturating_mul(1000),
+        per_attempt_timeout_ms: config.timeout.saturating_mul(1000),
+        hedge_after_ms: config.hedge_after_secs.saturating_mul(1000),
         backoff_base_ms: config.backoff_base_ms,
         backoff_max_ms: config.backoff_max_ms,
         relaunch_floor_ms: config.relaunch_floor_ms,
