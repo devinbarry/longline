@@ -2,6 +2,7 @@ mod config;
 mod extract;
 mod home;
 mod invoke;
+mod outcome;
 mod prompt;
 mod response;
 
@@ -12,6 +13,8 @@ pub use config::{AiJudgeConfig, InterpreterTrigger, TriggersConfig};
 pub use extract::{extract_code, ExtractedCode};
 pub use home::{expand_tilde_token, home_dir};
 pub use invoke::{evaluate, evaluate_lenient};
+#[allow(unused_imports)]
+pub use outcome::{classify, AttemptOutcome};
 #[allow(unused_imports)]
 pub use prompt::{build_prompt, build_prompt_lenient};
 #[allow(unused_imports)]
