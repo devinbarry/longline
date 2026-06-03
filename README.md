@@ -326,6 +326,58 @@ These flags combine with the hook command in your settings:
 }
 ```
 
+The judge is **lift-only**: it is consulted only when a command is already going to `ask`, and can only turn that `ask` into `allow`, never escalate to `deny`. Any timeout or unparseable output falls back to `ask`.
+
+### How the judge runs
+
+The primary provider (`codex`) is retried with exponential backoff on transient failures. After `hedge_after_secs` (default 30s) with no verdict, a second provider (`claude -p`) is launched concurrently; the first valid verdict wins. The friction `ask` is reached only after the full `total_budget_secs` budget (default 90s) is spent or both providers are disabled.
+
+The `claude -p` hedge is enabled by default and self-disables if `claude` is not on PATH (codex carries). Set `fallback_command: ""` in `ai-judge.yaml` to use codex only.
+
+### AI judge configuration (`~/.config/longline/ai-judge.yaml`)
+
+| Field | Default | Description |
+|---|---|---|
+| `command` | `codex exec …` | Primary judge provider command |
+| `fallback_command` | `claude -p …` | Secondary hedge provider; `""` disables |
+| `timeout` | `45` | Per-attempt timeout in seconds |
+| `total_budget_secs` | `90` | Total wall-clock budget before `ask` fallback |
+| `hedge_after_secs` | `30` | Seconds before launching the fallback concurrently |
+| `backoff_base_ms` | `500` | Initial retry backoff in milliseconds |
+| `backoff_max_ms` | `4000` | Maximum retry backoff in milliseconds |
+| `relaunch_floor_ms` | `250` | Minimum delay before re-launching after a clean empty exit |
+| `max_attempts` | `40` | Maximum total provider launches |
+| `max_nonconforming` | `2` | Unparseable responses tolerated before disabling a provider |
+
+**Back-compat:** if you previously set `timeout:` without `total_budget_secs:`, your old wall-clock ceiling is preserved (`total_budget_secs` defaults to your `timeout` value).
+
+### Judge settings file
+
+`longline init` writes `~/.config/longline/judge-claude-settings.json`, a longline-owned settings file used exclusively by the `claude -p` hedge. It pins `cleanupPeriodDays: 3650` so the hedge never runs under a transcript-GC-enabling setting, and disables telemetry and autoupdate. longline validates and atomically repairs this file before each hedge launch. The file is inert for any Claude session that does not reference it via `--settings`.
+
+### Audit log
+
+Judged commands gain a structured `judge` field in the JSONL entry:
+
+```jsonc
+{
+  "runtime": "claude",
+  "profile": "default",
+  "judge": {
+    "provider_final": "codex",
+    "attempts": [
+      { "provider": "codex", "outcome": "verdict", "latency_ms": 3200 }
+    ],
+    "phase_reached": "primary",
+    "outcome": "verdict",
+    "failure_mode": {}
+  },
+  ...
+}
+```
+
+Non-judge log lines are unchanged.
+
 ## Profiles
 
 ### Why profiles exist

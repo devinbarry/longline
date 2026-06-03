@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.0] - 2026-06-03
+
+### Changed
+
+- **AI judge now retries transient failures and hedges a slow primary against a
+  second provider instead of turning the first empty or timed-out response into
+  an `ask`.** When `--ask-ai` / `--ask-ai-lenient` is on and a command already
+  going to `ask` reaches the judge, the primary provider (`codex`) is retried
+  with exponential backoff until the per-attempt timeout is exhausted or a
+  verdict arrives. After `hedge_after_secs` (default 30s) with no verdict, a
+  second provider (`claude -p`) is launched concurrently; whichever provider
+  returns the first valid verdict wins. The friction `ask` is now reached only
+  after the full time budget (`total_budget_secs`, default 90s) is spent or
+  both providers are disabled. A legit `ASK:` verdict from the judge is an
+  immediate, valid result — the judge remains lift-only (can only turn an `ask`
+  into `allow`, never escalate to `deny`).
+- **`timeout` in `~/.config/longline/ai-judge.yaml` is now the per-attempt
+  timeout** (default 45s). If you previously set `timeout:` without
+  `total_budget_secs:`, your old wall-clock ceiling is preserved (`total_budget_secs`
+  defaults to your `timeout` value in that case).
+- **AI-judge audit-log entries gain a structured `judge` object.** Each entry
+  for a judged command now includes `provider_final`, per-attempt `outcome` and
+  `latency_ms`, `phase_reached`, final `outcome` (`verdict` or `exhausted`),
+  and a `failure_mode` tally. Non-judge log lines are unchanged.
+
+### Added
+
+- **New `~/.config/longline/ai-judge.yaml` fields:**
+  - `fallback_command` — the `claude -p` hedge command; set to `""` to disable
+    (codex-only mode). Enabled by default; self-disables if `claude` is not on
+    PATH (spawn error → provider disabled, codex carries).
+  - `total_budget_secs` — maximum wall-clock time before the judge falls back to
+    `ask` (default 90s).
+  - `hedge_after_secs` — how long to wait for the primary before launching the
+    fallback concurrently (default 30s).
+  - `backoff_base_ms`, `backoff_max_ms` — exponential-backoff bounds between
+    primary retries (defaults 500ms / 4000ms).
+  - `relaunch_floor_ms` — minimum delay before re-launching a provider after a
+    clean exit with no verdict (default 250ms).
+  - `max_attempts` — maximum total provider launches across both providers
+    (default 40).
+  - `max_nonconforming` — how many unparseable responses are tolerated before a
+    provider is disabled (default 2).
+- **`longline init` writes `~/.config/longline/judge-claude-settings.json`**, a
+  longline-owned settings file for the claude hedge. It pins
+  `cleanupPeriodDays: 3650` (longline never lets the hedge run under a
+  transcript-GC-enabling setting), disables telemetry, and disables autoupdate.
+  longline validates and atomically repairs this file before each hedge launch;
+  if the file cannot be written, the hedge runs without it. The settings file is
+  inert for any Claude session that does not use `--settings` to point at it.
+
 ## [0.19.6] - 2026-05-31
 
 ### Note
