@@ -15,6 +15,8 @@ pub use config::{AiJudgeConfig, InterpreterTrigger, TriggersConfig};
 pub use extract::{extract_code, ExtractedCode};
 pub use home::{expand_tilde_token, home_dir};
 pub use invoke::{evaluate, evaluate_lenient};
+#[allow(unused_imports)] // consumed by invoke.rs in Task 11
+pub use orchestrator::{orchestrate, OrchestrateParams, OrchestrateResult};
 #[allow(unused_imports)]
 pub use orchestrator::{AttemptHandle, AttemptId, Clock, Event, Runner, Xorshift};
 #[allow(unused_imports)]
