@@ -4,6 +4,7 @@ mod home;
 mod invoke;
 mod outcome;
 mod prompt;
+mod provider;
 mod response;
 
 pub use config::load_config;
@@ -20,5 +21,7 @@ pub use outcome::{
 };
 #[allow(unused_imports)]
 pub use prompt::{build_prompt, build_prompt_lenient};
+#[allow(unused_imports)]
+pub use provider::{resolve_provider_set, Provider, ProviderSet};
 #[allow(unused_imports)]
 pub use response::{parse_output, ParsedOutput, Verdict};
