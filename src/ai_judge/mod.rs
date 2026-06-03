@@ -28,5 +28,7 @@ pub use outcome::{
 pub use prompt::{build_prompt, build_prompt_lenient};
 #[allow(unused_imports)]
 pub use provider::{resolve_provider_set, Provider, ProviderSet};
+#[allow(unused_imports)] // RealClock/RealRunner consumed by tests + invoke.rs (Task 11)
+pub use provider::{RealClock, RealHandle, RealRunner};
 #[allow(unused_imports)]
 pub use response::{parse_output, ParsedOutput, Verdict};
