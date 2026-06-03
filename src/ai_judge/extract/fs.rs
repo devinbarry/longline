@@ -50,17 +50,5 @@ fn is_under_temp_root(path: &std::path::Path) -> bool {
 }
 
 fn expand_tilde(path: &str) -> Option<String> {
-    if path == "~" {
-        return std::env::var("HOME").ok();
-    }
-    if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var("HOME").ok()?;
-        return Some(
-            std::path::Path::new(&home)
-                .join(rest)
-                .to_string_lossy()
-                .to_string(),
-        );
-    }
-    Some(path.to_string())
+    Some(super::super::home::expand_tilde_token(path))
 }

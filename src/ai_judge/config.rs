@@ -80,8 +80,7 @@ fn default_runners() -> Vec<String> {
 }
 
 fn default_config_path() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    PathBuf::from(home)
+    super::home::home_dir()
         .join(".config")
         .join("longline")
         .join("ai-judge.yaml")
