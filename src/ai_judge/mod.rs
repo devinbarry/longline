@@ -7,6 +7,7 @@ mod outcome;
 mod prompt;
 mod provider;
 mod response;
+mod settings;
 
 pub use config::load_config;
 #[allow(unused_imports)]
@@ -32,3 +33,8 @@ pub use provider::{resolve_provider_set, Provider, ProviderSet};
 pub use provider::{RealClock, RealHandle, RealRunner};
 #[allow(unused_imports)]
 pub use response::{parse_output, ParsedOutput, Verdict};
+#[allow(unused_imports)] // consumed by invoke.rs in Task 11 / cli.rs in Task 14
+pub use settings::{
+    content_is_safe, ensure_settings_file, is_inert_and_safe, SettingsOutcome,
+    EMBEDDED as JUDGE_CLAUDE_SETTINGS,
+};

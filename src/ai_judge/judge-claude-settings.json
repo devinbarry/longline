@@ -1,0 +1,13 @@
+{
+  "includeCoAuthoredBy": false,
+  "cleanupPeriodDays": 3650,
+  "enableAllProjectMcpServers": false,
+  "enabledPlugins": {},
+  "env": {
+    "DISABLE_AUTOUPDATER": "1",
+    "DISABLE_TELEMETRY": "1",
+    "DISABLE_ERROR_REPORTING": "1",
+    "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1",
+    "LONGLINE_JUDGE_ACTIVE": "1"
+  }
+}
