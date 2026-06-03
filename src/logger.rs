@@ -24,6 +24,8 @@ pub struct LogEntry {
     pub original_decision: Option<Decision>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub overridden: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judge: Option<longline::ai_judge::JudgeReport>,
     pub matched_rules: Vec<String>,
     pub reason: Option<String>,
     pub parse_ok: bool,
@@ -182,6 +184,7 @@ pub fn make_entry(
         decision,
         original_decision: None,
         overridden: false,
+        judge: None,
         matched_rules,
         reason,
         parse_ok,
@@ -424,6 +427,66 @@ mod tests {
         }
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn judge_field_is_omitted_when_none() {
+        let ctx = EntryContext {
+            runtime: "claude",
+            profile: "default".into(),
+        };
+        let entry = make_entry(
+            &ctx,
+            "Bash",
+            "/tmp",
+            "ls",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(
+            !json.contains("\"judge\""),
+            "judge must be omitted when None: {json}"
+        );
+    }
+
+    #[test]
+    fn judge_field_serializes_when_present() {
+        use longline::ai_judge::{AttemptRecord, JudgeReport, Phase, ReportOutcome};
+        let ctx = EntryContext {
+            runtime: "codex",
+            profile: "default".into(),
+        };
+        let mut entry = make_entry(
+            &ctx,
+            "Bash",
+            "/tmp",
+            "python3 -c 'pass'",
+            Decision::Allow,
+            vec![],
+            None,
+            true,
+            None,
+        );
+        entry.judge = Some(JudgeReport {
+            provider_final: Some("codex".into()),
+            outcome: ReportOutcome::Verdict,
+            failure_mode: None,
+            phase_reached: Phase::Phase1,
+            total_latency_ms: 4200,
+            attempts: vec![AttemptRecord {
+                provider: "codex".into(),
+                outcome: "verdict".into(),
+                latency_ms: 4200,
+            }],
+        });
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("\"judge\""));
+        assert!(json.contains("\"provider_final\":\"codex\""));
+        assert!(json.contains("\"outcome\":\"verdict\""));
     }
 
     #[test]
