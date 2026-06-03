@@ -41,20 +41,6 @@ pub fn parse_output(output: &str) -> ParsedOutput {
     }
 }
 
-/// Compatibility shim for `invoke.rs` (production caller) until Task 11 rewrites it.
-/// Must be non-test because invoke.rs calls this from production (non-test) code.
-#[allow(dead_code)]
-pub fn parse_response_with_reason(o: &str) -> (crate::domain::Decision, String) {
-    match parse_output(o) {
-        ParsedOutput::Verdict(Verdict::Allow, r) => (crate::domain::Decision::Allow, r),
-        ParsedOutput::Verdict(Verdict::Ask, r) => (crate::domain::Decision::Ask, r),
-        _ => (
-            crate::domain::Decision::Ask,
-            "AI judge: unparseable response".into(),
-        ),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

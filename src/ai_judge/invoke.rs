@@ -1,11 +1,18 @@
-use crate::domain::Decision;
+use crate::ai_judge::config::AiJudgeConfig;
+use crate::ai_judge::orchestrator::{orchestrate, OrchestrateParams, Xorshift};
+use crate::ai_judge::outcome::{derive_failure_mode, JudgeReport, Phase, ReportOutcome};
+use crate::ai_judge::provider::{resolve_provider_set, Provider, RealRunner};
+use crate::ai_judge::response::Verdict;
+use crate::ai_judge::settings::{self, SettingsOutcome};
 
-use super::config::AiJudgeConfig;
-use super::prompt::{build_prompt, build_prompt_lenient};
-use super::response::parse_response_with_reason;
+/// Result of a judge run. `verdict ∈ {Allow, Ask}` (I1). `report` is logged.
+pub struct JudgeVerdict {
+    pub verdict: Verdict,
+    pub reason: String,
+    pub report: JudgeReport,
+}
 
-/// Evaluate inline code using the AI judge.
-/// Returns (decision, reason) where reason is the AI's assessment.
+/// Evaluate inline code using the AI judge (strict prompt).
 pub fn evaluate(
     config: &AiJudgeConfig,
     language: &str,
@@ -13,13 +20,12 @@ pub fn evaluate(
     cwd: &str,
     context: Option<&str>,
     project_prompt: Option<&str>,
-) -> (Decision, String) {
-    let prompt = build_prompt(language, code, cwd, context, project_prompt);
-    evaluate_with_prompt(config, prompt)
+) -> JudgeVerdict {
+    let prompt = super::prompt::build_prompt(language, code, cwd, context, project_prompt);
+    run(config, prompt)
 }
 
-/// Evaluate inline code using the AI judge with a lenient prompt.
-/// Returns (decision, reason) where reason is the AI's assessment.
+/// Evaluate inline code using the AI judge (lenient prompt).
 pub fn evaluate_lenient(
     config: &AiJudgeConfig,
     language: &str,
@@ -27,30 +33,103 @@ pub fn evaluate_lenient(
     cwd: &str,
     context: Option<&str>,
     project_prompt: Option<&str>,
-) -> (Decision, String) {
-    let prompt = build_prompt_lenient(language, code, cwd, context, project_prompt);
-    evaluate_with_prompt(config, prompt)
+) -> JudgeVerdict {
+    let prompt = super::prompt::build_prompt_lenient(language, code, cwd, context, project_prompt);
+    run(config, prompt)
 }
 
-#[cfg(unix)]
-fn kill_process_group(pid: u32) {
-    if pid == 0 {
-        return;
+fn run(config: &AiJudgeConfig, prompt: String) -> JudgeVerdict {
+    let mut set = resolve_provider_set(&config.command, &config.fallback_command);
+    for w in &set.warnings {
+        eprintln!("{w}");
     }
-    // Ignore errors (process may have already exited).
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
+
+    ensure_claude_settings(&mut set.providers);
+
+    if set.empty {
+        let report = JudgeReport {
+            provider_final: None,
+            outcome: ReportOutcome::Exhausted,
+            failure_mode: derive_failure_mode(&[], true),
+            phase_reached: Phase::Phase1,
+            total_latency_ms: 0,
+            attempts: vec![],
+        };
+        let reason = report.render_reason(None);
+        return JudgeVerdict {
+            verdict: Verdict::Ask,
+            reason,
+            report,
+        };
+    }
+
+    let params = OrchestrateParams {
+        total_budget_ms: config.total_budget_secs * 1000,
+        per_attempt_timeout_ms: config.timeout * 1000,
+        hedge_after_ms: config.hedge_after_secs * 1000,
+        backoff_base_ms: config.backoff_base_ms,
+        backoff_max_ms: config.backoff_max_ms,
+        relaunch_floor_ms: config.relaunch_floor_ms,
+        max_attempts: config.max_attempts,
+        max_nonconforming: config.max_nonconforming,
+        min_launch_ms: config.relaunch_floor_ms,
+    };
+    let mut rng = Xorshift::new(process_seed());
+    let (clock, mut runner) =
+        RealRunner::new(prompt, judge_debug_enabled(), params.per_attempt_timeout_ms);
+    let result = orchestrate(&clock, &mut runner, &set.providers, &params, &mut rng);
+
+    match result.verdict {
+        Some(v) => JudgeVerdict {
+            verdict: v,
+            reason: result.report.render_reason(result.verdict_line.as_deref()),
+            report: result.report,
+        },
+        None => JudgeVerdict {
+            verdict: Verdict::Ask,
+            reason: result.report.render_reason(None),
+            report: result.report,
+        },
     }
 }
 
-/// Remove any occurrence of `--ephemeral` from argv when debug_enabled is true.
-/// Used via the `LONGLINE_AI_JUDGE_DEBUG` env var to keep codex session rollouts
-/// for post-mortem inspection.
-fn maybe_strip_ephemeral(argv: Vec<String>, debug_enabled: bool) -> Vec<String> {
-    if !debug_enabled {
-        return argv;
+/// For the provider named "claude", if its argv contains `--settings <path>`,
+/// ensure the settings file is valid (atomic repair). On `Unavailable`, drop
+/// `--settings` AND its path token so claude runs with `--setting-sources ""`
+/// alone, and note `settings_unavailable` on stderr.
+fn ensure_claude_settings(providers: &mut [Provider]) {
+    for p in providers.iter_mut() {
+        if p.name != "claude" {
+            continue;
+        }
+        if let Some(i) = p.argv.iter().position(|a| a == "--settings") {
+            // path token is the next arg; guard the bound.
+            if i + 1 < p.argv.len() {
+                let path = std::path::PathBuf::from(&p.argv[i + 1]);
+                match settings::ensure_settings_file(&path) {
+                    SettingsOutcome::Ready => {}
+                    SettingsOutcome::Unavailable => {
+                        // Remove the path token (i+1) first, then the flag (i),
+                        // so the first removal does not shift the second index.
+                        p.argv.remove(i + 1);
+                        p.argv.remove(i);
+                        eprintln!(
+                            "longline: ai-judge settings_unavailable; claude running with --setting-sources \"\" only"
+                        );
+                    }
+                }
+            }
+        }
     }
-    argv.into_iter().filter(|a| a != "--ephemeral").collect()
+}
+
+fn process_seed() -> u64 {
+    let pid = std::process::id() as u64;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    pid ^ nanos
 }
 
 fn judge_debug_enabled() -> bool {
@@ -59,144 +138,27 @@ fn judge_debug_enabled() -> bool {
         .unwrap_or(false)
 }
 
-fn evaluate_with_prompt(config: &AiJudgeConfig, prompt: String) -> (Decision, String) {
-    let parts: Vec<String> = config
-        .command
-        .split_whitespace()
-        .map(String::from)
-        .collect();
-    if parts.is_empty() {
-        let reason = "AI judge error: command is empty".to_string();
-        eprintln!("longline: ai-judge command is empty");
-        return (Decision::Ask, reason);
-    }
-    let parts = maybe_strip_ephemeral(parts, judge_debug_enabled());
-
-    let timeout = std::time::Duration::from_secs(config.timeout);
-
-    let mut cmd = std::process::Command::new(&parts[0]);
-    cmd.args(&parts[1..])
-        .arg(&prompt)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
-    }
-
-    let mut child = match cmd.spawn() {
-        Ok(c) => c,
-        Err(e) => {
-            let reason = format!("AI judge error: {e}");
-            eprintln!("longline: ai-judge process error: {e}");
-            return (Decision::Ask, reason);
-        }
-    };
-
-    let child_pid = child.id();
-    let stdout = match child.stdout.take() {
-        Some(s) => s,
-        None => {
-            let reason = "AI judge error: failed to capture stdout".to_string();
-            eprintln!("longline: ai-judge failed to capture stdout");
-            return (Decision::Ask, reason);
-        }
-    };
-    let stderr = match child.stderr.take() {
-        Some(s) => s,
-        None => {
-            let reason = "AI judge error: failed to capture stderr".to_string();
-            eprintln!("longline: ai-judge failed to capture stderr");
-            return (Decision::Ask, reason);
-        }
-    };
-
-    let stdout_handle = std::thread::spawn(move || {
-        use std::io::Read;
-        let mut buf = Vec::new();
-        let mut reader = stdout;
-        let _ = reader.read_to_end(&mut buf);
-        buf
-    });
-    let stderr_handle = std::thread::spawn(move || {
-        use std::io::Read;
-        let mut buf = Vec::new();
-        let mut reader = stderr;
-        let _ = reader.read_to_end(&mut buf);
-        buf
-    });
-
-    let start = std::time::Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(_status)) => break,
-            Ok(None) => {}
-            Err(e) => {
-                let reason = format!("AI judge error: {e}");
-                eprintln!("longline: ai-judge process error: {e}");
-                #[cfg(unix)]
-                kill_process_group(child_pid);
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = stdout_handle.join();
-                let _ = stderr_handle.join();
-                return (Decision::Ask, reason);
-            }
-        }
-
-        if start.elapsed() >= timeout {
-            #[cfg(unix)]
-            kill_process_group(child_pid);
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = stdout_handle.join();
-            let _ = stderr_handle.join();
-            let reason = format!("AI judge error: timed out after {}s", config.timeout);
-            eprintln!("longline: ai-judge timed out after {}s", config.timeout);
-            return (Decision::Ask, reason);
-        }
-
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-
-    let stdout = stdout_handle.join().unwrap_or_default();
-    let stderr = stderr_handle.join().unwrap_or_default();
-    let stdout = String::from_utf8_lossy(&stdout);
-    let result = parse_response_with_reason(&stdout);
-    if result.1.contains("unparseable") {
-        let stderr = String::from_utf8_lossy(&stderr);
-        eprintln!(
-            "longline: ai-judge unparseable response\n  stdout: {:?}\n  stderr: {:?}",
-            stdout, stderr
-        );
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_evaluate_empty_command_returns_ask() {
-        let config = AiJudgeConfig::for_test(String::new(), 1);
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
-        assert_eq!(decision, Decision::Ask);
-        assert_eq!(reason, "AI judge error: command is empty");
-    }
-
-    #[test]
-    fn test_evaluate_missing_command_returns_ask_with_error_prefix() {
-        let config = AiJudgeConfig::for_test("/definitely-not-a-real-ai-judge-command-12345", 1);
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
-        assert_eq!(decision, Decision::Ask);
-        assert!(
-            reason.starts_with("AI judge error:"),
-            "Expected error prefix, got: {reason}"
-        );
+    /// Build a fast-budget config without YAML quoting: deserialize `{}`,
+    /// finalize, then overwrite the public fields tests need.
+    fn test_config(command: &str, fallback: &str) -> AiJudgeConfig {
+        let mut c = serde_norway::from_str::<AiJudgeConfig>("{}")
+            .unwrap()
+            .finalize();
+        c.command = command.to_string();
+        c.fallback_command = fallback.to_string();
+        c.total_budget_secs = 5;
+        c.timeout = 2;
+        c.hedge_after_secs = 1;
+        c.backoff_base_ms = 10;
+        c.backoff_max_ms = 40;
+        c.relaunch_floor_ms = 5;
+        c.max_attempts = 8;
+        c.max_nonconforming = 2;
+        c
     }
 
     #[cfg(unix)]
@@ -226,110 +188,70 @@ mod tests {
         path
     }
 
+    /// Signature guard: any change to the 6-arg shape / return type fails to compile.
+    #[test]
+    #[allow(clippy::type_complexity)]
+    fn evaluate_signature_returns_judge_verdict() {
+        let _: fn(&AiJudgeConfig, &str, &str, &str, Option<&str>, Option<&str>) -> JudgeVerdict =
+            evaluate;
+        let _: fn(&AiJudgeConfig, &str, &str, &str, Option<&str>, Option<&str>) -> JudgeVerdict =
+            evaluate_lenient;
+    }
+
     #[cfg(unix)]
     #[test]
-    fn test_evaluate_parses_allow_from_command_output() {
-        let script = make_executable_script(
-            "allow.sh",
-            r#"#!/bin/sh
-if [ "$#" -ne 1 ]; then
-  echo "ASK: missing prompt arg"
-  exit 0
-fi
-echo "ALLOW: safe computation"
-"#,
-        );
-        // Generous timeout (10s) to avoid flakiness under CI load.
-        let config = AiJudgeConfig::for_test(script.to_string_lossy().to_string(), 10);
-
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
-        assert_eq!(decision, Decision::Allow);
-        assert_eq!(reason, "ALLOW: safe computation");
-
+    fn parses_allow_from_command_output_via_orchestrator() {
+        let script =
+            make_executable_script("allow.sh", "#!/bin/sh\necho 'ALLOW: safe computation'\n");
+        let config = test_config(&script.to_string_lossy(), "");
+        let v = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
+        assert_eq!(v.verdict, Verdict::Allow);
+        assert_eq!(v.reason, "ALLOW: safe computation");
+        assert!(matches!(v.report.outcome, ReportOutcome::Verdict));
         let _ = std::fs::remove_file(&script);
     }
 
-    /// Signature guard: any change to the 6-arg shape fails to compile.
     #[test]
-    #[allow(clippy::type_complexity)]
-    fn test_evaluate_signature_has_project_prompt_param() {
-        let _: fn(
-            &AiJudgeConfig,
-            &str,
-            &str,
-            &str,
-            Option<&str>,
-            Option<&str>,
-        ) -> (Decision, String) = evaluate;
-        let _: fn(
-            &AiJudgeConfig,
-            &str,
-            &str,
-            &str,
-            Option<&str>,
-            Option<&str>,
-        ) -> (Decision, String) = evaluate_lenient;
-    }
-
-    #[test]
-    fn test_strip_ephemeral_when_debug_env_set() {
-        let argv = vec![
-            "codex".to_string(),
-            "exec".to_string(),
-            "--ephemeral".to_string(),
-            "-m".to_string(),
-            "gpt-5.4".to_string(),
-        ];
-        let stripped = maybe_strip_ephemeral(argv.clone(), true);
-        assert!(
-            !stripped.iter().any(|a| a == "--ephemeral"),
-            "--ephemeral should be stripped when debug is enabled: {stripped:?}"
-        );
-        assert_eq!(stripped, vec!["codex", "exec", "-m", "gpt-5.4"]);
-    }
-
-    #[test]
-    fn test_preserve_ephemeral_when_debug_env_unset() {
-        let argv = vec![
-            "codex".to_string(),
-            "exec".to_string(),
-            "--ephemeral".to_string(),
-            "-m".to_string(),
-            "gpt-5.4".to_string(),
-        ];
-        let stripped = maybe_strip_ephemeral(argv.clone(), false);
-        assert_eq!(stripped, argv, "argv should be unchanged when debug is off");
-    }
-
-    #[test]
-    fn test_strip_ephemeral_noop_when_absent() {
-        let argv = vec![
-            "codex".to_string(),
-            "exec".to_string(),
-            "-m".to_string(),
-            "gpt-5.4".to_string(),
-        ];
-        let stripped = maybe_strip_ephemeral(argv.clone(), true);
-        assert_eq!(stripped, argv, "argv with no --ephemeral is unchanged");
+    fn empty_command_and_empty_fallback_is_no_providers_ask() {
+        let config = test_config("", "");
+        let v = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
+        assert_eq!(v.verdict, Verdict::Ask);
+        assert_eq!(v.report.failure_mode.as_deref(), Some("no_providers"));
+        assert!(matches!(v.report.outcome, ReportOutcome::Exhausted));
     }
 
     #[cfg(unix)]
     #[test]
-    fn test_evaluate_times_out() {
-        let script = make_executable_script(
-            "sleep.sh",
-            r#"#!/bin/sh
-sleep 10
-echo "ALLOW: safe computation"
-"#,
+    fn missing_binary_returns_ask_exhausted_under_budget() {
+        // A binary that cannot spawn disables the (sole) provider → exhausted/ask.
+        let config = test_config("/definitely-not-a-real-ai-judge-command-12345", "");
+        let v = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
+        assert_eq!(v.verdict, Verdict::Ask);
+        assert!(matches!(v.report.outcome, ReportOutcome::Exhausted));
+        // Well under the 5s budget — disabling on spawn error does not spin.
+        assert!(
+            v.report.total_latency_ms < 5_000,
+            "fast exhaust at t={}",
+            v.report.total_latency_ms
         );
-        // 1s timeout with a 10s sleep reliably triggers the timeout path.
-        let config = AiJudgeConfig::for_test(script.to_string_lossy().to_string(), 1);
+    }
 
-        let (decision, reason) = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
-        assert_eq!(decision, Decision::Ask);
-        assert_eq!(reason, "AI judge error: timed out after 1s");
-
+    #[cfg(unix)]
+    #[test]
+    fn timeout_script_returns_ask_exhausted_under_budget() {
+        // Sleeps past the per-attempt timeout AND the total budget; every attempt
+        // times out → exhausted/ask. Budget (5s) bounds the run.
+        let script = make_executable_script("sleep.sh", "#!/bin/sh\nsleep 30\necho 'ALLOW: x'\n");
+        let config = test_config(&script.to_string_lossy(), "");
+        let v = evaluate(&config, "python3", "print(1)", "/tmp", None, None);
+        assert_eq!(v.verdict, Verdict::Ask);
+        assert!(matches!(v.report.outcome, ReportOutcome::Exhausted));
+        // Bounded by the total budget (5s) plus modest slack for kill/reap.
+        assert!(
+            v.report.total_latency_ms < 15_000,
+            "bounded by budget at t={}",
+            v.report.total_latency_ms
+        );
         let _ = std::fs::remove_file(&script);
     }
 }
