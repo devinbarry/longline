@@ -101,27 +101,44 @@ fn run(config: &AiJudgeConfig, prompt: String) -> JudgeVerdict {
 /// `--settings` AND its path token so claude runs with `--setting-sources ""`
 /// alone, and note `settings_unavailable` on stderr.
 fn ensure_claude_settings(providers: &mut [Provider]) {
+    const JOINED: &str = "--settings=";
     for p in providers.iter_mut() {
         if p.name != "claude" {
             continue;
         }
-        if let Some(i) = p.argv.iter().position(|a| a == "--settings") {
-            // path token is the next arg; guard the bound.
-            if i + 1 < p.argv.len() {
-                let path = std::path::PathBuf::from(&p.argv[i + 1]);
-                match settings::ensure_settings_file(&path) {
-                    SettingsOutcome::Ready => {}
-                    SettingsOutcome::Unavailable => {
-                        // Remove the path token (i+1) first, then the flag (i),
-                        // so the first removal does not shift the second index.
-                        p.argv.remove(i + 1);
-                        p.argv.remove(i);
-                        eprintln!(
-                            "longline: ai-judge settings_unavailable; claude running with --setting-sources \"\" only"
-                        );
-                    }
-                }
+        // Recognize both the split form (`--settings <path>`) and the joined
+        // form (`--settings=<path>`), so the cleanupPeriodDays>=3650 guarantee
+        // holds for either shape a user might write in `fallback_command`.
+        // `remove` lists the argv indices to drop if the settings file can't be
+        // placed (so claude falls back to `--setting-sources ""` alone).
+        let split = p.argv.iter().position(|a| a == "--settings");
+        let resolved: Option<(std::path::PathBuf, Vec<usize>)> = if let Some(i) = split {
+            // A dangling `--settings` with no following path is left untouched
+            // (it will fail at spawn → ExitError → provider disabled → ask).
+            p.argv
+                .get(i + 1)
+                .map(|path| (std::path::PathBuf::from(path), vec![i, i + 1]))
+        } else {
+            p.argv.iter().position(|a| a.starts_with(JOINED)).map(|i| {
+                (
+                    std::path::PathBuf::from(&p.argv[i][JOINED.len()..]),
+                    vec![i],
+                )
+            })
+        };
+
+        let Some((path, mut remove)) = resolved else {
+            continue;
+        };
+        if let SettingsOutcome::Unavailable = settings::ensure_settings_file(&path) {
+            // Drop highest index first so earlier removals don't shift it.
+            remove.sort_unstable_by(|a, b| b.cmp(a));
+            for idx in remove {
+                p.argv.remove(idx);
             }
+            eprintln!(
+                "longline: ai-judge settings_unavailable; claude running with --setting-sources \"\" only"
+            );
         }
     }
 }
@@ -256,5 +273,99 @@ mod tests {
             v.report.total_latency_ms
         );
         let _ = std::fs::remove_file(&script);
+    }
+
+    fn unique_test_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test-tmp")
+            .join(format!(
+                "ensure-claude-{tag}-{}-{:?}",
+                std::process::id(),
+                std::thread::current().id()
+            ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn ensure_claude_settings_validates_joined_form() {
+        // `--settings=<path>` (joined) must be recognized and the file written/pinned.
+        let dir = unique_test_dir("joined");
+        let settings = dir.join("judge-claude-settings.json");
+        let mut providers = vec![Provider {
+            name: "claude".into(),
+            argv: vec![
+                "claude".into(),
+                format!("--settings={}", settings.display()),
+                "-p".into(),
+            ],
+        }];
+        ensure_claude_settings(&mut providers);
+        assert!(
+            settings.exists(),
+            "joined --settings= form must be validated and written"
+        );
+        let content = std::fs::read_to_string(&settings).unwrap();
+        assert!(content.contains("\"cleanupPeriodDays\": 3650"));
+        // Ready → argv keeps the joined token.
+        assert!(providers[0]
+            .argv
+            .iter()
+            .any(|a| a.starts_with("--settings=")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ensure_claude_settings_drops_joined_token_when_unavailable() {
+        // An unwritable joined path → drop just that token, keep --setting-sources "".
+        let mut providers = vec![Provider {
+            name: "claude".into(),
+            argv: vec![
+                "claude".into(),
+                "--setting-sources".into(),
+                "".into(),
+                "--settings=/proc/longline-cannot-write/x.json".into(),
+                "-p".into(),
+            ],
+        }];
+        ensure_claude_settings(&mut providers);
+        assert!(
+            !providers[0]
+                .argv
+                .iter()
+                .any(|a| a.starts_with("--settings=")),
+            "unavailable joined --settings= token must be dropped: {:?}",
+            providers[0].argv
+        );
+        // The unrelated --setting-sources flag (different flag) is untouched.
+        assert!(providers[0].argv.iter().any(|a| a == "--setting-sources"));
+    }
+
+    #[test]
+    fn ensure_claude_settings_drops_both_tokens_when_split_unavailable() {
+        let mut providers = vec![Provider {
+            name: "claude".into(),
+            argv: vec![
+                "claude".into(),
+                "--settings".into(),
+                "/proc/longline-cannot-write/x.json".into(),
+                "-p".into(),
+            ],
+        }];
+        ensure_claude_settings(&mut providers);
+        assert!(
+            !providers[0].argv.iter().any(|a| a == "--settings"),
+            "split --settings flag must be dropped: {:?}",
+            providers[0].argv
+        );
+        assert!(
+            !providers[0]
+                .argv
+                .iter()
+                .any(|a| a.contains("longline-cannot-write")),
+            "split path token must be dropped: {:?}",
+            providers[0].argv
+        );
     }
 }

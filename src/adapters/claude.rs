@@ -119,19 +119,36 @@ fn run_hook_input(
                 }
             };
             let audit_log_path = runtime::claude::audit_log_path(home);
-            let outcome = evaluator::evaluate_invocation(
-                final_config,
-                &audit_log_path,
-                invocation,
-                evaluator::EvaluationOptions {
-                    ask_on_deny: options.ask_on_deny,
-                    ask_ai: options.ask_ai,
-                    ask_ai_lenient: options.ask_ai_lenient,
-                },
-                "claude",
-            );
+            let opts = evaluator::EvaluationOptions {
+                ask_on_deny: options.ask_on_deny,
+                ask_ai: options.ask_ai,
+                ask_ai_lenient: options.ask_ai_lenient,
+            };
+            // Fail-open backstop: a panic anywhere in the evaluator / parser /
+            // policy / AI-judge orchestration must NOT unwind across the hook
+            // boundary (exit 101 crashes the Claude session). Convert it to a
+            // safe `ask` + exit 0, mirroring the Codex adapter's evaluator guard.
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                evaluator::evaluate_invocation(
+                    final_config,
+                    &audit_log_path,
+                    invocation,
+                    opts,
+                    "claude",
+                )
+            }));
 
-            let output = ClaudeHookOutput::decision(outcome.decision, &outcome.reason);
+            let output = match outcome {
+                Ok(outcome) => ClaudeHookOutput::decision(outcome.decision, &outcome.reason),
+                Err(panic) => {
+                    let reason = super::describe_panic(panic.as_ref());
+                    eprintln!("longline: evaluator panic (failing open to ask): {reason}");
+                    ClaudeHookOutput::decision(
+                        Decision::Ask,
+                        &format!("longline: internal error, failing open to ask: {reason}"),
+                    )
+                }
+            };
             print_json(&output);
             0
         }

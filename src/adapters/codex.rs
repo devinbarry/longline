@@ -244,7 +244,7 @@ fn run_hook_input(
                     return 0;
                 }
                 Err(panic) => {
-                    let reason = describe_panic(panic.as_ref());
+                    let reason = super::describe_panic(panic.as_ref());
                     eprintln!("longline: finalize_config panic: {reason}");
                     write_fail_open_entry_with_session(
                         home,
@@ -299,7 +299,7 @@ fn run_hook_input(
                     0
                 }
                 Err(panic) => {
-                    let reason = describe_panic(panic.as_ref());
+                    let reason = super::describe_panic(panic.as_ref());
                     eprintln!("longline: evaluator panic: {reason}");
                     write_fail_open_entry_with_session(
                         home,
@@ -333,16 +333,6 @@ fn run_hook_input(
             );
             0
         }
-    }
-}
-
-fn describe_panic(panic: &(dyn std::any::Any + Send)) -> String {
-    if let Some(s) = panic.downcast_ref::<&'static str>() {
-        (*s).to_string()
-    } else if let Some(s) = panic.downcast_ref::<String>() {
-        s.clone()
-    } else {
-        "<non-string panic payload>".to_string()
     }
 }
 
