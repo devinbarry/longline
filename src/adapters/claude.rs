@@ -103,19 +103,36 @@ fn run_hook_input(
     match action_from_input(hook_input) {
         ClaudeHookAction::Evaluate(invocation) => {
             let cwd_path = invocation.cwd().map(PathBuf::from);
-            let final_config = match config::finalize_config(
-                rules_config,
-                home,
-                cwd_path.as_deref(),
-                options.cli_trust_level,
-                options.cli_safety_level,
-                "claude",
-                options.profile_override.as_deref(),
-            ) {
-                Ok(final_config) => final_config,
-                Err(e) => {
+            // Guard config finalization too (mirrors the Codex adapter's phase-1
+            // guard): a config-load *error* keeps the v0.15 byte-identical exit-2
+            // posture, but a *panic* fails open to ask + exit 0 rather than
+            // unwinding across the hook boundary.
+            let finalized = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                config::finalize_config(
+                    rules_config,
+                    home,
+                    cwd_path.as_deref(),
+                    options.cli_trust_level,
+                    options.cli_safety_level,
+                    "claude",
+                    options.profile_override.as_deref(),
+                )
+            }));
+            let final_config = match finalized {
+                Ok(Ok(final_config)) => final_config,
+                Ok(Err(e)) => {
                     eprintln!("longline: {e}");
                     return 2;
+                }
+                Err(panic) => {
+                    let reason = super::describe_panic(panic.as_ref());
+                    eprintln!("longline: finalize_config panic (failing open to ask): {reason}");
+                    let output = ClaudeHookOutput::decision(
+                        Decision::Ask,
+                        &format!("longline: internal error, failing open to ask: {reason}"),
+                    );
+                    print_json(&output);
+                    return 0;
                 }
             };
             let audit_log_path = runtime::claude::audit_log_path(home);
