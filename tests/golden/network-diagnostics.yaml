@@ -33,6 +33,45 @@ tests:
     expected:
       decision: allow
 
+  # ── getent: read-only NSS lookups (allow) ────────────────────
+  - id: getent-hosts
+    command: "getent hosts example.com"
+    expected:
+      decision: allow
+  - id: getent-ahosts
+    command: "getent ahosts example.com"
+    expected:
+      decision: allow
+  - id: getent-passwd
+    command: "getent passwd"
+    expected:
+      decision: allow
+  - id: getent-passwd-user
+    command: "getent passwd root"
+    expected:
+      decision: allow
+  - id: getent-group
+    command: "getent group docker"
+    expected:
+      decision: allow
+  - id: getent-services
+    command: "getent services https"
+    expected:
+      decision: allow
+  # ── getent: sensitive databases stay gated (ask) ─────────────
+  - id: getent-shadow-asks
+    command: "getent shadow"
+    expected:
+      decision: ask
+  - id: getent-shadow-user-asks
+    command: "getent shadow root"
+    expected:
+      decision: ask
+  - id: getent-gshadow-asks
+    command: "getent gshadow"
+    expected:
+      decision: ask
+
   # ── ip: read-only subcommands (allow) ────────────────────────
   - id: ip-addr-show
     command: "ip addr show"

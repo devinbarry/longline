@@ -157,6 +157,10 @@ allowlists:
     - { command: tracepath, trust: minimal }
     - { command: netstat, trust: minimal }
     - { command: ss, trust: minimal }
+    # getent: read-only NSS lookups (hosts/passwd/group/services/…). The
+    # `getent shadow`/`gshadow` databases (password hashes) are re-gated to
+    # `ask` by a rule in secrets.yaml, which overrides this allowlist entry.
+    - { command: getent, trust: minimal }
     # ── Network tools: read-only subcommands only ──────────────────
     - { command: "ip addr show", trust: minimal }
     - { command: "ip addr list", trust: minimal }
