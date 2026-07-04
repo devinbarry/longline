@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.1] - 2026-07-04
+
+### Added
+
+- **`getent` is now allowlisted as a read-only lookup tool.** The NSS databases
+  it queries (`hosts`, `ahosts`, `passwd`, `group`, `services`, …) are read-only,
+  so `getent` joins `dig`/`nslookup`/`host` in the core allowlist. This removes a
+  recurring friction `ask` for DNS/hosts/user lookups in automation workflows.
+- **`getent shadow` / `getent gshadow` remain gated to `ask`.** Those two
+  databases expose password hashes, so a new `critical` rule in `secrets.yaml`
+  re-gates them — rules run before the allowlist, the same mechanism that makes
+  `cat .env` ask despite `cat` being allowlisted. Golden coverage added in
+  `network-diagnostics.yaml` (hosts/ahosts/passwd/group/services allow;
+  shadow/gshadow ask).
+- **New `ansible.yaml` ruleset for read-only Ansible tooling.** `ansible-doc`
+  (module/plugin documentation) and `ansible-playbook --syntax-check` (parses
+  playbooks without connecting to hosts) are now allowed, in both bare and
+  `uv run` forms. Real playbook runs and `--check` (which contact hosts) are
+  intentionally left at `ask`. Golden coverage in `ansible.yaml`.
+
 ## [0.20.0] - 2026-06-04
 
 ### Changed
