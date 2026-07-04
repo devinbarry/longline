@@ -21,3 +21,4 @@ include:
   - rust.yaml
   - node.yaml
   - just.yaml
+  - ansible.yaml

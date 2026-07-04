@@ -345,6 +345,11 @@ fn golden_gh_readonly() {
 }
 
 #[test]
+fn golden_ansible() {
+    run_golden_suite("ansible.yaml");
+}
+
+#[test]
 fn test_golden_profiles() {
     run_golden_suite("profiles.yaml");
 }

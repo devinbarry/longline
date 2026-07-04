@@ -1,0 +1,46 @@
+# Ansible: read-only tooling allowlist + syntax-check rules.
+#
+# Only genuinely read-only operations are covered here:
+#   - `ansible-doc`               module/plugin documentation (read-only)
+#   - `ansible-playbook --syntax-check`  parses playbooks, does NOT connect to hosts
+#
+# Real playbook runs and `--check` (which DO contact hosts) are intentionally
+# NOT covered and remain `ask`.
+#
+# `uv run` does not pass the inner command's allow outward (only restrictive
+# rules reach the inner leaf), so each command needs coverage for both the bare
+# form and the `uv run` outer leaf — hence the paired allowlist/rule entries.
+
+allowlists:
+  commands:
+    - command: "ansible-doc"
+      trust: standard
+      reason: "Read-only Ansible module/plugin documentation"
+    - command: "uv run ansible-doc"
+      trust: standard
+      reason: "Read-only Ansible module/plugin documentation via uv run"
+
+rules:
+  # ansible-playbook --syntax-check: read-only parse. Inner leaf (bare or the
+  # command uv unwraps to).
+  - id: ansible-playbook-syntax-check
+    level: high
+    match:
+      command: ansible-playbook
+      flags:
+        any_of: ["--syntax-check"]
+    decision: allow
+    reason: "Ansible playbook syntax validation (read-only)"
+
+  # Outer `uv` leaf for `uv run ansible-playbook --syntax-check`. Needed because
+  # uv run does not carry the inner command's allow outward. Requires BOTH
+  # tokens, so real `uv run ansible-playbook <playbook>` (no --syntax-check)
+  # still asks.
+  - id: uv-run-ansible-playbook-syntax-check
+    level: high
+    match:
+      command: uv
+      args:
+        all_of: ["ansible-playbook", "--syntax-check"]
+    decision: allow
+    reason: "Ansible playbook syntax validation via uv run (read-only, outer leaf)"

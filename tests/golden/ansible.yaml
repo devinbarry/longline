@@ -1,0 +1,50 @@
+tests:
+  # ── ansible-doc: read-only module documentation (allow) ──────
+  - id: ansible-doc-module
+    command: "ansible-doc community.general.crypttab"
+    expected:
+      decision: allow
+  - id: ansible-doc-list
+    command: "ansible-doc -l"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-doc
+    command: "uv run ansible-doc community.general.crypttab"
+    expected:
+      decision: allow
+
+  # ── ansible-playbook --syntax-check: parse-only, no hosts (allow) ──
+  - id: ansible-playbook-syntax-check
+    command: "ansible-playbook --syntax-check site.yml"
+    expected:
+      decision: allow
+  - id: ansible-playbook-syntax-check-inv
+    command: "ansible-playbook --syntax-check -i inventory/hosts.yml site.yml"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-playbook-syntax-check
+    command: "uv run ansible-playbook --syntax-check -i inventory/hosts.yml site.yml"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-playbook-syntax-check-with-env
+    command: "ANSIBLE_ROLES_PATH=roles:/root/.ansible/roles uv run ansible-playbook --syntax-check -i inventory/hosts.yml site.yml"
+    expected:
+      decision: allow
+
+  # ── Real playbook runs / --check contact hosts (ask) ─────────
+  - id: ansible-playbook-real-run-asks
+    command: "ansible-playbook -i inventory/hosts.yml site.yml"
+    expected:
+      decision: ask
+  - id: uv-run-ansible-playbook-real-run-asks
+    command: "uv run ansible-playbook -i inventory/hosts.yml site.yml"
+    expected:
+      decision: ask
+  - id: ansible-playbook-check-mode-asks
+    command: "ansible-playbook --check -i inventory/hosts.yml site.yml"
+    expected:
+      decision: ask
+  - id: uv-run-ansible-playbook-check-mode-asks
+    command: "uv run ansible-playbook --check -i inventory/hosts.yml site.yml"
+    expected:
+      decision: ask

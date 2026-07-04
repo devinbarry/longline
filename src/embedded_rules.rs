@@ -18,6 +18,7 @@ const PYTHON: &str = include_str!("../rules/python.yaml");
 const RUST: &str = include_str!("../rules/rust.yaml");
 const NODE: &str = include_str!("../rules/node.yaml");
 const JUST: &str = include_str!("../rules/just.yaml");
+const ANSIBLE: &str = include_str!("../rules/ansible.yaml");
 
 /// Look up an embedded rule file by name.
 pub fn get(name: &str) -> Option<&'static str> {
@@ -40,6 +41,7 @@ pub fn get(name: &str) -> Option<&'static str> {
         "rust.yaml" => Some(RUST),
         "node.yaml" => Some(NODE),
         "just.yaml" => Some(JUST),
+        "ansible.yaml" => Some(ANSIBLE),
         _ => None,
     }
 }
@@ -65,6 +67,7 @@ pub fn all_files() -> Vec<(&'static str, &'static str)> {
         ("rust.yaml", RUST),
         ("node.yaml", NODE),
         ("just.yaml", JUST),
+        ("ansible.yaml", ANSIBLE),
     ]
 }
 
