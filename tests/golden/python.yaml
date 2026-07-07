@@ -163,6 +163,43 @@ tests:
     expected:
       decision: allow
 
+  # uv run dependency-group selectors: --extra/--group (space-separated
+  # value-flags) and --no-sync (bool flag) must not block the inner
+  # command from being found and matched against its allowlist entry.
+  - id: uv-run-extra-group-ruff-safe
+    command: "uv run --extra dev --group dev ruff check src/"
+    expected:
+      decision: allow
+  - id: uv-run-extra-group-pytest-safe
+    command: "UV_CACHE_DIR=/tmp/uv-cache uv run --extra dev --group dev pytest -q"
+    expected:
+      decision: allow
+  - id: uv-run-no-sync-pytest-safe
+    command: "uv run --no-sync pytest -q"
+    expected:
+      decision: allow
+  - id: uv-run-extra-only-yamllint-safe
+    command: "uv run --extra dev yamllint config.yml"
+    expected:
+      decision: allow
+
+  # Negative: --extra/--group/--no-sync must not let a DANGEROUS inner
+  # command bypass policy just because it now resolves past the flags.
+  - id: uv-run-extra-group-rm-denies
+    command: "uv run --extra dev --group dev rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: uv-run-no-sync-rm-denies
+    command: "uv run --no-sync rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: uv-run-extra-group-unallowlisted-tool-asks
+    command: "uv run --extra dev --group dev dangeroustool"
+    expected:
+      decision: ask
+
   # ════════════════════════════════════════════════════════════════
   # Python dev tools invoked directly (allowlisted; representative
   # allow-coverage for entries that previously had no golden assertion).

@@ -88,3 +88,39 @@ tests:
     command: "column -t data.txt"
     expected:
       decision: allow
+  - id: command-dash-v-safe
+    command: "command -v borg"
+    expected:
+      decision: allow
+  - id: command-dash-capital-v-safe
+    command: "command -V borg"
+    expected:
+      decision: allow
+  - id: command-dash-v-unallowlisted-tool-still-safe
+    command: "command -v some-tool-that-is-not-allowlisted-anywhere"
+    expected:
+      decision: allow
+  - id: command-dash-v-conditional-safe
+    command: "command -v borg && borg --version || true"
+    expected:
+      decision: allow
+
+  # ── command -v negative: real execution (no -v) is unaffected ─
+  - id: command-without-dash-v-runs-inner-normally
+    command: "command ls -la"
+    expected:
+      decision: allow
+  - id: command-without-dash-v-dangerous-inner-still-denies
+    command: "command rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: command-dash-v-chained-with-dangerous-command-denies
+    command: "command -v rm && rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: command-dash-v-double-dash-separator-safe
+    command: "command -v -- rm"
+    expected:
+      decision: allow

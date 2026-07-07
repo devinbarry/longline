@@ -88,13 +88,26 @@ static WRAPPERS: &[WrapperDef] = &[
     WrapperDef {
         name: "uv",
         subcommand: Some("run"),
-        value_flags: &["--python", "-p", "--directory", "--project"],
+        value_flags: &[
+            "--python",
+            "-p",
+            "--directory",
+            "--project",
+            "--extra",
+            "--group",
+            "--with",
+            "-w",
+            "--env-file",
+        ],
         bool_flags: &[
             "--no-project",
             "--isolated",
             "--no-dev",
             "--locked",
             "--frozen",
+            "--no-sync",
+            "--all-extras",
+            "--active",
         ],
         skip: ArgSkip::None,
     },
@@ -173,6 +186,19 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     let wrapper = find_wrapper(cmd_name)?;
 
     let argv = &cmd.argv;
+
+    // `command -v`/`command -V` is an existence check (like `which`/`type`)
+    // and never executes the named program, so it must NOT unwrap to the
+    // inner command — that would evaluate policy against a program that
+    // never actually runs. Bail out and let `command -v foo` stay its own
+    // leaf, covered by the `command -v` / `command -V` allowlist entries.
+    if wrapper.name == "command"
+        && argv
+            .first()
+            .is_some_and(|a| a.text == "-v" || a.text == "-V")
+    {
+        return None;
+    }
 
     // If wrapper requires a subcommand, check that argv[0] matches
     let start_idx = if let Some(sub) = wrapper.subcommand {
@@ -1040,6 +1066,34 @@ mod tests {
     fn test_strace_bare() {
         let cmd = make_cmd("strace", &[]);
         assert!(unwrap_transparent(&cmd).is_none());
+    }
+
+    // ── command -v/-V unwrap tests ───────────────────────────────
+    // `command -v foo` / `command -V foo` check whether `foo` exists —
+    // they never execute it — so they must NOT unwrap to `foo` as the
+    // inner command (that would evaluate policy against a program that
+    // never runs, and let an unallowlisted-but-benign `foo` block on ask
+    // even though nothing was executed).
+
+    #[test]
+    fn test_command_dash_v_does_not_unwrap() {
+        let cmd = make_cmd("command", &["-v", "borg"]);
+        assert!(unwrap_transparent(&cmd).is_none());
+    }
+
+    #[test]
+    fn test_command_dash_capital_v_does_not_unwrap() {
+        let cmd = make_cmd("command", &["-V", "borg"]);
+        assert!(unwrap_transparent(&cmd).is_none());
+    }
+
+    #[test]
+    fn test_command_without_dash_v_still_unwraps() {
+        // `command ls -la` (no -v) really does execute `ls`, so it must
+        // still unwrap normally.
+        let cmd = make_cmd("command", &["ls", "-la"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("ls"));
     }
 
     // ── Non-wrapper passthrough ─────────────────────────────────

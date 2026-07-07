@@ -1255,4 +1255,44 @@ mod tests {
         // "ruff" is consumed as --project's value, no subcommand follows.
         assert_eq!(find_allowlist_match(&config, &cmd), None);
     }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_extra_space_value() {
+        // `uv run --extra dev ruff` must match `uv run ruff` entry.
+        // Regression: --extra/--group are dependency-group selectors commonly
+        // combined (`uv run --extra dev --group dev <tool>`), not previously
+        // in uv run's value_flags, so the inner command couldn't be found.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--extra", "dev", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_group_space_value() {
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--group", "dev", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_extra_and_group_combined() {
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--extra", "dev", "--group", "dev", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_no_sync_bool_flag() {
+        // --no-sync is a boolean flag (no value), must keep matching.
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--no-sync", "ruff"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), Some("uv run ruff"));
+    }
+
+    #[test]
+    fn test_find_match_uv_run_ruff_with_group_space_value_after_project() {
+        let config = uv_run_ruff_config();
+        let cmd = uv_cmd(&["run", "--extra", "dev", "--group", "dev", "dangeroustool"]);
+        assert_eq!(find_allowlist_match(&config, &cmd), None);
+    }
 }

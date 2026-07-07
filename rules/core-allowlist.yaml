@@ -16,6 +16,8 @@ allowlists:
     - { command: file, trust: minimal }
     - { command: which, trust: minimal }
     - { command: type, trust: minimal }
+    - { command: "command -v", trust: minimal, reason: "Checks whether a program exists (does not execute it)" }
+    - { command: "command -V", trust: minimal, reason: "Checks whether a program exists (does not execute it)" }
     - { command: basename, trust: minimal }
     - { command: dirname, trust: minimal }
     - { command: realpath, trust: minimal }
