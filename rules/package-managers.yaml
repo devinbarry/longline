@@ -199,6 +199,13 @@ allowlists:
     - { command: "stack build", trust: standard, reason: "Builds a Haskell project with Stack" }
     - { command: "stack test", trust: standard, reason: "Runs Haskell tests with Stack" }
     - { command: "stack run", trust: standard, reason: "Runs a Haskell executable with Stack" }
+    # ── apt-cache: read-only local package cache queries ──────────
+    # apt-cache never installs/removes packages, unlike apt/apt-get.
+    - { command: "apt-cache show", trust: minimal }
+    - { command: "apt-cache search", trust: minimal }
+    - { command: "apt-cache policy", trust: minimal }
+    - { command: "apt-cache depends", trust: minimal }
+    - { command: "apt-cache rdepends", trust: minimal }
 
 rules:
   # ============================================================

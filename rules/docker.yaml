@@ -12,6 +12,9 @@ allowlists:
     - { command: "docker port", trust: minimal }
     - { command: "docker version", trust: minimal }
     - { command: "docker info", trust: minimal }
+    # ── Docker image: read-only ──────────────────────────────────
+    - { command: "docker image inspect", trust: minimal }
+    - { command: "docker image ls", trust: minimal }
     # ── Docker network: read-only ────────────────────────────────
     - { command: "docker network ls", trust: minimal }
     - { command: "docker network inspect", trust: minimal }

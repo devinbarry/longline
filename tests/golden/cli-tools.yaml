@@ -97,11 +97,32 @@ tests:
     command: "pfp --version"
     expected:
       decision: allow
+  - id: pfp-run-help-safe
+    command: "pfp run --help"
+    expected:
+      decision: allow
+  - id: pfp-run-help-short-safe
+    command: "pfp run -h"
+    expected:
+      decision: allow
   # Mutating operations (should ask at standard trust, require full trust)
   - id: pfp-run-ask
     command: "pfp run deploy"
     expected:
       decision: ask
+  - id: pfp-run-with-set-flags-still-asks
+    command: "pfp run pve_acme/pve-acme-prod --set config.connectivity_check=true"
+    expected:
+      decision: ask
+  - id: pfp-run-deployment-then-help-flag-still-asks
+    command: "pfp run somedeployment --help"
+    expected:
+      decision: ask
+  - id: pfp-run-help-chained-with-dangerous-command-denies
+    command: "pfp run --help; rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
   - id: pfp-pause-ask
     command: "pfp pause abc123"
     expected:

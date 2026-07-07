@@ -95,6 +95,8 @@ allowlists:
     - { command: pstree, trust: minimal }
     - { command: lsof, trust: minimal }
     - { command: nproc, trust: minimal }
+    - { command: findmnt, trust: minimal, reason: "Lists mounted filesystems (read-only)" }
+    - { command: uuidgen, trust: minimal, reason: "Generates a random UUID" }
     - { command: getconf, trust: minimal }
     - { command: locale, trust: minimal }
     - { command: uptime, trust: minimal }

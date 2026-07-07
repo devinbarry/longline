@@ -48,3 +48,41 @@ tests:
     command: "uv run ansible-playbook --check -i inventory/hosts.yml site.yml"
     expected:
       decision: ask
+
+  # ── ansible-lint: standard dev tool, no hosts contacted (allow) ─
+  - id: ansible-lint-bare
+    command: "ansible-lint roles/foo/tasks/main.yml"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-lint
+    command: "uv run ansible-lint roles/foo/tasks/main.yml"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-lint-extra-group
+    command: "UV_CACHE_DIR=/tmp/uv-cache uv run --extra dev --group dev ansible-lint roles/foo/tasks/main.yml"
+    expected:
+      decision: allow
+  - id: ansible-lint-fix-allowed-like-other-dev-tools
+    command: "ansible-lint --fix roles/foo/tasks/main.yml"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-lint-fix-allowed-like-other-dev-tools
+    command: "uv run ansible-lint --fix roles/foo/tasks/main.yml"
+    expected:
+      decision: allow
+
+  # ── ansible --version: version info only (allow) ─────────────
+  - id: ansible-version-bare
+    command: "ansible --version"
+    expected:
+      decision: allow
+  - id: uv-run-ansible-version
+    command: "uv run ansible --version"
+    expected:
+      decision: allow
+
+  # ── ansible ad-hoc execution: module is attacker-controlled (ask) ──
+  - id: ansible-adhoc-debug-module-still-asks
+    command: "ansible localhost -c local -m debug -a 'msg=test'"
+    expected:
+      decision: ask

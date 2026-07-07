@@ -108,6 +108,8 @@ allowlists:
     - { command: "pfp -h", trust: minimal }
     - { command: "pfp --version", trust: minimal }
     - { command: "pfp -V", trust: minimal }
+    - { command: "pfp run --help", trust: minimal }
+    - { command: "pfp run -h", trust: minimal }
     # ── pfp: mutating operations (full trust) ────────────────────
     - { command: "pfp run", trust: full, reason: "Triggers a Prefect flow run" }
     - { command: "pfp pause", trust: full, reason: "Pauses a Prefect flow run" }

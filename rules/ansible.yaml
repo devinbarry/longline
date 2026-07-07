@@ -1,11 +1,17 @@
 # Ansible: read-only tooling allowlist + syntax-check rules.
 #
-# Only genuinely read-only operations are covered here:
+# Covered here:
 #   - `ansible-doc`               module/plugin documentation (read-only)
+#   - `ansible-lint`              standard dev tool (like ruff/black); --fix
+#                                  auto-remediates local files but never
+#                                  connects to hosts, same trust class as
+#                                  other allowlisted formatters/linters
+#   - `ansible --version`         version info only
 #   - `ansible-playbook --syntax-check`  parses playbooks, does NOT connect to hosts
 #
-# Real playbook runs and `--check` (which DO contact hosts) are intentionally
-# NOT covered and remain `ask`.
+# Real playbook runs, ad-hoc `ansible <host> -m <module>` (module is
+# attacker-controlled and can be `-m shell`/`-m command`), and `--check`
+# (which DO contact hosts) are intentionally NOT covered and remain `ask`.
 #
 # `uv run` does not pass the inner command's allow outward (only restrictive
 # rules reach the inner leaf), so each command needs coverage for both the bare
@@ -19,6 +25,18 @@ allowlists:
     - command: "uv run ansible-doc"
       trust: standard
       reason: "Read-only Ansible module/plugin documentation via uv run"
+    - command: "ansible-lint"
+      trust: standard
+      reason: "Lints Ansible playbooks and roles (standard dev tool, incl. --fix auto-remediation)"
+    - command: "uv run ansible-lint"
+      trust: standard
+      reason: "Lints Ansible playbooks and roles via uv run (standard dev tool, incl. --fix auto-remediation)"
+    - command: "ansible --version"
+      trust: minimal
+      reason: "Prints Ansible version information"
+    - command: "uv run ansible --version"
+      trust: minimal
+      reason: "Prints Ansible version information via uv run"
 
 rules:
   # ansible-playbook --syntax-check: read-only parse. Inner leaf (bare or the

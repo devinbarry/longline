@@ -88,6 +88,18 @@ tests:
     command: "column -t data.txt"
     expected:
       decision: allow
+  - id: findmnt-safe
+    command: "findmnt --target /opt"
+    expected:
+      decision: allow
+  - id: findmnt-json-safe
+    command: "findmnt --json --noheadings --output SOURCE,TARGET,FSTYPE,OPTIONS --mountpoint /tmp"
+    expected:
+      decision: allow
+  - id: uuidgen-safe
+    command: "uuidgen"
+    expected:
+      decision: allow
   - id: command-dash-v-safe
     command: "command -v borg"
     expected:

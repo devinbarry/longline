@@ -209,3 +209,42 @@ tests:
     command: "pnpm outdated"
     expected:
       decision: allow
+
+  # ── apt-cache: read-only local package cache queries ──────────
+  - id: apt-cache-show-safe
+    command: "apt-cache show borgbackup"
+    expected:
+      decision: allow
+  - id: apt-cache-search-safe
+    command: "apt-cache search '^clevis'"
+    expected:
+      decision: allow
+  - id: apt-cache-policy-safe
+    command: "apt-cache policy clevis-systemd cryptsetup"
+    expected:
+      decision: allow
+  - id: apt-cache-depends-safe
+    command: "apt-cache depends borgbackup"
+    expected:
+      decision: allow
+  - id: apt-cache-rdepends-safe
+    command: "apt-cache rdepends borgbackup"
+    expected:
+      decision: allow
+
+  # ── apt-cache negative: real apt/apt-get mutation is unaffected ──
+  - id: apt-get-install-still-asks
+    command: "apt-get install borgbackup"
+    expected:
+      decision: ask
+      rule_id: apt-install
+  - id: apt-install-still-asks
+    command: "apt install borgbackup"
+    expected:
+      decision: ask
+      rule_id: apt-install
+  - id: apt-cache-chained-with-rm-denies
+    command: "apt-cache show borgbackup && rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root

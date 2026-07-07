@@ -53,6 +53,32 @@ tests:
     expected:
       decision: allow
 
+  # Image read-only commands
+  - id: docker-image-inspect
+    command: "docker image inspect myimage:latest"
+    expected:
+      decision: allow
+  - id: docker-image-ls
+    command: "docker image ls"
+    expected:
+      decision: allow
+
+  # Image negative: destructive/mutating docker image subcommands still gated
+  - id: docker-image-rm-still-asks
+    command: "docker image rm myimage:latest"
+    expected:
+      decision: ask
+      rule_id: docker-image-rm
+  - id: docker-image-prune-still-asks
+    command: "docker image prune -a"
+    expected:
+      decision: ask
+      rule_id: docker-image-prune
+  - id: docker-image-build-still-asks
+    command: "docker image build -t myimage:latest ."
+    expected:
+      decision: ask
+
   # Network read-only commands
   - id: docker-network-ls
     command: "docker network ls"
