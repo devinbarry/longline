@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.2] - 2026-07-07
+
+### Fixed
+
+- **`uv run --extra`/`--group`/`--no-sync` no longer block allowlisted tools
+  from being recognized.** An audit of Codex hook logs found `uv`'s wrapper
+  definition was missing `--extra`/`--group` (dependency-group selectors) as
+  known value-flags and `--no-sync` as a known bool-flag, so `uv run --extra
+  dev --group dev pytest/ruff/yamllint/...` couldn't find the inner
+  allowlisted command and fell through to `ask` on nearly every test/lint
+  invocation in real usage — the single largest source of excess asks found.
+- **`command -v`/`command -V` no longer evaluate policy against a program
+  that never runs.** The `command` transparent wrapper was unwrapping
+  `command -v foo` as if it executed `foo`, so an unallowlisted-but-benign
+  `foo` would ask even though `-v`/`-V` never execute anything — they only
+  check existence, same as `which`/`type`. `command -v`/`command -V` are now
+  matched as their own leaf and allowlisted directly.
+
+### Added
+
+- **`ansible-lint` (including `--fix`), `ansible --version`.** Standard dev
+  tool, same trust class as the already-allowlisted `ruff`/`black`/`isort` —
+  never connects to hosts.
+- **New `terraform.yaml` ruleset** covering `version`/`-version`, `validate`,
+  `providers schema` (read-only schema dump), and `init -backend=false`
+  (local module/provider install, no remote state access — the flag is
+  required, so bare `terraform init` still asks). `plan`/`apply`/`destroy`/
+  `import` and any `init` that can touch a real backend are intentionally
+  left at `ask`.
+- **`docker image inspect`/`docker image ls`.** Read-only, alongside the
+  existing `docker network`/`volume inspect` entries. Destructive `docker
+  image` subcommands (`rm`, `prune`, `build`) are unaffected.
+- **`apt-cache show`/`search`/`policy`/`depends`/`rdepends`.** Queries the
+  local package cache only; `apt`/`apt-get install` are unaffected.
+- **`findmnt`, `uuidgen`.** Read-only; no dangerous variant exists for either.
+- **`pfp run --help`/`-h`.** Help text, distinct from the full-trust `pfp
+  run` entry that triggers real Prefect flow runs.
+
 ## [0.20.1] - 2026-07-04
 
 ### Added
