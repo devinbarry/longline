@@ -22,3 +22,4 @@ include:
   - node.yaml
   - just.yaml
   - ansible.yaml
+  - terraform.yaml

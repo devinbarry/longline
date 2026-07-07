@@ -19,6 +19,7 @@ const RUST: &str = include_str!("../rules/rust.yaml");
 const NODE: &str = include_str!("../rules/node.yaml");
 const JUST: &str = include_str!("../rules/just.yaml");
 const ANSIBLE: &str = include_str!("../rules/ansible.yaml");
+const TERRAFORM: &str = include_str!("../rules/terraform.yaml");
 
 /// Look up an embedded rule file by name.
 pub fn get(name: &str) -> Option<&'static str> {
@@ -42,6 +43,7 @@ pub fn get(name: &str) -> Option<&'static str> {
         "node.yaml" => Some(NODE),
         "just.yaml" => Some(JUST),
         "ansible.yaml" => Some(ANSIBLE),
+        "terraform.yaml" => Some(TERRAFORM),
         _ => None,
     }
 }
@@ -68,6 +70,7 @@ pub fn all_files() -> Vec<(&'static str, &'static str)> {
         ("node.yaml", NODE),
         ("just.yaml", JUST),
         ("ansible.yaml", ANSIBLE),
+        ("terraform.yaml", TERRAFORM),
     ]
 }
 

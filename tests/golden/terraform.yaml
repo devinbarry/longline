@@ -1,0 +1,76 @@
+tests:
+  # ── Read-only / non-mutating (allow) ──────────────────────────
+  - id: terraform-version-safe
+    command: "terraform version"
+    expected:
+      decision: allow
+  - id: terraform-dash-version-safe
+    command: "terraform -version"
+    expected:
+      decision: allow
+  - id: terraform-validate-safe
+    command: "terraform validate"
+    expected:
+      decision: allow
+  - id: terraform-providers-schema-safe
+    command: "terraform providers schema -json"
+    expected:
+      decision: allow
+  - id: terraform-providers-schema-absolute-path-safe
+    command: "~/.local/bin/terraform -chdir=terraform/vault providers schema -json"
+    expected:
+      decision: allow
+  - id: terraform-init-no-backend-safe
+    command: "terraform init -backend=false -input=false"
+    expected:
+      decision: allow
+  - id: terraform-init-no-backend-upgrade-safe
+    command: "~/.local/bin/terraform -chdir=terraform/proxmox_vm init -backend=false -input=false -upgrade"
+    expected:
+      decision: allow
+
+  # ── Mutating / can touch real backend or infra (ask) ──────────
+  - id: terraform-init-bare-asks
+    command: "terraform init"
+    expected:
+      decision: ask
+  - id: terraform-init-upgrade-without-no-backend-asks
+    command: "terraform init -upgrade"
+    expected:
+      decision: ask
+  - id: terraform-init-input-false-without-no-backend-asks
+    command: "terraform init -input=false"
+    expected:
+      decision: ask
+  - id: terraform-init-reconfigure-asks
+    command: "terraform init -reconfigure"
+    expected:
+      decision: ask
+  - id: terraform-plan-asks
+    command: "terraform plan"
+    expected:
+      decision: ask
+  - id: terraform-apply-asks
+    command: "terraform apply"
+    expected:
+      decision: ask
+  - id: terraform-destroy-asks
+    command: "terraform destroy"
+    expected:
+      decision: ask
+  - id: terraform-import-asks
+    command: "terraform import vault_mount.kv kv"
+    expected:
+      decision: ask
+  - id: terraform-providers-mirror-asks
+    command: "terraform providers mirror /tmp/mirror"
+    expected:
+      decision: ask
+  - id: terraform-providers-lock-asks
+    command: "terraform providers lock"
+    expected:
+      decision: ask
+  - id: terraform-providers-bare-asks
+    command: "terraform providers"
+    expected:
+      decision: ask

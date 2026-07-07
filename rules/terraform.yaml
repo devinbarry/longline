@@ -1,0 +1,33 @@
+# Terraform: read-only tooling allowlist.
+#
+# Only genuinely non-mutating operations are covered here:
+#   - `terraform version` / `-version`     version info only
+#   - `terraform validate`                 static config validation, no state/backend access
+#   - `terraform providers schema -json`   dumps provider schema, read-only
+#   - `terraform init -backend=false`      local module/provider install only, no state access
+#
+# `plan`, `apply`, `destroy`, `import`, and any `init` that touches a real
+# backend are intentionally NOT covered and remain `ask` — `plan` can still
+# read live infrastructure state via provider credentials.
+
+allowlists:
+  commands:
+    - { command: "terraform version", trust: minimal }
+    - { command: "terraform -version", trust: minimal }
+    - { command: "terraform validate", trust: minimal, reason: "Validates Terraform config syntax (no state/backend access)" }
+    - { command: "terraform providers schema", trust: minimal, reason: "Dumps provider schema (read-only)" }
+
+rules:
+  # `terraform init -backend=false`: installs providers/modules locally only,
+  # does not touch remote state. Requires the flag explicitly so a bare
+  # `terraform init` (which can initialize a real backend) still asks.
+  - id: terraform-init-no-backend
+    level: high
+    match:
+      command: terraform
+      args:
+        all_of: ["init"]
+      flags:
+        any_of: ["-backend=false"]
+    decision: allow
+    reason: "Local Terraform init without backend access (read-only)"

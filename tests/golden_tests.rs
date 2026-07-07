@@ -350,6 +350,11 @@ fn golden_ansible() {
 }
 
 #[test]
+fn golden_terraform() {
+    run_golden_suite("terraform.yaml");
+}
+
+#[test]
 fn test_golden_profiles() {
     run_golden_suite("profiles.yaml");
 }
