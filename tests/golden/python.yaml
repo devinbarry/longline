@@ -200,6 +200,35 @@ tests:
     expected:
       decision: ask
 
+  # Unknown wrapper flags (not enumerated in uv's value/bool flag tables) are
+  # skipped as booleans rather than mistaken for the inner command name. This is
+  # correct-by-construction coverage for uv's long tail of flags (--offline,
+  # --no-cache, --refresh, and any future additions) so the inner command is
+  # still found and matched against its allowlist entry — no whack-a-mole.
+  - id: uv-run-offline-pytest-safe
+    command: "uv run --offline pytest -q"
+    expected:
+      decision: allow
+  - id: uv-run-no-cache-refresh-ruff-safe
+    command: "uv run --no-cache --refresh ruff check src/"
+    expected:
+      decision: allow
+  - id: uv-run-unknown-flag-yamllint-safe
+    command: "uv run --some-future-flag yamllint config.yml"
+    expected:
+      decision: allow
+  # Negative: skipping unknown flags must NOT let a dangerous inner command
+  # bypass policy — the inner command is still evaluated in full.
+  - id: uv-run-offline-rm-denies
+    command: "uv run --offline rm -rf /"
+    expected:
+      decision: deny
+      rule_id: rm-recursive-root
+  - id: uv-run-unknown-flag-unallowlisted-tool-asks
+    command: "uv run --some-future-flag dangeroustool"
+    expected:
+      decision: ask
+
   # ════════════════════════════════════════════════════════════════
   # Python dev tools invoked directly (allowlisted; representative
   # allow-coverage for entries that previously had no golden assertion).

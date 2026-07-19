@@ -385,16 +385,16 @@ tests:
     command: "nice"
     expected:
       decision: allow
-  - id: nice-version-ask
+  - id: nice-version-allow
     command: "nice --version"
     expected:
-      decision: ask
-    note: "--version not a nice flag, becomes inner command (unknown)"
-  - id: nice-help-ask
+      decision: allow
+    note: "Unknown wrapper flag --version is skipped (never a command name); no inner command remains, so the leaf is a bare `nice` invocation, which is allowlisted → allow"
+  - id: nice-help-allow
     command: "nice --help"
     expected:
-      decision: ask
-    note: "--help not a nice flag, becomes inner command (unknown)"
+      decision: allow
+    note: "Unknown wrapper flag --help is skipped; no inner command remains → bare allowlisted `nice` → allow"
 
   # ════════════════════════════════════════════════════════════════
   # nohup
@@ -433,16 +433,16 @@ tests:
     command: "nohup"
     expected:
       decision: allow
-  - id: nohup-version-ask
+  - id: nohup-version-allow
     command: "nohup --version"
     expected:
-      decision: ask
-    note: "--version not a nohup flag, becomes inner command (unknown)"
-  - id: nohup-help-ask
+      decision: allow
+    note: "Unknown wrapper flag --version is skipped; no inner command remains → bare allowlisted `nohup` → allow"
+  - id: nohup-help-allow
     command: "nohup --help"
     expected:
-      decision: ask
-    note: "--help not a nohup flag, becomes inner command (unknown)"
+      decision: allow
+    note: "Unknown wrapper flag --help is skipped; no inner command remains → bare allowlisted `nohup` → allow"
 
   # ════════════════════════════════════════════════════════════════
   # strace

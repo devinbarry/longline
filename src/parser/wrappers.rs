@@ -255,6 +255,27 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
             continue;
         }
 
+        // Unknown `-`/`--`-prefixed token. A token starting with `-` is never a
+        // command name, so it cannot be the inner command — treat it as an
+        // unrecognized boolean flag and skip it (consume the flag only, NOT a
+        // following value). This is correct-by-construction coverage for the
+        // long tail of wrapper flags we don't enumerate (`uv run --offline`,
+        // `--no-cache`, `--refresh`, future additions, etc.) without playing
+        // whack-a-mole on the flag tables.
+        //
+        // Fail-closed on value-taking unknown flags: if the unknown flag
+        // actually consumed a value (`--unknown-value FOO cmd`), FOO becomes
+        // the inner-command candidate, resolves to an unknown command, and the
+        // policy layer asks. We never skip the value, so we can never advance
+        // PAST the real inner command and silently bless a downstream token.
+        //
+        // Exact `-` (single dash, the stdin/stdout placeholder) is a positional,
+        // not a flag, so it stops flag processing like any bare token.
+        if token.starts_with('-') && token != "-" {
+            i += 1;
+            continue;
+        }
+
         // Not a flag -- stop flag processing
         break;
     }
@@ -1065,6 +1086,67 @@ mod tests {
     #[test]
     fn test_strace_bare() {
         let cmd = make_cmd("strace", &[]);
+        assert!(unwrap_transparent(&cmd).is_none());
+    }
+
+    // ── unknown-flag skipping during wrapper unwrap ──────────────
+    // A `-`/`--`-prefixed token is never a command name. Unknown flags
+    // (not enumerated in the wrapper's value/bool tables) are skipped as
+    // booleans so the inner command is still found, rather than the flag
+    // being mistaken for the inner command. Correct-by-construction coverage
+    // for the long tail of uv flags (--offline, --no-cache, future additions).
+
+    #[test]
+    fn test_uv_run_unknown_bool_flag_skipped() {
+        // --offline is a real uv flag we don't enumerate; the inner command
+        // must still resolve to pytest, not "--offline".
+        let cmd = make_cmd("uv", &["run", "--offline", "pytest", "-q"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("pytest"));
+        assert_eq!(inner.argv, vec![Arg::plain("-q")]);
+    }
+
+    #[test]
+    fn test_uv_run_multiple_unknown_flags_skipped() {
+        let cmd = make_cmd("uv", &["run", "--no-cache", "--refresh", "ruff", "check"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("ruff"));
+        assert_eq!(inner.argv, vec![Arg::plain("check")]);
+    }
+
+    #[test]
+    fn test_uv_run_future_unknown_flag_skipped() {
+        // An entirely made-up flag must behave the same (no enumeration needed).
+        let cmd = make_cmd("uv", &["run", "--some-future-flag", "yamllint", "x.yml"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("yamllint"));
+    }
+
+    #[test]
+    fn test_uv_run_unknown_flag_does_not_consume_value_failclosed() {
+        // Fail-closed: we do NOT assume an unknown flag takes a value. If it
+        // actually did (`--unknown-value FOO cmd`), FOO becomes the inner
+        // command candidate → resolves to an unknown command → policy asks. We
+        // never advance PAST the real inner command, so no downstream token is
+        // silently blessed.
+        let cmd = make_cmd("uv", &["run", "--unknown-value", "FOO", "pytest"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("FOO"));
+    }
+
+    #[test]
+    fn test_wrapper_single_dash_is_positional_not_flag() {
+        // Exact `-` (stdin/stdout placeholder) is a positional, so it stops
+        // flag processing and becomes the inner command candidate (not skipped).
+        let cmd = make_cmd("timeout", &["30", "-", "arg"]);
+        let inner = unwrap_transparent(&cmd).unwrap();
+        assert_eq!(inner.name.as_deref(), Some("-"));
+    }
+
+    #[test]
+    fn test_nice_unknown_flag_only_no_inner() {
+        // `nice --version` — unknown flag skipped, no inner command remains.
+        let cmd = make_cmd("nice", &["--version"]);
         assert!(unwrap_transparent(&cmd).is_none());
     }
 

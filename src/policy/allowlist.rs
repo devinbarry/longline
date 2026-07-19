@@ -317,7 +317,31 @@ pub fn is_known_command_family(config: &RulesConfig, cmd: &SimpleCommand) -> boo
 /// the first non-flag positional after stripping global value-flag pairs (so
 /// `git -C /repo reset --soft` renders `git reset`), or the bare `<family>`
 /// when there is no positional subcommand.
+///
+/// Transparent wrappers (`uv run`, `timeout`, `env`, `nice`, …) are unwrapped
+/// first so the label names the INNER command the user actually cares about:
+/// `uv run ansible-galaxy collection list` renders `ansible-galaxy collection`,
+/// not `uv run`. An uncovered wrapper leaf is only uncovered *because* its inner
+/// command is uncovered (`uv run` itself is never allowlisted bare), so naming
+/// the wrapper subcommand ("uv run isn't on longline's allowlist") is useless —
+/// the operator can't act on it. Nesting (`timeout 30 uv run foo`) is unwrapped
+/// to a bounded depth. Falls back to the wrapper's own label if the inner
+/// command can't be extracted.
 pub fn command_label(cmd: &SimpleCommand) -> String {
+    // Peel transparent wrappers so we label the inner command. Bounded depth
+    // guards against any pathological self-referential wrapper chain.
+    let mut current = Cow::Borrowed(cmd);
+    for _ in 0..8 {
+        match crate::parser::wrappers::unwrap_transparent(&current) {
+            Some(inner) => current = Cow::Owned(inner),
+            None => break,
+        }
+    }
+    command_label_direct(&current)
+}
+
+/// Label a single command with no wrapper unwrapping (see `command_label`).
+fn command_label_direct(cmd: &SimpleCommand) -> String {
     let Some(name) = cmd.name.as_deref() else {
         return String::new();
     };
@@ -439,6 +463,61 @@ mod tests {
             assignments: vec![],
             embedded_substitutions: vec![],
         }
+    }
+
+    fn named_cmd(name: &str, argv: &[&str]) -> SimpleCommand {
+        SimpleCommand {
+            name: Some(name.to_string()),
+            argv: make_argv(argv),
+            redirects: vec![],
+            assignments: vec![],
+            embedded_substitutions: vec![],
+        }
+    }
+
+    // ================================================================
+    // command_label: unwraps transparent wrappers to name the inner command
+    // ================================================================
+
+    #[test]
+    fn test_command_label_unwraps_uv_run_to_inner_tool() {
+        // The whole point of the fix: `uv run ansible-galaxy collection list`
+        // must be labelled by the INNER command, not "uv run".
+        let cmd = named_cmd("uv", &["run", "ansible-galaxy", "collection", "list"]);
+        assert_eq!(command_label(&cmd), "ansible-galaxy collection");
+    }
+
+    #[test]
+    fn test_command_label_unwraps_uv_run_with_flags() {
+        // Value-flags (--python VER) and unknown bool flags (--offline) between
+        // `uv run` and the inner command must not appear in the label.
+        let cmd = named_cmd(
+            "uv",
+            &["run", "--python", "3.14", "prefect", "deployment", "ls"],
+        );
+        assert_eq!(command_label(&cmd), "prefect deployment");
+    }
+
+    #[test]
+    fn test_command_label_unwraps_nested_wrappers() {
+        // timeout 90 uv run <tool> — peel both wrappers.
+        let cmd = named_cmd("timeout", &["90", "uv", "run", "ansible-config", "dump"]);
+        assert_eq!(command_label(&cmd), "ansible-config dump");
+    }
+
+    #[test]
+    fn test_command_label_bare_wrapper_no_inner_falls_back() {
+        // `nice --version` — unknown flag skipped, no inner command remains;
+        // label the wrapper itself rather than producing an empty/garbage name.
+        let cmd = named_cmd("nice", &["--version"]);
+        assert_eq!(command_label(&cmd), "nice");
+    }
+
+    #[test]
+    fn test_command_label_non_wrapper_unchanged() {
+        // Non-wrapper commands keep the existing `<family> <subcommand>` label.
+        let cmd = named_cmd("git", &["-C", "/repo", "reset", "--soft"]);
+        assert_eq!(command_label(&cmd), "git reset");
     }
 
     // ================================================================
