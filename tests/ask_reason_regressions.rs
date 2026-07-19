@@ -478,6 +478,85 @@ fn known_family_unlisted_operation_names_the_operation() {
 }
 
 #[test]
+fn ask_reason_shows_full_subcommand_path_not_just_first_positional() {
+    // REGRESSION (operator-reported): command_label rendered only
+    // `<family> <first-positional>`, so a multi-level subcommand like
+    // `git submodule foobar xyz` collapsed to "git submodule" — dropping the
+    // rest and reading as if `git submodule` itself were the uncovered op. For
+    // `ansible-galaxy collection install …` this truncated to "ansible-galaxy
+    // collection", identical to the allowlisted `… collection list`, making a
+    // correct ask look broken. The reason must surface the FULL leading
+    // subcommand path.
+    //
+    // `git submodule foobar xyz` is a known family (git) that hits no rule and
+    // is not allowlisted, so it flows through command_label end-to-end.
+    let result = evaluate("git submodule foobar xyz");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(result.rule_id, None);
+    assert_eq!(
+        result.reason, "git submodule foobar xyz isn't on longline's allowlist — confirm to run it",
+        "full subcommand path must appear, not truncated to 'git submodule': {}",
+        result.reason
+    );
+}
+
+#[test]
+fn ask_reason_subcommand_path_stops_at_operand() {
+    // The subcommand path must STOP at the first operand-looking token (one
+    // carrying path/value punctuation: `/ . = @`) so it names the operation,
+    // not the arguments. `docker frob community.docker` → the label stops at
+    // `frob` because `community.docker` carries a `.`. Without this, the label
+    // would swallow the whole argv and stop being a stable operation name.
+    // (docker is a known family that hits no rule and isn't allowlisted.)
+    let result = evaluate("docker frob community.docker");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(
+        result.reason, "docker frob isn't on longline's allowlist — confirm to run it",
+        "operand with '.' must terminate the subcommand path: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn ask_reason_subcommand_path_is_depth_capped() {
+    // A pathological run of bare words must not produce an unbounded label.
+    // The subcommand path is capped at 3 tokens past the family, which covers
+    // every real nesting seen (`ansible-galaxy collection install` = 3,
+    // `git submodule foobar xyz` = 3) while bounding the worst case.
+    let result = evaluate("docker aa bb cc dd ee");
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(
+        result.reason, "docker aa bb cc isn't on longline's allowlist — confirm to run it",
+        "subcommand path must cap at 3 tokens past the family: {}",
+        result.reason
+    );
+}
+
+#[test]
+fn ask_reason_wrapped_subcommand_path_names_full_inner_operation() {
+    // Integration of the two reason-quality behaviours: a transparent wrapper
+    // is unwrapped to name the INNER command, AND the inner command's full
+    // subcommand path is shown. This is the exact shape of the operator's
+    // `uv run ansible-galaxy collection install …` report; `nohup git submodule
+    // foobar xyz` stands in end-to-end (uv/ansible-galaxy are not in the
+    // embedded rules; nohup is an allowlisted wrapper and git a known family).
+    // The reason must name the full inner path and NOT the wrapper's own
+    // allowlist description.
+    let result = evaluate("nohup git submodule foobar xyz");
+    assert_eq!(result.decision, Decision::Ask);
+    assert!(
+        !result.reason.contains("immune to hangup signals"),
+        "must not surface the wrapper's allowlist description: {}",
+        result.reason
+    );
+    assert!(
+        result.reason.contains("git submodule foobar xyz"),
+        "wrapped inner op must show the full subcommand path: {}",
+        result.reason
+    );
+}
+
+#[test]
 fn git_reset_abbreviated_destructive_modes_must_ask() {
     // SAFETY REGRESSION GUARD (Codex xhigh review, dual-model gate).
     //

@@ -341,17 +341,41 @@ pub fn command_label(cmd: &SimpleCommand) -> String {
 }
 
 /// Label a single command with no wrapper unwrapping (see `command_label`).
+///
+/// Renders the full leading subcommand PATH (the run of leading non-flag
+/// positionals), not just the first positional, so a legitimately-uncovered
+/// subcommand is visible and not truncated to look identical to an allowlisted
+/// sibling (e.g. `git submodule foobar` vs the allowlisted `git submodule`).
 fn command_label_direct(cmd: &SimpleCommand) -> String {
     let Some(name) = cmd.name.as_deref() else {
         return String::new();
     };
     let family = normalize_command_name(name);
-    match effective_argv(cmd)
-        .iter()
-        .find(|a| !a.text.starts_with('-'))
-    {
-        Some(arg) => format!("{family} {}", arg.text),
-        None => family.to_string(),
+
+    // Cap the subcommand-path depth so a pathological argv of bare words can't
+    // produce an unbounded label. 3 covers every real nesting (e.g.
+    // `ansible-galaxy collection install`, `git submodule foobar xyz`).
+    const MAX_SUBCOMMAND_DEPTH: usize = 3;
+    let argv = effective_argv(cmd);
+    let mut parts: Vec<&str> = Vec::new();
+    for arg in argv.iter() {
+        if parts.len() >= MAX_SUBCOMMAND_DEPTH {
+            break;
+        }
+        let tok = arg.text.as_str();
+        // Stop at the first flag or the first operand-looking token. A
+        // subcommand word is a plain bareword; anything carrying path/value
+        // punctuation is an operand, not a subcommand.
+        if tok.starts_with('-') || tok.contains(['/', '.', '=', '@']) {
+            break;
+        }
+        parts.push(tok);
+    }
+
+    if parts.is_empty() {
+        family.to_string()
+    } else {
+        format!("{family} {}", parts.join(" "))
     }
 }
 
@@ -478,10 +502,10 @@ mod tests {
 
     #[test]
     fn test_command_label_unwraps_uv_run_to_inner_tool() {
-        // The whole point of the fix: `uv run ansible-galaxy collection list`
-        // must be labelled by the INNER command, not "uv run".
+        // `uv run ansible-galaxy collection list` must be labelled by the INNER
+        // command, not "uv run", and show the full subcommand path.
         let cmd = named_cmd("uv", &["run", "ansible-galaxy", "collection", "list"]);
-        assert_eq!(command_label(&cmd), "ansible-galaxy collection");
+        assert_eq!(command_label(&cmd), "ansible-galaxy collection list");
     }
 
     #[test]
@@ -492,7 +516,7 @@ mod tests {
             "uv",
             &["run", "--python", "3.14", "prefect", "deployment", "ls"],
         );
-        assert_eq!(command_label(&cmd), "prefect deployment");
+        assert_eq!(command_label(&cmd), "prefect deployment ls");
     }
 
     #[test]
@@ -512,9 +536,48 @@ mod tests {
 
     #[test]
     fn test_command_label_non_wrapper_unchanged() {
-        // Non-wrapper commands keep the existing `<family> <subcommand>` label.
+        // Non-wrapper commands keep the `<family> <subcommand-path>` label; the
+        // --soft flag terminates the path so it stays "git reset".
         let cmd = named_cmd("git", &["-C", "/repo", "reset", "--soft"]);
         assert_eq!(command_label(&cmd), "git reset");
+    }
+
+    #[test]
+    fn test_command_label_full_subcommand_path() {
+        // Full leading subcommand path, not just the first positional.
+        let cmd = named_cmd("ansible-galaxy", &["collection", "install"]);
+        assert_eq!(command_label(&cmd), "ansible-galaxy collection install");
+    }
+
+    #[test]
+    fn test_command_label_stops_at_dotted_operand() {
+        // Operand carrying `.` terminates the path.
+        let cmd = named_cmd(
+            "ansible-galaxy",
+            &["collection", "install", "community.docker"],
+        );
+        assert_eq!(command_label(&cmd), "ansible-galaxy collection install");
+    }
+
+    #[test]
+    fn test_command_label_stops_at_slash_operand() {
+        // Operand carrying `/` terminates the path.
+        let cmd = named_cmd("prefect", &["deployment", "delete", "flow/name"]);
+        assert_eq!(command_label(&cmd), "prefect deployment delete");
+    }
+
+    #[test]
+    fn test_command_label_dotted_filename_only_operand_is_bare_family() {
+        // The single positional is a filename (has `.`) → bare family label.
+        let cmd = named_cmd("yamllint", &["config.yml"]);
+        assert_eq!(command_label(&cmd), "yamllint");
+    }
+
+    #[test]
+    fn test_command_label_depth_capped_at_three() {
+        // A long run of bare words is capped so the label can't run away.
+        let cmd = named_cmd("tool", &["a", "b", "c", "d", "e"]);
+        assert_eq!(command_label(&cmd), "tool a b c");
     }
 
     // ================================================================
