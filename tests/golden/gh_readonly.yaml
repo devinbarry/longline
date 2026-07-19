@@ -147,12 +147,12 @@ tests:
       rule_id: gh-readonly-classifier
     note: "command-wrapper unwrapping — inner gh leaf classifies; rule_id propagated from the classifier via the evaluate_with_extras merge branch added in Bundle 3"
 
-  - id: gh-env-wrapper-asks-via-printenv
+  - id: gh-env-wrapper-asks-via-inner-classifier
     command: "env GH_TOKEN=xyz gh api repos/foo"
     expected:
       decision: ask
-      rule_id: printenv
-    note: "env rule fires on the wrapper before/alongside the unwrapped gh leaf — proposal explicitly says env follows existing secret/env policy first"
+      rule_id: gh-suspicious-wrapper
+    note: "Executable env forms are transparent wrappers; the propagated GH_TOKEN assignment makes the inner gh api leaf ask."
 
   # ════════════════════════════════════════════════════════════════
   # Pipeline leaf preservation

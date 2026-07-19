@@ -260,7 +260,6 @@ rules:
         any_of:
           # core.* keys that substitute the program git invokes
           - "core.sshcommand=**"
-          - "core.editor=**"
           - "core.pager=**"
           - "help.browser=**"
           - "web.browser=**"
@@ -274,7 +273,6 @@ rules:
           - "core.askpass=**"
           - "core.alternaterefscommand=**"
           - "gc.recentobjectshook=**"
-          - "sequence.editor=**"
           # filter.<driver>.{clean,smudge,process} run on attribute-driven
           # files at add/checkout/normalize time
           - "filter.*.clean=**"
@@ -457,6 +455,18 @@ rules:
           - "--config-env=imap.tunnel=**"
     decision: deny
     reason: "Setting these git config keys via `-c` or `--config-env` substitutes the program git invokes (ssh / editor / pager / fsmonitor / gpg / credential helper / ext protocol / pager.<cmd>), sources an attacker-controlled include file, or bypasses repo-safety checks. Set them in .git/config by hand if you genuinely need this."
+
+  - id: git-c-editor-program
+    level: critical
+    match:
+      git_config:
+        command: git
+        source: cli-c
+        keys: [core.editor, sequence.editor]
+        key_case_insensitive: true
+        except_value_class: shell-noop
+    decision: deny
+    reason: "Git editor settings execute a shell command. Use the exact ephemeral no-op `GIT_EDITOR=true` (or `git -c core.editor=true`) when suppressing an editor; other values remain blocked."
 
   # Split git config setters into two rules so the bare-key form
   # (`git config <key>`, no value) — which is a READ — does not get denied
@@ -781,6 +791,8 @@ rules:
           - "SSH_ASKPASS"
           - "GIT_EDITOR"
           - "GIT_SEQUENCE_EDITOR"
+          - "EDITOR"
+          - "VISUAL"
           - "GIT_PAGER"
           - "GIT_PROXY_COMMAND"
           - "GIT_EXTERNAL_DIFF"
@@ -813,8 +825,12 @@ rules:
           - "GIT_SSL_CAINFO"
           - "GIT_SSL_CAPATH"
           - "GIT_SSL_VERSION"
+        except:
+          - names: [GIT_EDITOR, GIT_SEQUENCE_EDITOR, EDITOR, VISUAL]
+            name_case_insensitive: false
+            value_class: shell-noop
     decision: deny
-    reason: "Setting these GIT_* env vars on a git invocation substitutes the program git invokes (ssh / editor / pager / askpass / external-diff / proxy-command), reroutes git at attacker-controlled config files (GIT_CONFIG{,_GLOBAL,_SYSTEM}), or injects ad-hoc config (GIT_CONFIG_COUNT/KEY_n/VALUE_n). Set the safe equivalent in .git/config by hand if you genuinely need this."
+    reason: "Setting these Git-related env vars on a git invocation substitutes the program git invokes (ssh / editor / pager / askpass / external-diff / proxy-command), reroutes git at attacker-controlled config files (GIT_CONFIG{,_GLOBAL,_SYSTEM}), or injects ad-hoc config (GIT_CONFIG_COUNT/KEY_n/VALUE_n). Use the exact ephemeral no-op `GIT_EDITOR=true` when suppressing an editor; other program values remain blocked."
 
   - id: git-transport-program-flags
     level: critical

@@ -186,6 +186,25 @@ fn redirected_shell_c(cmd: &SimpleCommand) -> Option<PolicyResult> {
     None
 }
 
+/// `env` dumps the environment only when it has no executable operand. When
+/// transparent-wrapper extraction can identify an inner command, evaluating
+/// that inner command (with its propagated assignments) is the complete and
+/// more precise policy. Keep `printenv` as a YAML rule; it never has an
+/// executable form.
+pub(super) fn classify_env(cmd: &SimpleCommand) -> Option<PolicyResult> {
+    let full_name = cmd.name.as_deref()?;
+    if basename(full_name) != "env" {
+        return None;
+    }
+    if crate::parser::wrappers::unwrap_transparent(cmd).is_none() {
+        return Some(ask("printenv", "Environment dump may expose secrets"));
+    }
+    if full_name.starts_with("./") || full_name.starts_with("../") {
+        return Some(ask("project-script-exec", "Runs a project-local script"));
+    }
+    None
+}
+
 pub(super) fn classify(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyResult> {
     let full_name = cmd.name.as_deref()?;
     let name = basename(full_name);
@@ -238,5 +257,38 @@ pub(super) fn classify(cmd: &SimpleCommand, is_extra: bool) -> Option<PolicyResu
             Some(ask("project-script-exec", "Runs a project-local script"))
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::{parse, Statement};
+
+    fn sc(input: &str) -> SimpleCommand {
+        match parse(input).expect("parse command") {
+            Statement::SimpleCommand(cmd) => cmd,
+            other => panic!("expected simple command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn env_dump_asks_but_executable_env_wrapper_is_transparent() {
+        for input in ["env", "env -i", "env FOO=bar"] {
+            let result = classify_env(&sc(input)).expect("environment dump should ask");
+            assert_eq!(result.decision, Decision::Ask, "{input}");
+            assert_eq!(result.rule_id.as_deref(), Some("printenv"), "{input}");
+        }
+
+        for input in [
+            "env git status",
+            "env FOO=bar git status",
+            "env -i FOO=bar git status",
+        ] {
+            assert!(
+                classify_env(&sc(input)).is_none(),
+                "executable env wrapper should inherit inner policy: {input}"
+            );
+        }
     }
 }

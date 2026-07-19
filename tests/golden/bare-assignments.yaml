@@ -216,9 +216,72 @@ tests:
   - id: r11-excluded-home
     command: "HOME=/tmp git status"
     expected: { decision: allow }
-  - id: r11-excluded-editor
+  - id: r11-editor-unsafe-git-deny
     command: "EDITOR=vim git commit -m y"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: r11-editor-noop-commandless-allow
+    command: "EDITOR=true"
     expected: { decision: allow }
+  - id: r11-visual-noop-commandless-allow
+    command: "VISUAL=true"
+    expected: { decision: allow }
+  - id: r11-git-editor-noop-commandless-allow
+    command: "GIT_EDITOR=true"
+    expected: { decision: allow }
+  - id: r11-git-sequence-editor-noop-commandless-allow
+    command: "GIT_SEQUENCE_EDITOR=true"
+    expected: { decision: allow }
+  - id: r11-editor-noop-safe-command-allow
+    command: "EDITOR=true echo hi"
+    expected: { decision: allow }
+  - id: r11-editor-noop-export-inherits-builtin-policy
+    command: "export EDITOR=true"
+    expected: { decision: ask }
+  - id: r11-editor-unsafe-export-asks
+    command: "export EDITOR=vim"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-visual-noop-safe-command-allow
+    command: "VISUAL=true echo hi"
+    expected: { decision: allow }
+  - id: r11-editor-unsafe-commandless-asks
+    command: "EDITOR=vim"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-visual-unsafe-commandless-asks
+    command: "VISUAL=code"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-editor-expanded-commandless-asks
+    command: 'EDITOR="$EDITOR"'
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-editor-non-git-command-asks
+    command: "EDITOR=vim vim file"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-visual-non-git-command-asks
+    command: "VISUAL=code some-tool"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-editor-noop-inherits-underlying-command-policy
+    command: "EDITOR=true vim file"
+    expected: { decision: ask }
+  - id: r11-git-editor-noop-list-rebase-still-asks
+    command: "GIT_EDITOR=true; git rebase --continue"
+    expected: { decision: ask, rule_id: git-rebase }
+  - id: r11-editor-unsafe-list-asks
+    command: "EDITOR=vim; git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-editor-unsafe-outer-shell-c-asks
+    command: "EDITOR=vim bash -c 'git status'"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-read-editor-asks
+    command: "read EDITOR"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-read-visual-asks
+    command: "read VISUAL"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-printf-v-editor-asks
+    command: "printf -v EDITOR vim"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: r11-printf-v-visual-asks
+    command: "printf -vVISUAL code"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
   - id: r11-benign-read-answer
     command: "read answer"
     expected: { decision: allow }

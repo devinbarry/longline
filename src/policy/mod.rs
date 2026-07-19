@@ -612,6 +612,20 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                 }
             }
 
+            // `env` is allowlisted as a transparent wrapper, but without an
+            // executable operand it dumps the environment. Classify that
+            // shape before the allowlist; executable forms are evaluated via
+            // their extracted inner command and propagated assignments.
+            let env_dump_guard_enabled = config
+                .rules
+                .iter()
+                .any(|rule| rule.id == "printenv" && rule.level <= config.safety_level);
+            if env_dump_guard_enabled {
+                if let Some(result) = descriptive_asks::classify_env(cmd) {
+                    return result;
+                }
+            }
+
             // No rule matched -- check allowlist as fallback
             if let Some(entry) = find_allowlist_match(config, cmd) {
                 let reason = if entry.contains(' ') {

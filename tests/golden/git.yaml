@@ -28,6 +28,221 @@
 tests:
 
   # ============================================================
+  # Safe ephemeral editor suppression (v0.21)
+  # ============================================================
+
+  # Exact, statically known `true` is transparent to the editor-channel
+  # guard; the underlying Git operation still determines the outcome.
+  - id: git-editor-noop-env-status-allow
+    command: "GIT_EDITOR=true git status"
+    expected: { decision: allow }
+  - id: git-sequence-editor-noop-env-status-allow
+    command: "GIT_SEQUENCE_EDITOR=true git status"
+    expected: { decision: allow }
+  - id: editor-noop-env-status-allow
+    command: "EDITOR=true git status"
+    expected: { decision: allow }
+  - id: visual-noop-env-status-allow
+    command: "VISUAL=true git status"
+    expected: { decision: allow }
+  - id: git-editor-noop-env-single-quoted-status-allow
+    command: "GIT_EDITOR='true' git status"
+    expected: { decision: allow }
+  - id: git-editor-noop-env-double-quoted-status-allow
+    command: 'GIT_EDITOR="true" git status'
+    expected: { decision: allow }
+  - id: git-editor-noop-env-rebase-still-asks
+    command: "GIT_EDITOR=true git rebase --continue"
+    expected: { decision: ask, rule_id: git-rebase }
+  - id: git-sequence-editor-noop-env-interactive-rebase-still-asks
+    command: "GIT_SEQUENCE_EDITOR=true git rebase -i HEAD~3"
+    expected: { decision: ask, rule_id: git-rebase }
+
+  - id: git-c-core-editor-noop-status-allow
+    command: "git -c core.editor=true status"
+    expected: { decision: allow }
+  - id: git-c-sequence-editor-noop-status-allow
+    command: "git -c sequence.editor=true status"
+    expected: { decision: allow }
+  - id: git-c-core-editor-noop-rebase-still-asks
+    command: "git -c core.editor=true rebase --continue"
+    expected: { decision: ask, rule_id: git-rebase }
+  - id: git-c-sequence-editor-noop-rebase-still-asks
+    command: "git -c sequence.editor=true rebase --continue"
+    expected: { decision: ask, rule_id: git-rebase }
+  - id: git-c-editor-noop-case-insensitive-key-allow
+    command: "git -c CORE.EDITOR=true status"
+    expected: { decision: allow }
+  - id: git-c-editor-noop-whole-token-single-quoted-allow
+    command: "git -c 'core.editor=true' status"
+    expected: { decision: allow }
+  - id: git-c-editor-noop-whole-token-double-quoted-allow
+    command: 'git -c "core.editor=true" status'
+    expected: { decision: allow }
+  - id: git-c-editor-noop-absolute-git-allow
+    command: "/usr/bin/git -c core.editor=true status"
+    expected: { decision: allow }
+  - id: git-c-editor-noop-leading-C-allow
+    command: "git -C /repo -c core.editor=true status"
+    expected: { decision: allow }
+
+  # Wrapper propagation preserves assignment provenance. Whole-token quoted
+  # `NAME=true` is static; RHS-only quote concatenation is conservative.
+  - id: env-wrapper-editor-noop-allow
+    command: "env GIT_EDITOR=true git status"
+    expected: { decision: allow }
+  - id: env-wrapper-whole-token-quoted-editor-noop-allow
+    command: "env 'GIT_EDITOR=true' git status"
+    expected: { decision: allow }
+  - id: env-wrapper-rhs-quoted-editor-noop-deny
+    command: "env GIT_EDITOR='true' git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: timeout-wrapper-editor-noop-allow
+    command: "timeout 30 GIT_EDITOR=true git status"
+    expected: { decision: allow }
+  - id: command-wrapper-editor-noop-allow
+    command: "command GIT_EDITOR=true git status"
+    expected: { decision: allow }
+
+  # Every non-exact, dynamic, or ambiguous editor program stays restrictive.
+  - id: git-editor-vim-deny
+    command: "GIT_EDITOR=vim git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-path-deny
+    command: "GIT_EDITOR=/tmp/evil git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-expanded-deny
+    command: 'GIT_EDITOR="$EDITOR" git status'
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: editor-vim-git-deny
+    command: "EDITOR=vim git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: visual-code-git-deny
+    command: "VISUAL=code git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: lowercase-git-editor-noop-does-not-qualify
+    command: "git_editor=true git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-uppercase-true-deny
+    command: "GIT_EDITOR=TRUE git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-bin-true-deny
+    command: "GIT_EDITOR=/bin/true git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-true-with-arg-deny
+    command: "GIT_EDITOR='true --help' git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-empty-deny
+    command: "GIT_EDITOR= git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-command-substitution-deny
+    command: 'GIT_EDITOR="$(printf true)" git status'
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-literal-concatenation-deny
+    command: "GIT_EDITOR='tr''ue' git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+
+  - id: git-c-editor-vim-deny-new-rule
+    command: "git -c core.editor=vim status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-sequence-editor-vim-deny-new-rule
+    command: "git -c sequence.editor=vim status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-implicit-empty-deny
+    command: "git -c core.editor status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-expanded-deny-new-rule
+    command: 'git -c "core.editor=$EDITOR" status'
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-literal-concatenation-deny
+    command: "git -c core.editor='tr''ue' status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-uppercase-value-deny
+    command: "git -c core.editor=TRUE status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-dynamic-key-asks
+    command: 'git -c "$KEY=true" status'
+    expected: { decision: ask }
+  - id: git-c-editor-invalid-joined-safe-asks
+    command: "git -ccore.editor=true status"
+    expected: { decision: ask }
+  - id: git-c-editor-invalid-joined-unsafe-asks
+    command: "git -ccore.editor=vim status"
+    expected: { decision: ask }
+
+  # Same-candidate exception semantics and most-restrictive-wins.
+  - id: git-env-safe-editor-dangerous-sibling-deny
+    command: "GIT_EDITOR=true GIT_SSH_COMMAND=evil git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-env-safe-then-unsafe-duplicate-deny
+    command: "GIT_EDITOR=true GIT_EDITOR=vim git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-env-unsafe-then-safe-duplicate-deny
+    command: "GIT_EDITOR=vim GIT_EDITOR=true git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-c-safe-then-unsafe-editor-duplicate-deny
+    command: "git -c core.editor=true -c core.editor=vim status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-unsafe-then-safe-editor-duplicate-deny
+    command: "git -c core.editor=vim -c core.editor=true status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-safe-editor-dangerous-sibling-deny
+    command: "git -c core.editor=true -c core.sshCommand=evil status"
+    expected: { decision: deny, rule_id: git-c-rce-keys }
+  - id: git-c-dangerous-sibling-safe-editor-deny
+    command: "git -c core.sshCommand=evil -c core.editor=true status"
+    expected: { decision: deny, rule_id: git-c-rce-keys }
+
+  # Ephemeral CLI -c is the only config-channel exception. Persistent config,
+  # --config-env indirection, destructive config edit, and post-subcommand
+  # editor-looking tokens remain unchanged.
+  - id: git-config-env-editor-space-deny
+    command: "git --config-env core.editor=EDITOR status"
+    expected: { decision: deny, rule_id: git-config-env-spaceform }
+  - id: git-config-env-editor-joined-deny
+    command: "git --config-env=core.editor=EDITOR status"
+    expected: { decision: deny, rule_id: git-c-rce-keys }
+  - id: git-config-persistent-editor-set-deny
+    command: "git config core.editor true"
+    expected: { decision: deny, rule_id: git-config-rce-keys-spaceform }
+  - id: git-c-safe-editor-config-edit-still-deny
+    command: "git -c core.editor=true config --edit"
+    expected: { decision: deny }
+    note: "The existing raw-argv persistent-config matcher may win deny attribution over git-config-edit; either deny preserves the authorization boundary."
+  - id: git-log-editor-token-after-subcommand-allow
+    command: "git log --grep core.editor=true"
+    expected: { decision: allow }
+  - id: git-status-editor-token-after-subcommand-allow
+    command: "git status core.editor=true"
+    expected: { decision: allow }
+
+  # Compound forms preserve each leaf's normal decision. The documented
+  # find/xargs bare-assignment extraction gap remains fail-closed at ask.
+  - id: git-editor-noop-pipeline-allow
+    command: "GIT_EDITOR=true git status | grep clean"
+    expected: { decision: allow }
+  - id: git-editor-noop-list-rebase-asks
+    command: "GIT_EDITOR=true git status; git rebase --continue"
+    expected: { decision: ask, rule_id: git-rebase }
+  - id: git-editor-unsafe-outer-shell-c-asks
+    command: "GIT_EDITOR=vim bash -c 'git status'"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: find-exec-bare-editor-assignment-gap-asks
+    command: "find . -exec GIT_EDITOR=true git status \\;"
+    expected: { decision: ask }
+  - id: xargs-bare-editor-assignment-gap-asks
+    command: "printf x | xargs GIT_EDITOR=true git status"
+    expected: { decision: ask }
+
+  # Disabling the legacy broad RCE-key rule no longer disables the dedicated
+  # editor-channel protection.
+  - id: git-c-editor-rule-independent-of-legacy-disable
+    overlay: |
+      disable_rules: [git-c-rce-keys]
+    command: "git -c core.editor=vim status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+
+  # ============================================================
   # 1. CORE READ-ONLY COMMANDS (always safe)
   # ============================================================
 
@@ -649,7 +864,7 @@ tests:
     command: "git -c core.editor=/tmp/evil commit"
     expected:
       decision: deny
-      rule_id: git-c-rce-keys
+      rule_id: git-c-editor-program
   - id: git-c-core-pager-log-deny
     command: "git -c core.pager=/tmp/evil log"
     expected:
@@ -886,7 +1101,7 @@ tests:
     command: "git -c sequence.editor=/tmp/evil rebase -i HEAD~1"
     expected:
       decision: deny
-      rule_id: git-c-rce-keys
+      rule_id: git-c-editor-program
   - id: git-c-diff-external-deny
     command: "git -c diff.external=/tmp/evil diff"
     expected:

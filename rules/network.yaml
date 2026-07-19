@@ -100,8 +100,7 @@ rules:
   - id: printenv
     level: high
     match:
-      command:
-        any_of: [printenv, env]
+      command: printenv
     decision: ask
     reason: "Environment dump may expose secrets"
 

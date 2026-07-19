@@ -11,7 +11,15 @@
 //! See `docs/plans/2026-05-31-r11-sensitive-env-assignment-guard-design.md`.
 
 use crate::domain::{Decision, PolicyResult};
-use crate::parser::{Arg, SimpleCommand};
+use crate::parser::{Arg, Assignment, SimpleCommand};
+
+use super::value_safety::{is_safe_program_value, SafeProgramClass};
+
+/// The only environment-variable program channels for which exact static
+/// `true` is a reviewed safe value. Keep this case-sensitive: lowercase names
+/// are different Unix variables and do not qualify for the exception.
+const SAFE_EDITOR_OVERRIDE_NAMES: &[&str] =
+    &["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL"];
 
 /// Exact-match sensitive variable names (compared case-sensitively). Includes
 /// the full `git-env-rce-vars` `env.any_of` plain names — the drift-guard test
@@ -47,6 +55,8 @@ const SENSITIVE_EXACT: &[&str] = &[
     "SSH_ASKPASS",
     "GIT_EDITOR",
     "GIT_SEQUENCE_EDITOR",
+    "EDITOR",
+    "VISUAL",
     "GIT_PAGER",
     "GIT_PROXY_COMMAND",
     "GIT_EXTERNAL_DIFF",
@@ -101,6 +111,30 @@ fn is_sensitive_var(name: &str) -> bool {
             .any(|p| glob_match::glob_match(p, name))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SensitiveAssignment<'a> {
+    SafeKnownOverride,
+    Sensitive(&'a str),
+    NotSensitive,
+}
+
+fn classify_assignment(assignment: &Assignment) -> SensitiveAssignment<'_> {
+    let name = strip_subscript(&assignment.name);
+    if SAFE_EDITOR_OVERRIDE_NAMES.contains(&name)
+        && is_safe_program_value(
+            SafeProgramClass::ShellNoop,
+            &assignment.value,
+            assignment.value_meta,
+        )
+    {
+        SensitiveAssignment::SafeKnownOverride
+    } else if is_sensitive_var(name) {
+        SensitiveAssignment::Sensitive(name)
+    } else {
+        SensitiveAssignment::NotSensitive
+    }
+}
+
 /// Extract the target variable of a `printf -v NAME ...` invocation. `printf`
 /// parses options only BEFORE the format string, and `--` ends option parsing,
 /// so we scan only leading option tokens: stop at `--` or at the first token
@@ -144,8 +178,9 @@ fn ask_for(var: &str) -> PolicyResult {
 pub fn classify_sensitive_env(cmd: &SimpleCommand) -> Option<PolicyResult> {
     // Assignment vector — any leaf, commandless or inline.
     for a in &cmd.assignments {
-        if is_sensitive_var(&a.name) {
-            return Some(ask_for(strip_subscript(&a.name)));
+        match classify_assignment(a) {
+            SensitiveAssignment::SafeKnownOverride | SensitiveAssignment::NotSensitive => {}
+            SensitiveAssignment::Sensitive(name) => return Some(ask_for(name)),
         }
     }
     // `read` vector — coarse: any argv token that names a sensitive var.
@@ -197,6 +232,8 @@ mod tests {
         assert!(is_sensitive_var("RUSTC_WRAPPER"));
         assert!(is_sensitive_var("MANPAGER"));
         assert!(is_sensitive_var("GIT_WEB_BROWSER"));
+        assert!(is_sensitive_var("EDITOR"));
+        assert!(is_sensitive_var("VISUAL"));
         assert!(is_sensitive_var("GIT_SSH_COMMAND"));
         // Glob families
         assert!(is_sensitive_var("LD_PRELOAD"));
@@ -235,8 +272,6 @@ mod tests {
         assert!(!is_sensitive_var("ENVIRONMENT")); // ENV is exact, not a prefix
         assert!(!is_sensitive_var("MY_ENV"));
         assert!(!is_sensitive_var("GIT_CONFIG_KEYBOARD")); // GIT_CONFIG_KEY_* needs the trailing _
-        assert!(!is_sensitive_var("EDITOR")); // deliberately excluded
-        assert!(!is_sensitive_var("VISUAL"));
         assert!(!is_sensitive_var("BROWSER"));
         assert!(!is_sensitive_var("IFS"));
         assert!(!is_sensitive_var("HOME"));
@@ -249,6 +284,41 @@ mod tests {
         assert!(asks("LD_PRELOAD=/evil.so ls")); // inline on allowlisted
         assert!(asks("export PATH=.:$PATH")); // declaration builtin
         assert!(asks("PATH+=(/evil) ls")); // append form, name captured as PATH
+        assert!(asks("EDITOR=vim"));
+        assert!(asks("VISUAL=code some-tool"));
+        assert!(asks("EDITOR=\"$EDITOR\""));
+    }
+
+    #[test]
+    fn exact_static_editor_noops_are_transparent() {
+        for input in [
+            "GIT_EDITOR=true",
+            "GIT_SEQUENCE_EDITOR=true",
+            "EDITOR=true",
+            "VISUAL=true",
+            "EDITOR='true' echo hi",
+            "VISUAL=\"true\" echo hi",
+        ] {
+            assert!(
+                classify_sensitive_env(&sc(input)).is_none(),
+                "static no-op should be transparent: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn editor_noop_requires_exact_value_and_static_provenance() {
+        for input in [
+            "EDITOR=TRUE",
+            "EDITOR=/bin/true",
+            "EDITOR='true --help'",
+            "EDITOR=",
+            "EDITOR=\"$EDITOR\"",
+            "EDITOR=\"$(printf true)\"",
+            "EDITOR='tr''ue'",
+        ] {
+            assert!(asks(input), "unsafe editor value should ask: {input}");
+        }
     }
 
     #[test]
@@ -256,6 +326,8 @@ mod tests {
         assert!(asks("printf -v PATH /tmp")); // separate -v operand
         assert!(asks("printf -vPATH /tmp")); // combined -vNAME form
         assert!(asks("printf -v LD_PRELOAD /e.so"));
+        assert!(asks("printf -v EDITOR vim"));
+        assert!(asks("printf -vVISUAL code"));
     }
 
     #[test]
@@ -284,6 +356,8 @@ mod tests {
         assert!(asks("read PATH"));
         assert!(asks("read -r PATH foo"));
         assert!(asks("read PATH[0]")); // subscript on the read token
+        assert!(asks("read EDITOR"));
+        assert!(asks("read VISUAL"));
     }
 
     #[test]
@@ -326,5 +400,50 @@ mod tests {
                 "R11 sensitive set must cover git-env-rce-vars entry '{pat}' (concrete '{concrete}')",
             );
         }
+    }
+
+    #[test]
+    fn editor_exception_and_r11_classifier_cannot_drift() {
+        use crate::config::rules::EnvValueClass;
+        use crate::policy::{load_embedded_rules, Matcher};
+        use std::collections::BTreeSet;
+
+        let expected_names =
+            BTreeSet::from(["EDITOR", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "VISUAL"]);
+        let rust_safe_names = SAFE_EDITOR_OVERRIDE_NAMES
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(rust_safe_names, expected_names);
+        let cfg = load_embedded_rules().expect("load embedded rules");
+        let rule = cfg
+            .rules
+            .iter()
+            .find(|r| r.id == "git-env-rce-vars")
+            .expect("git-env-rce-vars rule present");
+        let Matcher::Command { env: Some(env), .. } = &rule.matcher else {
+            panic!("git-env-rce-vars should be a Command matcher with an env block");
+        };
+
+        assert_eq!(env.except.len(), 1, "exactly one reviewed exception");
+        let exception = &env.except[0];
+        assert!(
+            !exception.name_case_insensitive,
+            "editor exception names must be case-sensitive"
+        );
+        assert_eq!(exception.value_class, EnvValueClass::ShellNoop);
+        let yaml_names = exception
+            .names
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(yaml_names, expected_names);
+
+        let r11_names = SENSITIVE_EXACT
+            .iter()
+            .copied()
+            .filter(|name| expected_names.contains(name))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(r11_names, expected_names);
     }
 }
