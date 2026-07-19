@@ -13,10 +13,11 @@ All notable changes to this project will be documented in this file.
   a dangerous sibling.
 - **Structural `git_config` matchers for real leading `git -c` overrides.**
   The new `git_config` YAML variant matches canonical key/value records rather
-  than argv globs, compares configured keys case-insensitively, preserves value
-  provenance, and supports an exact static `shell-noop` exception. The embedded
-  critical rule for arbitrary `core.editor` / `sequence.editor` programs now
-  has the dedicated ID **`git-c-editor-program`**.
+  than argv globs, preserves value provenance, offers configurable
+  `key_case_insensitive` matching (default `false`), and supports an exact static
+  `shell-noop` exception. The embedded critical rule for arbitrary
+  `core.editor` / `sequence.editor` programs enables case-insensitive key
+  matching and now has the dedicated ID **`git-c-editor-program`**.
 
 ### Changed
 
@@ -53,9 +54,11 @@ All notable changes to this project will be documented in this file.
   a safe config read. Malformed `-c` / `--config-env` operands also stay out of
   the allowlist.
 - Unquoted pathname-expansion syntax (`*`, `?`, `[`) now carries unsafe parser
-  provenance. Pattern-bearing Git config keys remain ambiguous/ask, and
-  `gh api` endpoints with query strings must quote the `?`-containing endpoint
-  to retain read-only classification.
+  provenance. Pattern-bearing Git config keys fail closed: unidentified keys
+  ask, while an existing restrictive matcher can still recognize and deny the
+  raw token (for example, `url.*.insteadof`). `gh api` endpoints with query
+  strings must quote the `?`-containing endpoint to retain read-only
+  classification.
 
 ### Compatibility
 
