@@ -127,9 +127,7 @@ impl<'a> GitInvocation<'a> {
 
             if text == "-c" {
                 let operand = separate_operand(argv.get(index + 1));
-                ambiguous |= operand
-                    .as_ref()
-                    .is_none_or(|value| value.meta == ArgMeta::UnsafeString);
+                ambiguous |= operand.as_ref().is_none_or(config_operand_is_ambiguous);
                 globals.push(GitGlobalOption::Config { operand });
                 index = (index + 2).min(argv.len());
                 continue;
@@ -137,9 +135,7 @@ impl<'a> GitInvocation<'a> {
 
             if text == "--config-env" {
                 let operand = separate_operand(argv.get(index + 1));
-                ambiguous |= operand
-                    .as_ref()
-                    .is_none_or(|value| value.meta == ArgMeta::UnsafeString);
+                ambiguous |= operand.as_ref().is_none_or(config_env_operand_is_ambiguous);
                 globals.push(GitGlobalOption::ConfigEnv { operand });
                 index = (index + 2).min(argv.len());
                 continue;
@@ -160,7 +156,7 @@ impl<'a> GitInvocation<'a> {
 
             if let Some(value) = text.strip_prefix("--config-env=") {
                 let operand = joined_operand(value, arg.meta);
-                ambiguous |= operand.meta == ArgMeta::UnsafeString;
+                ambiguous |= config_env_operand_is_ambiguous(&operand);
                 globals.push(GitGlobalOption::ConfigEnv {
                     operand: Some(operand),
                 });
@@ -218,23 +214,24 @@ impl<'a> GitInvocation<'a> {
     /// Unsafe/dangling operands and unknown option shapes deliberately keep the
     /// invocation out of the allowlist even when a later token looks safe.
     pub(crate) fn is_allowlist_safe(&self) -> bool {
-        self.globals.iter().all(|global| match global {
-            GitGlobalOption::Config {
-                operand: Some(operand),
-            }
-            | GitGlobalOption::ConfigEnv {
-                operand: Some(operand),
-            }
-            | GitGlobalOption::ValueFlag {
-                operand: Some(operand),
-                ..
-            } => operand.meta != ArgMeta::UnsafeString,
-            GitGlobalOption::BooleanFlag(_) => true,
-            GitGlobalOption::Config { operand: None }
-            | GitGlobalOption::ConfigEnv { operand: None }
-            | GitGlobalOption::ValueFlag { operand: None, .. }
-            | GitGlobalOption::Ambiguous(_) => false,
-        })
+        !matches!(self.subcommand, SubcommandResolution::Ambiguous)
+            && self.globals.iter().all(|global| match global {
+                GitGlobalOption::Config {
+                    operand: Some(operand),
+                }
+                | GitGlobalOption::ConfigEnv {
+                    operand: Some(operand),
+                }
+                | GitGlobalOption::ValueFlag {
+                    operand: Some(operand),
+                    ..
+                } => operand.meta != ArgMeta::UnsafeString,
+                GitGlobalOption::BooleanFlag(_) => true,
+                GitGlobalOption::Config { operand: None }
+                | GitGlobalOption::ConfigEnv { operand: None }
+                | GitGlobalOption::ValueFlag { operand: None, .. }
+                | GitGlobalOption::Ambiguous(_) => false,
+            })
     }
 }
 
@@ -288,9 +285,41 @@ fn split_joined_value_flag(text: &str) -> Option<(&str, &str)> {
     })
 }
 
+fn config_operand_is_ambiguous(operand: &GitOptionOperand<'_>) -> bool {
+    operand.meta == ArgMeta::UnsafeString
+        || !is_well_formed_config_key(config_key(operand.text.as_ref()))
+}
+
+fn config_env_operand_is_ambiguous(operand: &GitOptionOperand<'_>) -> bool {
+    if operand.meta == ArgMeta::UnsafeString {
+        return true;
+    }
+    operand
+        .text
+        .split_once('=')
+        .is_none_or(|(key, envvar)| !is_well_formed_config_key(key) || envvar.is_empty())
+}
+
+fn config_key(operand: &str) -> &str {
+    operand.split_once('=').map_or(operand, |(key, _value)| key)
+}
+
+/// Validate the structural portion of Git's `section[.subsection].variable`
+/// key grammar. Git permits broad subsection text (including URL punctuation),
+/// so only the required outer boundaries are constrained here.
+fn is_well_formed_config_key(key: &str) -> bool {
+    let Some(first_dot) = key.find('.') else {
+        return false;
+    };
+    first_dot > 0
+        && key
+            .rsplit_once('.')
+            .is_some_and(|(_prefix, variable)| !variable.is_empty())
+}
+
 #[allow(dead_code)] // Used through the next task's structural override consumer.
 fn recognizable_key(key: &str, meta: ArgMeta) -> bool {
-    if key.is_empty() {
+    if !is_well_formed_config_key(key) {
         return false;
     }
     if meta != ArgMeta::UnsafeString {
@@ -365,6 +394,17 @@ mod tests {
                 value_meta: ArgMeta::PlainWord,
             })
         );
+
+        let invocation = scan("git -c http.https://example.com/.proxy=value status");
+        assert_eq!(invocation.subcommand, resolved("status"));
+        assert_eq!(
+            invocation.globals[0].config_override(),
+            Some(GitConfigOverride {
+                key: Some(Cow::Borrowed("http.https://example.com/.proxy")),
+                value: GitConfigValue::Explicit(Cow::Borrowed("value")),
+                value_meta: ArgMeta::PlainWord,
+            })
+        );
     }
 
     #[test]
@@ -405,17 +445,36 @@ mod tests {
     }
 
     #[test]
-    fn git_invocation_empty_config_operand_is_unknown() {
-        let invocation = scan("git -c '' status");
-        assert_eq!(invocation.subcommand, resolved("status"));
-        assert_eq!(
-            invocation.globals[0].config_override(),
-            Some(GitConfigOverride {
-                key: None,
-                value: GitConfigValue::Unknown,
-                value_meta: ArgMeta::RawString,
-            })
-        );
+    fn git_invocation_malformed_config_operands_are_ambiguous() {
+        for (source, expected_value) in [
+            ("git -c '' status", GitConfigValue::Unknown),
+            (
+                "git -c =true status",
+                GitConfigValue::Explicit(Cow::Borrowed("true")),
+            ),
+            ("git -c foo status", GitConfigValue::ImplicitEmpty),
+            (
+                "git -c .foo=true status",
+                GitConfigValue::Explicit(Cow::Borrowed("true")),
+            ),
+            (
+                "git -c foo.=true status",
+                GitConfigValue::Explicit(Cow::Borrowed("true")),
+            ),
+        ] {
+            let invocation = scan(source);
+            assert_eq!(
+                invocation.subcommand,
+                SubcommandResolution::Ambiguous,
+                "{source}"
+            );
+            assert_eq!(invocation.subcommand_index, 2, "{source}");
+            let override_value = invocation.globals[0]
+                .config_override()
+                .expect("Config operand must retain a structural candidate");
+            assert_eq!(override_value.key, None, "{source}");
+            assert_eq!(override_value.value, expected_value, "{source}");
+        }
     }
 
     #[test]
@@ -455,6 +514,10 @@ mod tests {
                 "git --config-env=core.editor=EDITOR status",
                 GitOptionForm::Joined,
             ),
+            (
+                "git --config-env=http.https://example.com/.proxy=PROXY status",
+                GitOptionForm::Joined,
+            ),
         ] {
             let invocation = scan(source);
             assert_eq!(invocation.subcommand, resolved("status"), "{source}");
@@ -466,6 +529,62 @@ mod tests {
             ));
             assert!(invocation.globals[0].config_override().is_none());
         }
+    }
+
+    #[test]
+    fn git_invocation_rejects_malformed_config_env_operands() {
+        for source in [
+            "git --config-env= status",
+            "git --config-env=foo status",
+            "git --config-env foo status",
+            "git --config-env =true status",
+            "git --config-env foo= status",
+            "git --config-env foo=ENV status",
+            "git --config-env=.foo=ENV status",
+            "git --config-env=foo.=ENV status",
+        ] {
+            let invocation = scan(source);
+            assert_eq!(
+                invocation.subcommand,
+                SubcommandResolution::Ambiguous,
+                "{source}"
+            );
+            assert!(matches!(
+                invocation.globals.as_slice(),
+                [GitGlobalOption::ConfigEnv { operand: Some(_) }]
+            ));
+        }
+    }
+
+    #[test]
+    fn git_invocation_preserves_repeated_config_overrides_in_order() {
+        let invocation = scan("git -c core.one=first -c core.two=second status");
+        assert_eq!(invocation.subcommand, resolved("status"));
+        assert_eq!(invocation.subcommand_index, 4);
+        assert_eq!(invocation.globals.len(), 2);
+        assert!(invocation
+            .globals
+            .iter()
+            .all(|global| matches!(global, GitGlobalOption::Config { .. })));
+        assert_eq!(
+            invocation
+                .globals
+                .iter()
+                .filter_map(GitGlobalOption::config_override)
+                .collect::<Vec<_>>(),
+            vec![
+                GitConfigOverride {
+                    key: Some(Cow::Borrowed("core.one")),
+                    value: GitConfigValue::Explicit(Cow::Borrowed("first")),
+                    value_meta: ArgMeta::PlainWord,
+                },
+                GitConfigOverride {
+                    key: Some(Cow::Borrowed("core.two")),
+                    value: GitConfigValue::Explicit(Cow::Borrowed("second")),
+                    value_meta: ArgMeta::PlainWord,
+                },
+            ]
+        );
     }
 
     #[test]
@@ -517,28 +636,36 @@ mod tests {
     }
 
     #[test]
-    fn git_invocation_recognizes_boolean_globals_and_repetition() {
-        let invocation = scan(
-            "/usr/bin/git --paginate --no-pager --no-replace-objects --bare --literal-pathspecs --glob-pathspecs --noglob-pathspecs --icase-pathspecs -C one -C two status",
-        );
+    fn git_invocation_recognizes_every_boolean_global() {
+        for flag in BOOLEAN_FLAGS {
+            let source = format!("git {flag} status");
+            let invocation = scan(&source);
+            assert_eq!(invocation.subcommand, resolved("status"), "{source}");
+            assert_eq!(invocation.subcommand_index, 1, "{source}");
+            assert!(matches!(
+                invocation.globals.as_slice(),
+                [GitGlobalOption::BooleanFlag(arg)] if arg.text == *flag
+            ));
+        }
+    }
+
+    #[test]
+    fn git_invocation_recognizes_repeated_globals_for_absolute_git() {
+        let invocation = scan("/usr/bin/git --paginate -C one -C two status");
         assert_eq!(invocation.subcommand, resolved("status"));
-        assert_eq!(invocation.subcommand_index, 12);
-        assert_eq!(invocation.globals.len(), 10);
+        assert_eq!(invocation.subcommand_index, 5);
+        assert_eq!(invocation.globals.len(), 3);
         assert!(matches!(
             invocation.globals[0],
             GitGlobalOption::BooleanFlag(_)
         ));
         assert!(matches!(
             invocation.globals[1],
-            GitGlobalOption::BooleanFlag(_)
+            GitGlobalOption::ValueFlag { name: "-C", .. }
         ));
         assert!(matches!(
             invocation.globals[2],
-            GitGlobalOption::BooleanFlag(_)
-        ));
-        assert!(matches!(
-            invocation.globals[3],
-            GitGlobalOption::BooleanFlag(_)
+            GitGlobalOption::ValueFlag { name: "-C", .. }
         ));
     }
 
