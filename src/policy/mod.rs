@@ -1703,8 +1703,8 @@ rules:
 
     #[test]
     fn test_env_safe_inner_allows() {
-        // Note: bare `env` matches the printenv rule (ask) in the real ruleset,
-        // so we use a minimal config where env is just allowlisted.
+        // Note: bare `env` shares the active printenv policy (ask) in the real
+        // ruleset, so we use a minimal config where env is just allowlisted.
         let yaml = r#"
 version: 1
 default_decision: ask
@@ -1731,8 +1731,8 @@ rules: []
 
     #[test]
     fn test_chained_wrappers_safe_allows() {
-        // Note: bare `env` matches the printenv rule (ask) in the real ruleset,
-        // so we use a minimal config where env is just allowlisted.
+        // Note: bare `env` shares the active printenv policy (ask) in the real
+        // ruleset, so we use a minimal config where env is just allowlisted.
         let yaml = r#"
 version: 1
 default_decision: ask

@@ -2,6 +2,76 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Value-aware rule exceptions for environment assignments.** Command
+  matchers now accept `env.except` entries with `names`, independent name-case
+  handling, and the `shell-noop` value class. Exceptions filter only the same
+  assignment that matched the parent `env.any_of`; one safe value cannot hide
+  a dangerous sibling.
+- **Structural `git_config` matchers for real leading `git -c` overrides.**
+  The new `git_config` YAML variant matches canonical key/value records rather
+  than argv globs, compares configured keys case-insensitively, preserves value
+  provenance, and supports an exact static `shell-noop` exception. The embedded
+  critical rule for arbitrary `core.editor` / `sequence.editor` programs now
+  has the dedicated ID **`git-c-editor-program`**.
+
+### Changed
+
+- **Exact static `true` is now the supported ephemeral Git editor
+  suppression value.** `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `EDITOR`, and
+  `VISUAL` assignments on Git commands, plus `git -c core.editor=true` and
+  `git -c sequence.editor=true`, no longer trigger the editor-program deny.
+  They inherit the underlying operation: read-only commands such as `status`
+  allow, while rebase start/continue/skip/abort/quit remains confirmable under
+  the existing `git-rebase` ask. Real-Git tests cover conflict continuation and
+  interactive sequence editing with failing editor sentinels.
+- **`env` now distinguishes execution from inspection.** `env NAME=value cmd`
+  is evaluated as a transparent executable wrapper with assignments propagated
+  to the inner command. `env`, `env -i`, and assignment-only forms remain
+  environment dumps governed by the active `printenv` rule. Disabling or
+  replacing `printenv` applies to both dump spellings with the replacement
+  rule's configured level, decision, reason, and precedence.
+
+### Hardened
+
+- Arbitrary, dynamic, empty, differently cased, path-qualified, or
+  argument-bearing editor values remain denied on identifiable Git editor
+  channels. Generic non-Git `EDITOR` / `VISUAL` program assignments now ask via
+  the sensitive-environment guard; exact static `true` stays transparent.
+- `git -c core.editor` and `git -c sequence.editor` without `=` now deny under
+  `git-c-editor-program`; the empty string Git exposes to these string-valued
+  settings is not treated as the executable `true`. Invalid joined forms such
+  as `git -ccore.editor=true` remain fail-closed at ask and are not supported
+  syntax. Persistent `git config` setters and all `--config-env` editor forms
+  remain denied.
+- Git's leading global-option scanner is now canonical across subcommand and
+  allowlist resolution. Unsafe joined globals such as
+  `git --git-dir="$REPO" config user.email` now ask instead of being treated as
+  a safe config read. Malformed `-c` / `--config-env` operands also stay out of
+  the allowlist.
+- Unquoted pathname-expansion syntax (`*`, `?`, `[`) now carries unsafe parser
+  provenance. Pattern-bearing Git config keys remain ambiguous/ask, and
+  `gh api` endpoints with query strings must quote the `?`-containing endpoint
+  to retain read-only classification.
+
+### Compatibility
+
+- Existing YAML remains valid, but schema compatibility is one-way: older
+  longline binaries cannot parse overlays containing `env.except` or
+  `git_config`. Upgrade longline before deploying such overlays. Under an older
+  binary, Claude hook config loading fails with exit 2; Codex follows its
+  existing fail-open hook posture and writes a fail-open audit entry.
+- `disable_rules: [git-c-rce-keys]` no longer disables editor protection,
+  because editor overrides moved to `git-c-editor-program`. An overlay that
+  intentionally disables both protections must name both rule IDs.
+- This is a pre-1.0 minor-release change rather than a patch: adding `except`
+  to the public Rust `EnvMatcher` breaks downstream struct-literal construction,
+  and adding the public `Matcher::GitConfig` variant affects exhaustive matches.
+  Existing YAML without the new fields continues to load unchanged.
+
 ## [0.20.5] - 2026-07-19
 
 ### Fixed

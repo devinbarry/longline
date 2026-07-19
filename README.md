@@ -215,6 +215,45 @@ You can also point to a rules file anywhere on disk:
 longline --config /path/to/rules.yaml
 ```
 
+## Safe Git editor suppression
+
+longline accepts these ephemeral editor overrides when the value is the exact,
+statically parsed command `true`:
+
+```bash
+GIT_EDITOR=true git ...
+GIT_SEQUENCE_EDITOR=true git ...
+EDITOR=true git ...
+VISUAL=true git ...
+git -c core.editor=true ...
+git -c sequence.editor=true ...
+```
+
+The override is transparent: it removes only the arbitrary-editor finding and
+inherits the underlying command's decision. For example,
+`GIT_EDITOR=true git status` is allowed, while both
+`GIT_EDITOR=true git rebase --continue` and
+`git -c core.editor=true rebase --continue` still ask under `git-rebase`.
+The sequence-editor forms likewise ask for an interactive rebase.
+
+This is deliberately narrow. Values such as `vim`, `/bin/true`, `TRUE`,
+`true --help`, whitespace-padded values, and expansions such as `$EDITOR`
+remain deny on a Git editor channel. A no-`=` override such as
+`git -c core.editor status` is also deny: Git exposes an empty string to the
+editor setting, not the executable `true`. The invalid joined spelling
+`git -ccore.editor=true status` remains fail-closed at ask. Persistent
+`git config core.editor true` / `git config sequence.editor true` mutations
+and every `--config-env` editor form remain deny. A safe editor override cannot
+hide another unsafe assignment or config override in the same command.
+
+Executable `env` forms are transparent wrappers too:
+`env GIT_EDITOR=true git status` inherits the inner Git decision, with the
+assignment propagated to policy. An `env` invocation without an executable
+operand (`env`, `env -i`, or `env NAME=value`) is still an environment dump and
+uses the active `printenv` rule, which asks by default. Disabling or replacing
+that rule applies consistently to both `printenv` and environment-dump `env`
+forms.
+
 ## Rules
 
 Rules are defined in YAML with four matcher types:
@@ -252,8 +291,8 @@ empty values, dynamic or unsafe values, paths, and differently cased values do
 not qualify. A dynamic key is not claimed by this targeted matcher and remains
 an `ask` through Git's canonical ambiguity gate. Persistent `git config`
 operations, `--config-env`, and editor-looking tokens after the subcommand are
-outside this matcher's scope. This schema is available for custom rules; no
-embedded rule uses it yet.
+outside this matcher's scope. The embedded `git-c-editor-program` rule uses
+this matcher, and the schema is also available to custom rules.
 
 Glob semantics (from the `glob-match` crate): `*` matches non-`/` chars; `**` matches all chars **but does not cross `/` in mid-pattern positions** — only at end-of-pattern is the cross-`/` semantic active.
 

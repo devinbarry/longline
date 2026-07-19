@@ -382,9 +382,10 @@ fn classify_gh_api(cmd: &SimpleCommand) -> Option<&'static str> {
     // accept basename-match (pre-R7 minimal/standard allowlist behaviour
     // is preserved for them).
     //
-    // (`env GH_TOKEN=... gh api` is independently caught by the printenv
-    // rule on the env wrapper; the inline-assignment form had no
-    // equivalent guard before this step.)
+    // (`env GH_TOKEN=... gh api` is independently gated after transparent
+    // wrapper extraction: the assignment is propagated to the inner `gh`,
+    // which is attributed to `gh-suspicious-wrapper`. The inline-assignment
+    // form had no equivalent guard before this step.)
     if cmd.name.as_deref() != Some("gh") {
         return None;
     }
