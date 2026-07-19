@@ -3,21 +3,9 @@
 use crate::parser::{Arg, SimpleCommand, Statement};
 
 use super::config::{AllowlistEntry, RulesConfig};
+use super::git_invocation::{GitInvocation, SubcommandResolution};
 use super::matching::normalize_command_name;
 use std::borrow::Cow;
-
-/// Git global value-flags (each consumes a separate following value token)
-/// that may appear before the subcommand. Shared by `strip_git_global_options`
-/// (allowlist) and the subcommand resolver (`matching::resolve_subcommand`).
-pub(crate) const GIT_GLOBAL_VALUE_FLAGS: &[&str] = &[
-    "-C",
-    "-c",
-    "--git-dir",
-    "--work-tree",
-    "--namespace",
-    "--config-env",
-    "--super-prefix",
-];
 
 /// Codex global value-flags that may appear before the subcommand. Shared by
 /// `strip_codex_global_flags` and the subcommand resolver.
@@ -77,81 +65,6 @@ fn strip_wrapper_value_flag_pairs(argv: &[Arg], value_flags: &[&str]) -> Vec<Arg
         out.push(argv[i].clone());
         i += 1;
     }
-    out
-}
-
-/// Git supports global options that appear before the subcommand. Strip those
-/// so allowlist entries like `git commit` still match `git -c commit.gpgsign=false commit`
-/// or `git -C /tmp status`.
-///
-/// Two shapes need stripping:
-/// - `-FLAG VALUE` pairs where VALUE is a separate token that doesn't start
-///   with `-` (so the existing flag-skip in `args_match_prefix` can't see past it).
-///   Examples: `-C <path>`, `-c <key>=<value>`, `--git-dir <path>`,
-///   `--work-tree <path>`, `--namespace <name>`, `--config-env <name>=<envvar>`.
-/// - Joined `--FLAG=VALUE` tokens are already single tokens starting with `-`
-///   so the existing flag-skip handles them — no strip needed.
-///
-/// Dangerous `-c key=value` keys (`core.sshCommand`, `core.editor`, `gpg.program`,
-/// `safe.directory`, etc.) are caught by deny rules in `git.yaml` BEFORE this
-/// strip ever runs — rules evaluate against the original argv. The strip only
-/// affects allowlist matching, not rule matching.
-fn strip_git_global_options(argv: &[Arg]) -> Vec<Arg> {
-    const VALUE_FLAGS: &[&str] = GIT_GLOBAL_VALUE_FLAGS;
-
-    let mut out = Vec::with_capacity(argv.len());
-    let mut i = 0;
-    let mut in_global_opts = true;
-
-    while i < argv.len() {
-        let arg = &argv[i];
-
-        if in_global_opts {
-            if arg.text == "--" {
-                // End of options marker; everything after is command args.
-                in_global_opts = false;
-                out.push(arg.clone());
-                i += 1;
-                continue;
-            }
-
-            if VALUE_FLAGS.contains(&arg.text.as_str()) {
-                // Skip the flag and its separate value token. Important:
-                // when the value is shell-expanded (`$VAR`, `${VAR}`,
-                // `$(cmd)`, etc.) tree-sitter classifies the arg as
-                // `UnsafeString`. Stripping such values would clear the
-                // unknown content from the allowlist's view of argv and
-                // let `git fetch` (or whatever subcommand follows) match
-                // the safe allowlist by accident. Refuse to strip
-                // unknowable values; the rule path will still see them
-                // and the allowlist will fall through to the default ask.
-                if let Some(value) = argv.get(i + 1) {
-                    if matches!(value.meta, crate::parser::ArgMeta::UnsafeString) {
-                        // Keep the flag + value in argv so allowlist
-                        // matching does not silently bless the rest.
-                        out.push(arg.clone());
-                        out.push(value.clone());
-                        i += 2;
-                        continue;
-                    }
-                }
-                i += 1;
-                if i < argv.len() {
-                    i += 1;
-                }
-                continue;
-            }
-
-            // First non-flag token is the git subcommand; stop treating subsequent args as global opts.
-            if !arg.text.starts_with('-') {
-                in_global_opts = false;
-            }
-        }
-
-        out.push(arg.clone());
-        i += 1;
-    }
-
     out
 }
 
@@ -254,29 +167,53 @@ fn args_match_prefix(required_args: &[&str], argv: &[Arg]) -> bool {
 /// global value-flag pairs that don't change which subcommand runs:
 /// git's `-C`/`-c`/... , codex's `--profile`/`--model`/... , and per-command
 /// value-flags. So `git -C /repo reset` is matched as if it were `git reset`.
-fn effective_argv(cmd: &SimpleCommand) -> Cow<'_, [Arg]> {
+struct EffectiveArgv<'a> {
+    argv: Cow<'a, [Arg]>,
+    git_subcommand: Option<SubcommandResolution>,
+    allowlist_safe: bool,
+}
+
+fn effective_argv(cmd: &SimpleCommand) -> EffectiveArgv<'_> {
     // Basename-normalize so an absolute-path invocation (`/usr/bin/git -C /p
     // status`) gets its globals stripped the same as bare `git` — otherwise
     // safe `/usr/bin/git -C <path> <subcmd>` would fall through to ask.
     let cmd_name = match &cmd.name {
         Some(n) => normalize_command_name(n),
-        None => return Cow::Borrowed(&cmd.argv),
+        None => {
+            return EffectiveArgv {
+                argv: Cow::Borrowed(&cmd.argv),
+                git_subcommand: None,
+                allowlist_safe: true,
+            };
+        }
     };
 
-    if cmd_name == "git"
-        && cmd
-            .argv
-            .iter()
-            .any(|a| GIT_GLOBAL_VALUE_FLAGS.contains(&a.text.as_str()))
-    {
-        Cow::Owned(strip_git_global_options(&cmd.argv))
+    if cmd_name == "git" {
+        let invocation = GitInvocation::new(&cmd.argv);
+        let allowlist_safe = invocation.is_allowlist_safe();
+        let argv = if allowlist_safe
+            && matches!(invocation.subcommand, SubcommandResolution::Resolved(_))
+        {
+            Cow::Borrowed(&cmd.argv[invocation.subcommand_index..])
+        } else {
+            Cow::Borrowed(cmd.argv.as_slice())
+        };
+        EffectiveArgv {
+            argv,
+            git_subcommand: Some(invocation.subcommand),
+            allowlist_safe,
+        }
     } else if cmd_name == "codex"
         && cmd
             .argv
             .iter()
             .any(|a| CODEX_GLOBAL_VALUE_FLAGS.contains(&a.text.as_str()))
     {
-        Cow::Owned(strip_codex_global_flags(&cmd.argv))
+        EffectiveArgv {
+            argv: Cow::Owned(strip_codex_global_flags(&cmd.argv)),
+            git_subcommand: None,
+            allowlist_safe: true,
+        }
     } else {
         let first_arg = cmd.argv.first().map(|a| a.text.as_str());
         let value_flags = crate::parser::wrappers::value_flags_for(cmd_name, first_arg);
@@ -286,9 +223,17 @@ fn effective_argv(cmd: &SimpleCommand) -> Cow<'_, [Arg]> {
                 .iter()
                 .any(|a| value_flags.contains(&a.text.as_str()))
         {
-            Cow::Owned(strip_wrapper_value_flag_pairs(&cmd.argv, value_flags))
+            EffectiveArgv {
+                argv: Cow::Owned(strip_wrapper_value_flag_pairs(&cmd.argv, value_flags)),
+                git_subcommand: None,
+                allowlist_safe: true,
+            }
         } else {
-            Cow::Borrowed(&cmd.argv)
+            EffectiveArgv {
+                argv: Cow::Borrowed(&cmd.argv),
+                git_subcommand: None,
+                allowlist_safe: true,
+            }
         }
     }
 }
@@ -356,7 +301,8 @@ fn command_label_direct(cmd: &SimpleCommand) -> String {
     // produce an unbounded label. 3 covers every real nesting (e.g.
     // `ansible-galaxy collection install`, `git submodule foobar xyz`).
     const MAX_SUBCOMMAND_DEPTH: usize = 3;
-    let argv = effective_argv(cmd);
+    let effective = effective_argv(cmd);
+    let argv = effective.argv;
     let mut parts: Vec<&str> = Vec::new();
     for arg in argv.iter() {
         if parts.len() >= MAX_SUBCOMMAND_DEPTH {
@@ -388,7 +334,11 @@ fn find_matching_entry<'a>(
 ) -> Option<&'a AllowlistEntry> {
     let cmd_name = cmd.name.as_deref()?;
 
-    let argv = effective_argv(cmd);
+    let effective = effective_argv(cmd);
+    if !effective.allowlist_safe {
+        return None;
+    }
+    let argv = effective.argv;
 
     for entry in &config.allowlists.commands {
         if check_trust && entry.trust > config.trust_level {
@@ -406,6 +356,14 @@ fn find_matching_entry<'a>(
             return Some(entry);
         }
         let required_args = &parts[1..];
+        if let Some(SubcommandResolution::Resolved(subcommand)) = &effective.git_subcommand {
+            if required_args
+                .first()
+                .is_some_and(|required| *required != normalize_arg(subcommand))
+            {
+                continue;
+            }
+        }
         if args_match_prefix(required_args, argv.as_ref()) {
             return Some(entry);
         }
@@ -493,6 +451,32 @@ mod tests {
             redirects: vec![],
             assignments: vec![],
             embedded_substitutions: vec![],
+        }
+    }
+
+    fn parse_cmd(source: &str) -> SimpleCommand {
+        match crate::parser::parse(source).unwrap() {
+            Statement::SimpleCommand(cmd) => cmd,
+            other => panic!("expected simple command, got {other:?}"),
+        }
+    }
+
+    fn config_with_allowlist(command: &str) -> RulesConfig {
+        RulesConfig {
+            version: 1,
+            default_decision: crate::domain::Decision::Ask,
+            safety_level: crate::policy::SafetyLevel::High,
+            trust_level: crate::policy::TrustLevel::default(),
+            allowlists: crate::policy::Allowlists {
+                commands: vec![crate::policy::AllowlistEntry {
+                    command: command.to_string(),
+                    trust: crate::policy::TrustLevel::Standard,
+                    reason: None,
+                    source: crate::policy::RuleSource::default(),
+                }],
+                paths: vec![],
+            },
+            rules: vec![],
         }
     }
 
@@ -709,96 +693,6 @@ mod tests {
         assert!(args_match_prefix(required, &argv));
     }
 
-    // ================================================================
-    // strip_git_global_options tests
-    // ================================================================
-
-    #[test]
-    fn test_strip_git_global_options_dash_c_path() {
-        let argv = make_argv(&["-C", "/tmp", "status"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_multiple_dash_c() {
-        let argv = make_argv(&["-C", "/tmp", "-C", "/other", "status"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_lowercase_c_keyvalue() {
-        let argv = make_argv(&["-c", "commit.gpgsign=false", "commit", "-m", "x"]);
-        assert_eq!(
-            strip_git_global_options(&argv),
-            make_argv(&["commit", "-m", "x"])
-        );
-    }
-
-    #[test]
-    fn test_strip_git_global_options_combined_uppercase_and_lowercase_c() {
-        let argv = make_argv(&["-C", "/tmp", "-c", "user.email=x@y", "commit", "-m", "x"]);
-        assert_eq!(
-            strip_git_global_options(&argv),
-            make_argv(&["commit", "-m", "x"])
-        );
-    }
-
-    #[test]
-    fn test_strip_git_global_options_git_dir_space_form() {
-        let argv = make_argv(&["--git-dir", "/tmp/g", "status"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_work_tree_space_form() {
-        let argv = make_argv(&["--work-tree", "/tmp/w", "status"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["status"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_namespace_space_form() {
-        let argv = make_argv(&["--namespace", "ns", "log"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["log"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_config_env_space_form() {
-        let argv = make_argv(&["--config-env", "user.name=GIT_USER", "commit"]);
-        assert_eq!(strip_git_global_options(&argv), make_argv(&["commit"]));
-    }
-
-    #[test]
-    fn test_strip_git_global_options_joined_form_passes_through() {
-        // Joined --FLAG=VALUE is a single token starting with `-`; the existing
-        // args_match_prefix flag-skip handles it. Strip leaves it alone.
-        let argv = make_argv(&["--git-dir=/tmp/g", "status"]);
-        assert_eq!(
-            strip_git_global_options(&argv),
-            make_argv(&["--git-dir=/tmp/g", "status"])
-        );
-    }
-
-    #[test]
-    fn test_strip_git_global_options_double_dash_terminates() {
-        // After `--`, nothing is treated as a global option.
-        let argv = make_argv(&["--", "-c", "commit.gpgsign=false", "commit"]);
-        assert_eq!(
-            strip_git_global_options(&argv),
-            make_argv(&["--", "-c", "commit.gpgsign=false", "commit"])
-        );
-    }
-
-    #[test]
-    fn test_strip_git_global_options_stops_at_subcommand() {
-        // `-c` after the subcommand is a subcommand argument, not a git
-        // global option, so it is preserved.
-        let argv = make_argv(&["log", "-c", "key=val"]);
-        assert_eq!(
-            strip_git_global_options(&argv),
-            make_argv(&["log", "-c", "key=val"])
-        );
-    }
-
     #[test]
     fn test_find_allowlist_match_dash_c_keyvalue_commit_matches_git_commit() {
         let config = RulesConfig {
@@ -843,6 +737,69 @@ mod tests {
 
         let cmd = test_git_cmd(vec!["-C", "/tmp", "status"]);
         assert_eq!(find_allowlist_match(&config, &cmd), Some("git status"));
+    }
+
+    #[test]
+    fn test_git_allowlist_accepts_every_complete_safe_global_form() {
+        let config = config_with_allowlist("git status");
+        for source in [
+            "git -C repo status",
+            "git -c benign.key=value status",
+            "git --git-dir repo status",
+            "git --git-dir=/repo status",
+            "git --work-tree repo status",
+            "git --work-tree=/repo status",
+            "git --namespace ns status",
+            "git --namespace=ns status",
+            "git --super-prefix prefix status",
+            "git --super-prefix=prefix status",
+            "git --config-env benign.key=ENV status",
+            "git --config-env=benign.key=ENV status",
+            "git --paginate -C repo -c benign.key=value status",
+            "/usr/bin/git -C repo status",
+        ] {
+            assert_eq!(
+                find_allowlist_match(&config, &parse_cmd(source)),
+                Some("git status"),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_git_allowlist_rejects_every_ambiguous_or_invalid_prefix() {
+        let config = config_with_allowlist("git status");
+        for source in [
+            "git -ccore.editor=true status",
+            "git -C \"$REPO\" status",
+            "git -c \"$KEY=true\" status",
+            "git -c \"core.editor=$EDITOR\" status",
+            "git --git-dir \"$(pwd)\" status",
+            "git --git-dir=\"$REPO\" status",
+            "git --config-env \"$PAIR\" status",
+            "git -C/repo status",
+            "git --git-dirx=/repo status",
+            "git --unknown status",
+            "git -- -c core.editor=true status",
+        ] {
+            assert_eq!(
+                find_allowlist_match(&config, &parse_cmd(source)),
+                None,
+                "ambiguous prefix must not expose a later safe-looking subcommand: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_git_allowlist_rejects_dangling_value_globals() {
+        let config = config_with_allowlist("git -C");
+        for source in ["git -C", "git -c", "git --git-dir", "git --config-env"] {
+            assert_eq!(
+                find_allowlist_match(&config, &parse_cmd(source)),
+                None,
+                "{source}"
+            );
+        }
     }
 
     #[test]

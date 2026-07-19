@@ -6,6 +6,7 @@ use std::borrow::Cow;
 use super::config::{
     EnvMatcher, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList,
 };
+use super::git_invocation::{GitInvocation, SubcommandResolution};
 
 /// Extract basename from a command path for matching.
 /// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
@@ -18,26 +19,9 @@ pub fn normalize_command_name(name: &str) -> &str {
 /// global-option pairs when resolving the effective subcommand.
 fn global_value_flags_for(cmd_name: &str, first_arg: Option<&str>) -> &'static [&'static str] {
     match cmd_name {
-        "git" => super::allowlist::GIT_GLOBAL_VALUE_FLAGS,
         "codex" => super::allowlist::CODEX_GLOBAL_VALUE_FLAGS,
         _ => crate::parser::wrappers::value_flags_for(cmd_name, first_arg),
     }
-}
-
-/// Outcome of resolving a command's effective subcommand for the
-/// `ArgsMatcher::subcommand` pin.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SubcommandResolution {
-    /// The effective subcommand was found.
-    Resolved(String),
-    /// A subcommand exists but is unknowable — a global value-flag's value is
-    /// a shell expansion/substitution (`git -C "$REPO" …`) or is dangling, so
-    /// we cannot locate the subcommand. Gate-biased: MATCHES ANY pinned
-    /// subcommand (over-ask is safe; missing a real `--force` is the failure).
-    Ambiguous,
-    /// There is no positional subcommand at all (`git --version`, `git -h`,
-    /// bare `git`). MATCHES NO pin — there is nothing to gate.
-    Absent,
 }
 
 /// Resolve a command's *effective subcommand* — the first positional argv
@@ -51,15 +35,17 @@ pub enum SubcommandResolution {
 /// [`SubcommandResolution::Absent`] (⇒ match no pin) when there is no
 /// positional token at all.
 ///
-/// This is intentionally a dedicated raw-argv scan and NOT a reuse of
-/// `effective_argv().find(...)`: that helper *retains* an `UnsafeString`
-/// value pair, so `.find(!starts_with('-'))` would return the `$REPO` token
-/// rather than signalling ambiguity, silently missing the gate.
+/// Git delegates to [`GitInvocation`], the canonical structural scan shared
+/// with allowlist matching and subcommand-boundary consumers. Other command
+/// families retain their generic value-flag scan.
 pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
     let Some(name) = cmd.name.as_deref() else {
         return SubcommandResolution::Absent;
     };
     let cmd_name = normalize_command_name(name);
+    if cmd_name == "git" {
+        return GitInvocation::new(&cmd.argv).subcommand;
+    }
     let first_arg = cmd.argv.first().map(|a| a.text.as_str());
     let value_flags = global_value_flags_for(cmd_name, first_arg);
 
@@ -114,7 +100,7 @@ pub fn resolve_subcommand(cmd: &SimpleCommand) -> SubcommandResolution {
 /// without the clamp a dangling `git -C` would yield an out-of-range index — an
 /// out-of-bounds slice in `argv_from_subcommand`, and an `argv.len() - index`
 /// underflow at the `min_args` call site (debug panic). Generic across command
-/// families: strips git / codex / wrapper leading value-flags via
+/// families: Git delegates to [`GitInvocation`], while codex and wrappers use
 /// `global_value_flags_for`. Shared by `argv_from_subcommand` (slice) and the
 /// `min_args` value-presence count, so both see argv the same way.
 fn subcommand_start_index(cmd: &SimpleCommand) -> usize {
@@ -122,6 +108,9 @@ fn subcommand_start_index(cmd: &SimpleCommand) -> usize {
         return 0;
     };
     let cmd_name = normalize_command_name(name);
+    if cmd_name == "git" {
+        return GitInvocation::new(&cmd.argv).subcommand_index;
+    }
     let first_arg = cmd.argv.first().map(|a| a.text.as_str());
     let value_flags = global_value_flags_for(cmd_name, first_arg);
 
@@ -487,9 +476,11 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
 mod tests {
     use super::arg_matches_flag;
     use super::matches_pipeline;
-    use super::{resolve_subcommand, SubcommandResolution};
+    use super::{matches_rule, resolve_subcommand, SubcommandResolution};
     use crate::parser::Arg;
-    use crate::policy::config::{FlagsMatcher, PipelineMatcher, StageMatcher, StringOrList};
+    use crate::policy::config::{
+        ArgsMatcher, FlagsMatcher, Matcher, PipelineMatcher, StageMatcher, StringOrList,
+    };
 
     fn parse_cmd(s: &str) -> crate::parser::SimpleCommand {
         match crate::parser::parse(s).unwrap() {
@@ -500,6 +491,30 @@ mod tests {
 
     fn resolved(s: &str) -> SubcommandResolution {
         SubcommandResolution::Resolved(s.to_string())
+    }
+
+    fn command_matcher(flags: Option<FlagsMatcher>, args: ArgsMatcher) -> Matcher {
+        Matcher::Command {
+            command: StringOrList::Single("git".to_string()),
+            flags,
+            args: Some(args),
+            env: None,
+        }
+    }
+
+    fn args_matcher(subcommand: &[&str]) -> ArgsMatcher {
+        ArgsMatcher {
+            any_of: vec![],
+            all_of: vec![],
+            none_of: vec![],
+            argv_first_not: vec![],
+            subcommand: subcommand
+                .iter()
+                .map(|value| (*value).to_string())
+                .collect(),
+            case_insensitive: false,
+            min_args: None,
+        }
     }
 
     #[test]
@@ -527,6 +542,16 @@ mod tests {
         );
         assert_eq!(
             resolve_subcommand(&parse_cmd("git --git-dir /tmp/.git status")),
+            resolved("status")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git --git-dir=/tmp/.git status")),
+            resolved("status")
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd(
+                "git --paginate -C /repo -c user.name=x --work-tree=/repo status"
+            )),
             resolved("status")
         );
     }
@@ -559,6 +584,14 @@ mod tests {
         // Command substitution value is equally unknowable.
         assert_eq!(
             resolve_subcommand(&parse_cmd("git -C \"$(pwd)\" checkout --force")),
+            SubcommandResolution::Ambiguous
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git -ccore.editor=true status")),
+            SubcommandResolution::Ambiguous
+        );
+        assert_eq!(
+            resolve_subcommand(&parse_cmd("git --git-dirx=/repo status")),
             SubcommandResolution::Ambiguous
         );
     }
@@ -639,8 +672,72 @@ mod tests {
         // to argv.len() — guards the min_args underflow (argv=["-C"], len 1).
         assert_eq!(idx("git -C"), 1);
         assert_eq!(idx("git -c"), 1);
+        assert_eq!(idx("git -ccore.editor=true status"), 1);
+        assert_eq!(
+            idx("git --paginate -C /repo -c benign.key=value --work-tree=/repo status"),
+            6
+        );
         // Non-git command: no git globals, first positional at index 0.
         assert_eq!(idx("docker rm -f x"), 0);
+    }
+
+    #[test]
+    fn test_git_ambiguous_subcommand_does_not_match_a_pin_by_itself() {
+        let matcher = command_matcher(None, args_matcher(&["status"]));
+        for source in [
+            "git -ccore.editor=true status",
+            "git -C \"$REPO\" status",
+            "git --unknown status",
+        ] {
+            assert!(!matches_rule(&matcher, &parse_cmd(source)), "{source}");
+        }
+    }
+
+    #[test]
+    fn test_git_pinned_flags_start_at_canonical_subcommand_boundary() {
+        let matcher = command_matcher(
+            Some(FlagsMatcher {
+                any_of: vec!["-C".to_string()],
+                all_of: vec![],
+                none_of: vec![],
+                starts_with: vec![],
+            }),
+            args_matcher(&["branch"]),
+        );
+
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -C /repo branch --list")
+        ));
+        assert!(matches_rule(
+            &matcher,
+            &parse_cmd("git -C /repo branch -C old new")
+        ));
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -C \"$REPO\" branch --list")
+        ));
+    }
+
+    #[test]
+    fn test_git_min_args_uses_canonical_clamped_boundary() {
+        let mut args = args_matcher(&[]);
+        args.all_of = vec!["config".to_string()];
+        args.min_args = Some(3);
+        let matcher = command_matcher(None, args);
+
+        for source in [
+            "git -C /repo config core.editor",
+            "git --git-dir=/repo/.git config core.editor",
+            "git -C \"$REPO\" config core.editor",
+            "git -C",
+        ] {
+            assert!(!matches_rule(&matcher, &parse_cmd(source)), "{source}");
+        }
+        assert!(matches_rule(
+            &matcher,
+            &parse_cmd("git -C /repo config core.editor true")
+        ));
     }
 
     fn make_pipeline(commands: &[&str]) -> crate::parser::Pipeline {

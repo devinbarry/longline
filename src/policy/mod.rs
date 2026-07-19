@@ -2,6 +2,7 @@ mod allowlist;
 mod config;
 mod descriptive_asks;
 pub mod gh_classifier;
+mod git_invocation;
 mod matching;
 pub(crate) mod redirects;
 mod sensitive_env;

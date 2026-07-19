@@ -493,20 +493,21 @@ tests:
     command: 'git -C "$REPO" config user.email'
     expected:
       decision: ask
-  # Unsafe JOINED-form global -> allow (joined token skipped, NOT retained)
-  - id: git-gitdir-unsafe-config-hookspath-read-allow
+  # Unsafe JOINED-form global -> ask. The canonical scanner applies the same
+  # fail-closed provenance gate to joined and separate global operands.
+  - id: git-gitdir-unsafe-config-hookspath-read-ask
     command: 'git --git-dir="$REPO" config core.hooksPath'
     expected:
-      decision: allow
+      decision: ask
   - id: git-gitdir-unsafe-config-hookspath-write-deny
     command: 'git --git-dir="$REPO" config core.hooksPath /tmp/x'
     expected:
       decision: deny
       rule_id: git-config-corrupting-core-flags
-  - id: git-gitdir-unsafe-config-useremail-read-allow
+  - id: git-gitdir-unsafe-config-useremail-read-ask
     command: 'git --git-dir="$REPO" config user.email'
     expected:
-      decision: allow
+      decision: ask
   # Dangling leading global (no config token) -> ask; MUST NOT panic.
   # Exercises the clamped subcommand_start_index on a trailing value-flag,
   # reached because min_args is checked before the all_of:[config] constraint.
