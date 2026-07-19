@@ -410,6 +410,27 @@ fn back_compat_bare_equals_hook_claude_safe() {
 }
 
 #[test]
+fn back_compat_bare_equals_hook_claude_safe_git_editor_override() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let home = dir.path();
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "GIT_EDITOR=true git status"},
+        "session_id": "back-compat-safe-git-editor",
+        "cwd": "/tmp"
+    })
+    .to_string();
+
+    let bare = support::bin::run_longline(&[], home, Some(&input));
+    let explicit = support::bin::run_longline(&["hook", "claude"], home, Some(&input));
+
+    assert_eq!(bare.stdout, explicit.stdout, "stdout mismatch");
+    assert_eq!(bare.stderr, explicit.stderr, "stderr mismatch");
+    assert_eq!(bare.exit_code, explicit.exit_code, "exit code mismatch");
+}
+
+#[test]
 fn back_compat_bare_equals_hook_claude_dangerous() {
     let dir = tempfile::TempDir::new().unwrap();
     let home = dir.path();

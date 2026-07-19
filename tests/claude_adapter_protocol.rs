@@ -2,6 +2,7 @@ mod support;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use support::audit::last_audit_entry;
 use support::bin::longline_bin;
 use support::claude::{run_claude_hook, ClaudeRunResultExt, ClaudeTestEnvExt};
 use support::config::TestEnv;
@@ -307,4 +308,47 @@ fn test_e2e_claude_log_entry_includes_runtime_field() {
     assert_eq!(entry["runtime"], "claude");
     assert_eq!(entry["tool"], "Bash");
     assert_eq!(entry["decision"], "deny");
+}
+
+#[test]
+fn git_editor_overrides_preserve_claude_wire_and_audit_contract() {
+    let cases = [
+        ("GIT_EDITOR=true git status", "allow", None),
+        (
+            "GIT_EDITOR=true git rebase --continue",
+            "ask",
+            Some("git-rebase"),
+        ),
+        (
+            "GIT_EDITOR=/tmp/arbitrary-editor git status",
+            "deny",
+            Some("git-env-rce-vars"),
+        ),
+        (
+            r#"git -c "core.editor=$EDITOR" status"#,
+            "deny",
+            Some("git-c-editor-program"),
+        ),
+    ];
+
+    for (command, decision, expected_rule) in cases {
+        let env = TestEnv::new().build();
+        let result = env.run_claude_hook(command);
+
+        assert_eq!(result.exit_code, 0, "command: {command}");
+        result.assert_claude_decision(decision);
+
+        let entry = last_audit_entry(env.home_path(), "claude");
+        assert_eq!(entry["runtime"], "claude", "command: {command}");
+        assert_eq!(entry["decision"], decision, "command: {command}");
+        if let Some(rule) = expected_rule {
+            assert!(
+                entry["matched_rules"]
+                    .as_array()
+                    .is_some_and(|rules| rules.iter().any(|value| value == rule)),
+                "expected audit entry to name {rule} for {command}: {entry}"
+            );
+            result.assert_claude_reason_contains(rule);
+        }
+    }
 }

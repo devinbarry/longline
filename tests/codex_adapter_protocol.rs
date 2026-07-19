@@ -1,6 +1,7 @@
 mod support;
 
 use serde_json::json;
+use support::audit::{assert_audit_rule, last_audit_entry};
 use support::bin::{run_longline, run_longline_allow_stdin_write_error};
 use support::codex::CodexRunResultExt;
 use support::config::TestEnv;
@@ -341,6 +342,110 @@ fn codex_log_entry_includes_runtime_field() {
     assert_eq!(entry["runtime"], "codex");
     assert_eq!(entry["tool"], "Bash");
     assert_eq!(entry["decision"], "deny");
+}
+
+#[test]
+fn git_editor_overrides_preserve_codex_pre_tool_use_contract_and_audit() {
+    let cases = [
+        ("GIT_EDITOR=true git status", None, "allow", None),
+        (
+            "GIT_EDITOR=true git rebase --continue",
+            None,
+            "ask",
+            Some("git-rebase"),
+        ),
+        (
+            "GIT_EDITOR=/tmp/arbitrary-editor git status",
+            Some("deny"),
+            "deny",
+            Some("git-env-rce-vars"),
+        ),
+        (
+            r#"git -c "core.editor=$EDITOR" status"#,
+            Some("deny"),
+            "deny",
+            Some("git-c-editor-program"),
+        ),
+    ];
+
+    for (command, wire_decision, audit_decision, expected_rule) in cases {
+        let env = TestEnv::new().build();
+        let result = run_codex(&env, &codex_input("PreToolUse", "Bash", command));
+
+        assert_eq!(result.exit_code, 0, "command: {command}");
+        assert_eq!(
+            result.codex_pre_tool_use_decision().as_deref(),
+            wire_decision,
+            "command: {command}; stdout: {:?}",
+            result.stdout
+        );
+        if wire_decision == Some("deny") {
+            let rule = expected_rule.expect("deny case must name its rule");
+            assert!(
+                result
+                    .codex_pre_tool_use_reason()
+                    .is_some_and(|reason| reason.contains(rule)),
+                "deny reason must name {rule} for {command}: {:?}",
+                result.stdout
+            );
+        }
+        let entry = last_audit_entry(env.home_path(), "codex");
+        assert_eq!(entry["runtime"], "codex", "command: {command}");
+        assert_eq!(entry["decision"], audit_decision, "command: {command}");
+        assert_audit_rule(&entry, expected_rule, command);
+    }
+}
+
+#[test]
+fn git_editor_overrides_preserve_codex_permission_request_contract_and_audit() {
+    let cases = [
+        ("GIT_EDITOR=true git status", Some("allow"), "allow", None),
+        (
+            "GIT_EDITOR=true git rebase --continue",
+            None,
+            "ask",
+            Some("git-rebase"),
+        ),
+        (
+            "GIT_EDITOR=/tmp/arbitrary-editor git status",
+            Some("deny"),
+            "deny",
+            Some("git-env-rce-vars"),
+        ),
+        (
+            r#"git -c "core.editor=$EDITOR" status"#,
+            Some("deny"),
+            "deny",
+            Some("git-c-editor-program"),
+        ),
+    ];
+
+    for (command, behavior, audit_decision, expected_rule) in cases {
+        let env = TestEnv::new().build();
+        let result = run_codex(&env, &codex_input("PermissionRequest", "Bash", command));
+
+        assert_eq!(result.exit_code, 0, "command: {command}");
+        assert_eq!(
+            result.codex_permission_request_behavior().as_deref(),
+            behavior,
+            "command: {command}; stdout: {:?}",
+            result.stdout
+        );
+        if behavior == Some("deny") {
+            let rule = expected_rule.expect("deny case must name its rule");
+            assert!(
+                result
+                    .codex_permission_request_message()
+                    .is_some_and(|message| message.contains(rule)),
+                "deny message must name {rule} for {command}: {:?}",
+                result.stdout
+            );
+        }
+        let entry = last_audit_entry(env.home_path(), "codex");
+        assert_eq!(entry["runtime"], "codex", "command: {command}");
+        assert_eq!(entry["decision"], audit_decision, "command: {command}");
+        assert_audit_rule(&entry, expected_rule, command);
+    }
 }
 
 // Spec §Audit Log Layout commits to standard `session_id` on fail-open

@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod assertions;
+pub mod audit;
 pub mod bin;
 pub mod claude;
 pub mod cli;
