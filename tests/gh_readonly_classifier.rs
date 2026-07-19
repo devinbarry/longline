@@ -146,6 +146,19 @@ fn api_unsafe_argv_returns_none() {
 }
 
 #[test]
+fn api_query_endpoint_requires_quoting() {
+    assert_eq!(
+        classify("gh api repos/owner/repo/git/trees/main?recursive=1"),
+        None,
+        "unquoted ? may pathname-expand"
+    );
+    assert_eq!(
+        classify("gh api 'repos/owner/repo/git/trees/main?recursive=1'"),
+        Some("api (GET)")
+    );
+}
+
+#[test]
 fn api_short_value_flags_consume_value_for_endpoint_detection() {
     // -q is short for --jq; -t for --template; -p for --preview.
     // Without consuming their values, the value tokens (e.g. ".") would

@@ -294,10 +294,9 @@ fn config_env_operand_is_ambiguous(operand: &GitOptionOperand<'_>) -> bool {
     if operand.meta == ArgMeta::UnsafeString {
         return true;
     }
-    operand
-        .text
-        .split_once('=')
-        .is_none_or(|(key, envvar)| !is_well_formed_config_key(key) || envvar.is_empty())
+    operand.text.split_once('=').is_none_or(|(key, envvar)| {
+        !is_well_formed_config_key(key) || envvar.is_empty() || envvar.contains('=')
+    })
 }
 
 fn config_key(operand: &str) -> &str {
@@ -306,15 +305,30 @@ fn config_key(operand: &str) -> &str {
 
 /// Validate the structural portion of Git's `section[.subsection].variable`
 /// key grammar. Git permits broad subsection text (including URL punctuation),
-/// so only the required outer boundaries are constrained here.
+/// so the middle remains unrestricted while the outer section and variable
+/// components use their documented character grammar.
 fn is_well_formed_config_key(key: &str) -> bool {
     let Some(first_dot) = key.find('.') else {
         return false;
     };
-    first_dot > 0
-        && key
-            .rsplit_once('.')
-            .is_some_and(|(_prefix, variable)| !variable.is_empty())
+    let section = &key[..first_dot];
+    if section.is_empty()
+        || !section
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return false;
+    }
+
+    let variable = key
+        .rsplit_once('.')
+        .map(|(_prefix, variable)| variable)
+        .unwrap_or_default();
+    let mut chars = variable.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && chars.all(|character| character.is_ascii_alphanumeric() || character == '-')
 }
 
 #[allow(dead_code)] // Used through the next task's structural override consumer.
@@ -542,6 +556,8 @@ mod tests {
             "git --config-env foo=ENV status",
             "git --config-env=.foo=ENV status",
             "git --config-env=foo.=ENV status",
+            "git --config-env benign.key=ENV=OTHER status",
+            "git --config-env=benign.key=ENV=OTHER status",
         ] {
             let invocation = scan(source);
             assert_eq!(
@@ -553,6 +569,73 @@ mod tests {
                 invocation.globals.as_slice(),
                 [GitGlobalOption::ConfigEnv { operand: Some(_) }]
             ));
+        }
+    }
+
+    #[test]
+    fn git_invocation_glob_config_keys_are_ambiguous_for_every_quote_form() {
+        for (operand, expected_meta) in [
+            ("core.*=evil", ArgMeta::UnsafeString),
+            ("c?re.editor=evil", ArgMeta::UnsafeString),
+            ("core.[a]ditor=evil", ArgMeta::UnsafeString),
+            ("core.*", ArgMeta::UnsafeString),
+            ("'core.*=evil'", ArgMeta::RawString),
+            ("\"core.*=evil\"", ArgMeta::SafeString),
+            ("'c?re.editor=evil'", ArgMeta::RawString),
+            ("\"c?re.editor=evil\"", ArgMeta::SafeString),
+            ("'core.[a]ditor=evil'", ArgMeta::RawString),
+            ("\"core.[a]ditor=evil\"", ArgMeta::SafeString),
+            ("'core.*'", ArgMeta::RawString),
+            ("\"core.*\"", ArgMeta::SafeString),
+        ] {
+            let source = format!("git -c {operand} status");
+            let invocation = scan(&source);
+            assert_eq!(
+                invocation.subcommand,
+                SubcommandResolution::Ambiguous,
+                "{source}"
+            );
+            assert!(matches!(
+                invocation.globals.as_slice(),
+                [GitGlobalOption::Config {
+                    operand: Some(GitOptionOperand { meta, .. })
+                }] if *meta == expected_meta
+            ));
+            assert_eq!(
+                invocation.globals[0]
+                    .config_override()
+                    .expect("Config candidate must be retained")
+                    .key,
+                None,
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn git_config_key_validator_enforces_outer_grammar_only() {
+        for valid in [
+            "core.editor",
+            "core.editor-name2",
+            "core..editor",
+            "http.https://example.com/.proxy",
+            "includeIf.gitdir:/repo/.path",
+        ] {
+            assert!(is_well_formed_config_key(valid), "valid: {valid}");
+        }
+        for invalid in [
+            "core",
+            ".editor",
+            "core.",
+            "co_re.editor",
+            "core.2editor",
+            "core._editor",
+            "core.ed_itor",
+            "core.ed*itor",
+            "core.ed?tor",
+            "core.[a]ditor",
+        ] {
+            assert!(!is_well_formed_config_key(invalid), "invalid: {invalid}");
         }
     }
 

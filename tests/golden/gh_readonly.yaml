@@ -4,7 +4,7 @@ tests:
   # ════════════════════════════════════════════════════════════════
 
   - id: gh-api-dogfood-pain-point
-    command: "gh api repos/openai/codex/contents/codex-rs/hooks/src/engine/output_parser.rs?ref=main --jq .content"
+    command: "gh api 'repos/openai/codex/contents/codex-rs/hooks/src/engine/output_parser.rs?ref=main' --jq .content"
     expected:
       decision: allow
       rule_id: gh-readonly-classifier
@@ -37,6 +37,12 @@ tests:
   # ════════════════════════════════════════════════════════════════
   # gh api: mutating / unsafe — must ask
   # ════════════════════════════════════════════════════════════════
+
+  - id: gh-api-unquoted-query-pattern-asks
+    command: "gh api repos/owner/repo/git/trees/main?recursive=1"
+    expected:
+      decision: ask
+    note: "unquoted ? is pathname expansion, so endpoint argv is not statically known"
 
   - id: gh-api-explicit-post-asks-via-rule
     command: "gh api -X POST repos/foo/issues"
@@ -663,7 +669,7 @@ tests:
     note: "stderr suppression on gh api GET must allow"
 
   - id: gh-api-get-jq-stderr-devnull-alone-allow
-    command: "gh api repos/owner/repo/git/trees/main?recursive=1 --jq '.tree[]' 2>/dev/null"
+    command: "gh api 'repos/owner/repo/git/trees/main?recursive=1' --jq '.tree[]' 2>/dev/null"
     expected:
       decision: allow
       rule_id: gh-readonly-classifier

@@ -296,7 +296,8 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
 /// Classify an argv-position tree-sitter node into an `ArgMeta`.
 ///
 /// Grammar reference: tree-sitter-bash 0.25.x. Rules:
-/// - `word`, `number` → `PlainWord`
+/// - `word` without unquoted pathname-expansion syntax, plus `number` → `PlainWord`
+/// - `word` containing `*`, `?`, or `[` → `UnsafeString`
 /// - `raw_string` (single-quoted) → `RawString`
 /// - `string` (double-quoted) → delegated to `classify_string_node`
 /// - `ansi_c_string`, `translated_string` → `UnsafeString`
@@ -307,7 +308,15 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
 /// - anything else (unknown / error) → `UnsafeString` (conservative default)
 pub fn classify_arg_node(node: Node, source: &str) -> ArgMeta {
     match node.kind() {
-        "word" | "number" | "variable_name" => ArgMeta::PlainWord,
+        "word" => {
+            let text = node_text(node, source);
+            if text.contains(['*', '?', '[']) {
+                ArgMeta::UnsafeString
+            } else {
+                ArgMeta::PlainWord
+            }
+        }
+        "number" | "variable_name" => ArgMeta::PlainWord,
         "raw_string" => ArgMeta::RawString,
         "string" => classify_string_node(node, source),
         // Everything below is UnsafeString — text may differ from bash execution value.
@@ -427,6 +436,33 @@ mod classification_tests {
     #[test]
     fn plain_word_number() {
         assert_eq!(classify_first_arg("42").meta, ArgMeta::PlainWord);
+    }
+
+    #[test]
+    fn unquoted_pathname_patterns_are_unsafe() {
+        for pattern in ["core.*=evil", "c?re.editor=evil", "core.[a]ditor=evil"] {
+            assert_eq!(
+                classify_first_arg(pattern).meta,
+                ArgMeta::UnsafeString,
+                "{pattern}"
+            );
+        }
+    }
+
+    #[test]
+    fn quoted_pathname_pattern_characters_are_static() {
+        for pattern in ["core.*=evil", "c?re.editor=evil", "core.[a]ditor=evil"] {
+            assert_eq!(
+                classify_first_arg(&format!("'{pattern}'")).meta,
+                ArgMeta::RawString,
+                "single quoted: {pattern}"
+            );
+            assert_eq!(
+                classify_first_arg(&format!("\"{pattern}\"")).meta,
+                ArgMeta::SafeString,
+                "double quoted: {pattern}"
+            );
+        }
     }
 
     // ── RawString ──────────────────────────────────────────────

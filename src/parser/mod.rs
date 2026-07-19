@@ -41,7 +41,8 @@ pub struct Arg {
 /// See `classify_arg_node` in `helpers.rs` for the rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArgMeta {
-    /// Bareword token: `ls`, `--flag`, `FOO=bar`, `/usr/bin/ls`, `42`.
+    /// Bareword token without pathname-expansion syntax: `ls`, `--flag`,
+    /// `FOO=bar`, `/usr/bin/ls`, `42`.
     PlainWord,
     /// Single-quoted string: `'docker ps'`. Contents are literal — no escape
     /// interpretation, no variable expansion. Text is exactly what bash sees.
@@ -53,7 +54,8 @@ pub enum ArgMeta {
     /// Any argument whose extracted text may diverge from what bash actually
     /// executes: escapes, expansions, substitutions, concatenations, ANSI-C
     /// strings, process substitutions, arithmetic expansions, brace
-    /// expressions, parse-recovery error fragments, or unknown node kinds.
+    /// expressions, unquoted pathname patterns, parse-recovery error fragments,
+    /// or unknown node kinds.
     /// Spec B's shell-c unwrapper must refuse to re-parse these.
     UnsafeString,
 }
