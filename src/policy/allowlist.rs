@@ -362,10 +362,7 @@ fn find_matching_entry<'a>(
     cmd: &SimpleCommand,
     check_trust: bool,
 ) -> Option<&'a AllowlistEntry> {
-    let cmd_name = match &cmd.name {
-        Some(n) => n.as_str(),
-        None => return None,
-    };
+    let cmd_name = cmd.name.as_deref()?;
 
     let argv = effective_argv(cmd);
 
