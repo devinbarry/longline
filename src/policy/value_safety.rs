@@ -1,12 +1,10 @@
 use crate::parser::ArgMeta;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))] // consumed by later safe-editor policy tasks
 pub(crate) enum SafeProgramClass {
     ShellNoop,
 }
 
-#[cfg_attr(not(test), allow(dead_code))] // consumed by later safe-editor policy tasks
 pub(crate) fn is_safe_program_value(class: SafeProgramClass, value: &str, meta: ArgMeta) -> bool {
     match class {
         SafeProgramClass::ShellNoop => {
