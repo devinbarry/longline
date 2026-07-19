@@ -294,7 +294,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
         }
         ArgSkip::Assignments => {
             while i < argv.len() && is_env_assignment(argv[i].text.as_str()) {
-                if let Some(a) = parse_assignment_token(argv[i].text.as_str()) {
+                if let Some(a) = parse_assignment_token(&argv[i]) {
                     collected_assignments.push(a);
                 }
                 i += 1;
@@ -309,7 +309,7 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     // in front. Without this `timeout 30 GIT_SSH_COMMAND=evil git fetch`
     // would treat `GIT_SSH_COMMAND=evil` as the inner command name.
     while i < argv.len() && is_env_assignment(argv[i].text.as_str()) {
-        if let Some(a) = parse_assignment_token(argv[i].text.as_str()) {
+        if let Some(a) = parse_assignment_token(&argv[i]) {
             collected_assignments.push(a);
         }
         i += 1;
@@ -344,14 +344,15 @@ pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
 
 /// Parse a `NAME=VALUE` token into an Assignment. Returns None if the token
 /// is not a valid env-style assignment (per `is_env_assignment`).
-fn parse_assignment_token(token: &str) -> Option<Assignment> {
-    if !is_env_assignment(token) {
+fn parse_assignment_token(token: &Arg) -> Option<Assignment> {
+    if !is_env_assignment(token.text.as_str()) {
         return None;
     }
-    let eq_pos = token.find('=')?;
+    let eq_pos = token.text.find('=')?;
     Some(Assignment {
-        name: token[..eq_pos].to_string(),
-        value: token[eq_pos + 1..].to_string(),
+        name: token.text[..eq_pos].to_string(),
+        value: token.text[eq_pos + 1..].to_string(),
+        value_meta: token.meta,
     })
 }
 

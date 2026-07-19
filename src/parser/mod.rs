@@ -141,6 +141,20 @@ impl fmt::Display for RedirectOp {
 pub struct Assignment {
     pub name: String,
     pub value: String,
+    pub value_meta: ArgMeta,
+}
+
+impl Assignment {
+    /// Test helper: construct an `Assignment` with `PlainWord` value
+    /// provenance. Production parser and wrapper code must preserve the
+    /// provenance of the source node or token instead.
+    pub fn plain(name: impl Into<String>, value: impl Into<String>) -> Self {
+        Assignment {
+            name: name.into(),
+            value: value.into(),
+            value_meta: ArgMeta::PlainWord,
+        }
+    }
 }
 
 /// Parse a command string into a Statement.
@@ -415,6 +429,70 @@ mod tests {
                 assert_eq!(cmd.argv, vec![Arg::plain("status")]);
             }
             other => panic!("Expected SimpleCommand, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment_value_provenance() {
+        let cases = [
+            ("GIT_EDITOR=true git status", "true", ArgMeta::PlainWord),
+            ("GIT_EDITOR='true' git status", "true", ArgMeta::RawString),
+            (
+                "GIT_EDITOR=\"true\" git status",
+                "true",
+                ArgMeta::SafeString,
+            ),
+            (
+                "GIT_EDITOR=\"$EDITOR\" git status",
+                "$EDITOR",
+                ArgMeta::UnsafeString,
+            ),
+        ];
+
+        for (input, expected_value, expected_meta) in cases {
+            let Statement::SimpleCommand(cmd) = parse(input).unwrap() else {
+                panic!("expected SimpleCommand for {input}");
+            };
+            assert_eq!(cmd.assignments.len(), 1, "input: {input}");
+            let assignment = &cmd.assignments[0];
+            assert_eq!(assignment.name, "GIT_EDITOR", "input: {input}");
+            assert_eq!(assignment.value, expected_value, "input: {input}");
+            assert_eq!(assignment.value_meta, expected_meta, "input: {input}");
+        }
+    }
+
+    #[test]
+    fn test_parse_env_assignment_value_provenance() {
+        let cases = [
+            ("env GIT_EDITOR=true git status", "true", ArgMeta::PlainWord),
+            (
+                "env 'GIT_EDITOR=true' git status",
+                "true",
+                ArgMeta::RawString,
+            ),
+            (
+                "env GIT_EDITOR='true' git status",
+                "true",
+                ArgMeta::UnsafeString,
+            ),
+            (
+                "env GIT_EDITOR=\"$EDITOR\" git status",
+                "$EDITOR",
+                ArgMeta::UnsafeString,
+            ),
+        ];
+
+        for (input, expected_value, expected_meta) in cases {
+            let Statement::SimpleCommand(outer) = parse(input).unwrap() else {
+                panic!("expected SimpleCommand for {input}");
+            };
+            let inner = wrappers::unwrap_transparent(&outer)
+                .unwrap_or_else(|| panic!("expected env to unwrap for {input}"));
+            assert_eq!(inner.assignments.len(), 1, "input: {input}");
+            let assignment = &inner.assignments[0];
+            assert_eq!(assignment.name, "GIT_EDITOR", "input: {input}");
+            assert_eq!(assignment.value, expected_value, "input: {input}");
+            assert_eq!(assignment.value_meta, expected_meta, "input: {input}");
         }
     }
 

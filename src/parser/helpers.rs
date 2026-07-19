@@ -217,6 +217,7 @@ pub fn resolve_node_text(node: Node, source: &str) -> String {
 pub fn parse_assignment(node: Node, source: &str) -> (Assignment, Vec<super::Statement>) {
     let mut name = String::new();
     let mut value = String::new();
+    let mut value_meta = ArgMeta::PlainWord;
     let mut substitutions = Vec::new();
 
     let mut cursor = node.walk();
@@ -227,6 +228,7 @@ pub fn parse_assignment(node: Node, source: &str) -> (Assignment, Vec<super::Sta
             }
             _ => {
                 value = resolve_node_text(child, source);
+                value_meta = classify_arg_node(child, source);
                 super::convert::collect_descendant_substitutions_pub(
                     child,
                     source,
@@ -236,7 +238,14 @@ pub fn parse_assignment(node: Node, source: &str) -> (Assignment, Vec<super::Sta
         }
     }
 
-    (Assignment { name, value }, substitutions)
+    (
+        Assignment {
+            name,
+            value,
+            value_meta,
+        },
+        substitutions,
+    )
 }
 
 /// Parse a file_redirect node into a Redirect and any embedded command substitutions.
