@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.3] - 2026-07-19
+
+### Fixed
+
+- **Unknown wrapper flags no longer break inner-command resolution
+  (correct-by-construction, replaces flag enumeration).** `uv run --offline
+  pytest`, `uv run --no-cache ruff`, and any wrapper invocation using a flag
+  not enumerated in the wrapper's value/bool tables were mis-parsing the flag
+  itself as the inner command (`--offline` "isn't on longline's allowlist"),
+  falling through to `ask`. 0.20.2 tried to fix this by enumerating more `uv`
+  flags — a losing game as `uv` adds flags. Wrapper unwrapping now skips any
+  `-`/`--`-prefixed token as an unknown boolean during flag consumption (a
+  token starting with `-` is never a command name), so the inner command is
+  always found. Fail-closed: an unknown flag that actually took a value leaves
+  the value as the inner-command candidate → unknown command → `ask`; we never
+  advance past the real inner command, so no downstream token is silently
+  blessed. Side effect: `nice --version`/`--help`, `nohup --version`/`--help`
+  now `allow` (benign informational output on already-allowlisted wrappers)
+  instead of `ask`.
+- **Ask reasons for wrapped commands now name the inner tool, not the
+  wrapper.** `uv run ansible-galaxy collection list` reported "uv run isn't on
+  longline's allowlist" — useless, since `uv run` is never allowlisted bare
+  and the operator can't act on it. The reason now unwraps transparent
+  wrappers (bounded depth, handles nesting like `timeout 90 uv run …`) and
+  names the actual uncovered command: "ansible-galaxy collection isn't on
+  longline's allowlist".
+
 ## [0.20.2] - 2026-07-07
 
 ### Fixed
