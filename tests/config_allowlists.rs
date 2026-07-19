@@ -223,6 +223,120 @@ fn test_ops_printenv_rule_disabled() {
 }
 
 #[test]
+fn custom_allow_env_does_not_override_active_printenv_ask() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"rules:
+  - id: custom-allow-env-dump
+    level: high
+    match:
+      command: env
+    decision: allow
+    reason: "project permits env"
+"#,
+        )
+        .build();
+
+    let result = env.run_claude_hook("env");
+    result.assert_claude_decision("ask");
+    result.assert_claude_reason_contains("printenv");
+}
+
+#[test]
+fn same_id_printenv_allow_replacement_applies_to_env_and_printenv() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"disable_rules: [printenv]
+rules:
+  - id: printenv
+    level: high
+    match:
+      command: printenv
+    decision: allow
+    reason: "replacement allows environment inspection"
+"#,
+        )
+        .build();
+
+    env.run_claude_hook("env").assert_claude_decision("allow");
+    env.run_claude_hook("printenv")
+        .assert_claude_decision("allow");
+}
+
+#[test]
+fn same_id_printenv_deny_replacement_applies_to_env_and_printenv() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"disable_rules: [printenv]
+rules:
+  - id: printenv
+    level: high
+    match:
+      command: printenv
+    decision: deny
+    reason: "replacement denies environment inspection"
+  - id: custom-ask-env-dump
+    level: high
+    match:
+      command: env
+    decision: ask
+    reason: "project asks for env"
+"#,
+        )
+        .build();
+
+    for command in ["env", "printenv"] {
+        let result = env.run_claude_hook(command);
+        result.assert_claude_decision("deny");
+        result.assert_claude_reason_contains("replacement denies environment inspection");
+    }
+}
+
+#[test]
+fn inactive_same_id_printenv_replacement_respects_its_level() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"disable_rules: [printenv]
+rules:
+  - id: printenv
+    level: strict
+    match:
+      command: printenv
+    decision: deny
+    reason: "strict replacement is inactive at high safety"
+"#,
+        )
+        .build();
+
+    env.run_claude_hook("env").assert_claude_decision("allow");
+    env.run_claude_hook("printenv")
+        .assert_claude_decision("allow");
+}
+
+#[test]
+fn unrelated_same_id_rule_is_not_treated_as_printenv_policy() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"disable_rules: [printenv]
+rules:
+  - id: printenv
+    level: high
+    match:
+      command: unrelated-tool
+    decision: deny
+    reason: "same id but unrelated matcher"
+"#,
+        )
+        .build();
+
+    env.run_claude_hook("env").assert_claude_decision("allow");
+    env.run_claude_hook("printenv")
+        .assert_claude_decision("allow");
+    env.run_claude_hook("unrelated-tool")
+        .assert_claude_decision("deny");
+}
+
+#[test]
 fn test_ops_docker_run_allows() {
     let env = TestEnv::new()
         .with_project_config(OPS_AUTOMATION_CONFIG)

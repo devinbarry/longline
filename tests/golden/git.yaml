@@ -39,6 +39,9 @@ tests:
   - id: git-sequence-editor-noop-env-status-allow
     command: "GIT_SEQUENCE_EDITOR=true git status"
     expected: { decision: allow }
+  - id: git-sequence-editor-vim-env-status-deny
+    command: "GIT_SEQUENCE_EDITOR=vim git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
   - id: editor-noop-env-status-allow
     command: "EDITOR=true git status"
     expected: { decision: allow }
@@ -96,6 +99,12 @@ tests:
     expected: { decision: allow }
   - id: env-wrapper-rhs-quoted-editor-noop-deny
     command: "env GIT_EDITOR='true' git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: env-wrapper-editor-vim-deny
+    command: "env EDITOR=vim git status"
+    expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: env-wrapper-visual-code-deny
+    command: "env VISUAL=code git status"
     expected: { decision: deny, rule_id: git-env-rce-vars }
   - id: timeout-wrapper-editor-noop-allow
     command: "timeout 30 GIT_EDITOR=true git status"
@@ -241,6 +250,34 @@ tests:
       disable_rules: [git-c-rce-keys]
     command: "git -c core.editor=vim status"
     expected: { decision: deny, rule_id: git-c-editor-program }
+
+  # Disabling the Git-specific env deny leaves R11's command-agnostic ask in
+  # place for unsafe editor programs, while exact static `true` stays clear.
+  - id: git-editor-unsafe-r11-fallback-when-env-rule-disabled
+    overlay: |
+      disable_rules: [git-env-rce-vars]
+    command: "GIT_EDITOR=vim git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: editor-unsafe-r11-fallback-when-env-rule-disabled
+    overlay: |
+      disable_rules: [git-env-rce-vars]
+    command: "EDITOR=vim git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: env-wrapper-editor-unsafe-r11-fallback-when-env-rule-disabled
+    overlay: |
+      disable_rules: [git-env-rce-vars]
+    command: "env EDITOR=vim git status"
+    expected: { decision: ask, rule_id: sensitive-env-assignment }
+  - id: git-editor-noop-transparent-when-env-rule-disabled
+    overlay: |
+      disable_rules: [git-env-rce-vars]
+    command: "GIT_EDITOR=true git status"
+    expected: { decision: allow }
+  - id: editor-noop-transparent-when-env-rule-disabled
+    overlay: |
+      disable_rules: [git-env-rce-vars]
+    command: "EDITOR=true git status"
+    expected: { decision: allow }
 
   # ============================================================
   # 1. CORE READ-ONLY COMMANDS (always safe)

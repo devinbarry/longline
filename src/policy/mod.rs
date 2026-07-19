@@ -541,6 +541,20 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
             reason: OPAQUE_REASON.to_string(),
         },
         Statement::SimpleCommand(cmd) => {
+            // `env` with no executable operand is semantically the same
+            // environment dump as bare `printenv`. Match that shape against a
+            // synthetic bare printenv invocation inside the normal rule loop,
+            // preserving rule order, level, replacement, disable, decision,
+            // reason, and most-restrictive aggregation semantics.
+            let env_dump = descriptive_asks::is_env_dump(cmd);
+            let printenv_cmd = env_dump.then(|| parser::SimpleCommand {
+                name: Some("printenv".to_string()),
+                argv: vec![],
+                redirects: vec![],
+                assignments: vec![],
+                embedded_substitutions: vec![],
+            });
+
             // Check rules first -- rules always take priority
             let mut worst = PolicyResult::allow();
             for rule in &config.rules {
@@ -548,7 +562,12 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                 if rule.level > config.safety_level {
                     continue;
                 }
-                if matches_rule(&rule.matcher, cmd) {
+                let direct_match = matches_rule(&rule.matcher, cmd);
+                let env_dump_alias_match = rule.id == "printenv"
+                    && printenv_cmd
+                        .as_ref()
+                        .is_some_and(|synthetic| matches_rule(&rule.matcher, synthetic));
+                if direct_match || env_dump_alias_match {
                     let result = PolicyResult {
                         decision: rule.decision,
                         rule_id: Some(rule.id.clone()),
@@ -612,18 +631,10 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                 }
             }
 
-            // `env` is allowlisted as a transparent wrapper, but without an
-            // executable operand it dumps the environment. Classify that
-            // shape before the allowlist; executable forms are evaluated via
-            // their extracted inner command and propagated assignments.
-            let env_dump_guard_enabled = config
-                .rules
-                .iter()
-                .any(|rule| rule.id == "printenv" && rule.level <= config.safety_level);
-            if env_dump_guard_enabled {
-                if let Some(result) = descriptive_asks::classify_env(cmd) {
-                    return result;
-                }
+            // Relative `./env` executable forms are project-local scripts,
+            // while system `env` wrappers inherit the extracted inner policy.
+            if let Some(result) = descriptive_asks::classify_env(cmd) {
+                return result;
             }
 
             // No rule matched -- check allowlist as fallback
