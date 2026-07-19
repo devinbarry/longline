@@ -6,7 +6,7 @@ mod matching;
 pub(crate) mod redirects;
 mod sensitive_env;
 mod set_forms;
-pub(crate) mod value_safety;
+mod value_safety;
 
 #[allow(unused_imports)]
 pub use config::{
