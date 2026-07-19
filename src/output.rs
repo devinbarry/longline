@@ -178,6 +178,21 @@ fn format_matcher(matcher: &policy::Matcher) -> (String, String) {
             }
             ("redirect".to_string(), parts.join(" "))
         }
+        policy::Matcher::GitConfig { git_config } => (
+            "git_config".to_string(),
+            format!(
+                "cmd={} source={} keys={{{}}} key_case={} except_value_class={}",
+                format_string_or_list(&git_config.command),
+                git_config.source,
+                git_config.keys.join(", "),
+                if git_config.key_case_insensitive {
+                    "insensitive"
+                } else {
+                    "sensitive"
+                },
+                git_config.except_value_class,
+            ),
+        ),
     }
 }
 
@@ -393,7 +408,10 @@ pub fn print_profiles_json(
 #[cfg(test)]
 mod tests {
     use super::format_matcher;
-    use longline::policy::{EnvException, EnvMatcher, EnvValueClass, Matcher, StringOrList};
+    use longline::policy::{
+        EnvException, EnvMatcher, EnvValueClass, GitConfigMatcher, GitConfigSource, Matcher,
+        StringOrList,
+    };
 
     #[test]
     fn verbose_command_matcher_formats_environment_exceptions_deterministically() {
@@ -418,6 +436,29 @@ mod tests {
                 "command".to_string(),
                 "cmd=git env={GIT_SSH_COMMAND, GIT_EDITOR} env_case=insensitive env_except=[{names={GIT_EDITOR, EDITOR} name_case=sensitive value_class=shell-noop}]"
                     .to_string(),
+            )
+        );
+    }
+
+    #[test]
+    fn verbose_git_config_matcher_formats_every_field_deterministically() {
+        let matcher = Matcher::GitConfig {
+            git_config: GitConfigMatcher {
+                command: StringOrList::List {
+                    any_of: vec!["git".to_string(), "git-safe".to_string()],
+                },
+                source: GitConfigSource::CliC,
+                keys: vec!["core.editor".to_string(), "sequence.editor".to_string()],
+                key_case_insensitive: true,
+                except_value_class: EnvValueClass::ShellNoop,
+            },
+        };
+
+        assert_eq!(
+            format_matcher(&matcher),
+            (
+                "git_config".to_string(),
+                "cmd={git, git-safe} source=cli-c keys={core.editor, sequence.editor} key_case=insensitive except_value_class=shell-noop".to_string(),
             )
         );
     }

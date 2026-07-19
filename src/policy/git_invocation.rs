@@ -84,7 +84,6 @@ pub(crate) struct GitOptionOperand<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // Consumed by the structural GitConfig matcher added next.
 pub(crate) enum GitConfigValue<'a> {
     Explicit(Cow<'a, str>),
     ImplicitEmpty,
@@ -92,7 +91,6 @@ pub(crate) enum GitConfigValue<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // Consumed by the structural GitConfig matcher added next.
 pub(crate) struct GitConfigOverride<'a> {
     pub key: Option<Cow<'a, str>>,
     pub value: GitConfigValue<'a>,
@@ -236,7 +234,6 @@ impl<'a> GitInvocation<'a> {
 }
 
 impl<'a> GitGlobalOption<'a> {
-    #[allow(dead_code)] // Public-within-policy API for the next matcher task.
     pub(crate) fn config_override(&self) -> Option<GitConfigOverride<'_>> {
         let GitGlobalOption::Config {
             operand: Some(operand),
@@ -331,7 +328,6 @@ fn is_well_formed_config_key(key: &str) -> bool {
         && chars.all(|character| character.is_ascii_alphanumeric() || character == '-')
 }
 
-#[allow(dead_code)] // Used through the next task's structural override consumer.
 fn recognizable_key(key: &str, meta: ArgMeta) -> bool {
     if !is_well_formed_config_key(key) {
         return false;

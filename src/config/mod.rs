@@ -17,7 +17,8 @@ pub use overlays::{
 pub use prompt::{validate_ai_judge_prompt, validate_project_ai_judge_prompt};
 pub use rules::{
     load_embedded_rules, load_embedded_rules_with_info, load_rules, load_rules_with_info,
-    ArgsMatcher, EnvException, EnvMatcher, EnvValueClass, FlagsMatcher, LoadedConfig,
-    LoadedFileInfo, Matcher, PartialRulesConfig, PipelineMatcher, RedirectMatcher, Rule,
-    RulesConfig, RulesManifestConfig, SafetyLevel, StageMatcher, StringOrList, TrustLevel,
+    ArgsMatcher, EnvException, EnvMatcher, EnvValueClass, FlagsMatcher, GitConfigMatcher,
+    GitConfigSource, LoadedConfig, LoadedFileInfo, Matcher, PartialRulesConfig, PipelineMatcher,
+    RedirectMatcher, Rule, RulesConfig, RulesManifestConfig, SafetyLevel, StageMatcher,
+    StringOrList, TrustLevel,
 };

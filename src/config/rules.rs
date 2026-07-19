@@ -131,7 +131,7 @@ pub struct Rule {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+#[serde(untagged, deny_unknown_fields)]
 // Matchers are constructed at rules-load time and live for the life of the
 // process; the size difference between the Command variant (with its
 // `Option<ArgsMatcher>` containing several Vec<String>) and the smaller
@@ -143,6 +143,9 @@ pub enum Matcher {
     },
     Redirect {
         redirect: RedirectMatcher,
+    },
+    GitConfig {
+        git_config: GitConfigMatcher,
     },
     Command {
         command: StringOrList,
@@ -156,6 +159,33 @@ pub enum Matcher {
         #[serde(default)]
         env: Option<EnvMatcher>,
     },
+}
+
+/// Structural matcher for Git's command-line config override records.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitConfigMatcher {
+    pub command: StringOrList,
+    pub source: GitConfigSource,
+    pub keys: Vec<String>,
+    #[serde(default)]
+    pub key_case_insensitive: bool,
+    pub except_value_class: EnvValueClass,
+}
+
+/// Canonical source of Git config overrides understood by policy matching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GitConfigSource {
+    CliC,
+}
+
+impl std::fmt::Display for GitConfigSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(match self {
+            GitConfigSource::CliC => "cli-c",
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1052,5 +1082,113 @@ except:
     value_class: arbitrary-program
 "#;
         assert!(serde_norway::from_str::<EnvMatcher>(unknown_value_class).is_err());
+    }
+
+    #[test]
+    fn git_config_matcher_is_a_unique_untagged_variant_and_preserves_old_variants() {
+        let yaml = r#"
+version: 1
+rules:
+  - id: structural-git-config
+    level: critical
+    match:
+      git_config:
+        command: git
+        source: cli-c
+        keys: [core.editor, sequence.editor]
+        key_case_insensitive: true
+        except_value_class: shell-noop
+    decision: deny
+    reason: "Test structural matcher"
+  - id: legacy-command
+    level: high
+    match:
+      command: git
+      args:
+        any_of: [push]
+    decision: ask
+    reason: "Test command matcher"
+  - id: legacy-redirect
+    level: high
+    match:
+      redirect:
+        target: /etc/hosts
+    decision: ask
+    reason: "Test redirect matcher"
+"#;
+
+        let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
+        let Matcher::GitConfig { git_config } = &config.rules[0].matcher else {
+            panic!("expected structural git-config matcher");
+        };
+        assert!(git_config.command.matches("git"));
+        assert_eq!(git_config.source, GitConfigSource::CliC);
+        assert_eq!(git_config.keys, ["core.editor", "sequence.editor"]);
+        assert!(git_config.key_case_insensitive);
+        assert_eq!(git_config.except_value_class, EnvValueClass::ShellNoop);
+        assert!(matches!(config.rules[1].matcher, Matcher::Command { .. }));
+        assert!(matches!(config.rules[2].matcher, Matcher::Redirect { .. }));
+    }
+
+    #[test]
+    fn git_config_matcher_defaults_key_case_and_rejects_schema_typos() {
+        let minimal = r#"
+git_config:
+  command: git
+  source: cli-c
+  keys: [core.editor]
+  except_value_class: shell-noop
+"#;
+        let matcher: Matcher = serde_norway::from_str(minimal).unwrap();
+        let Matcher::GitConfig { git_config } = matcher else {
+            panic!("git_config key must select only the structural variant");
+        };
+        assert!(!git_config.key_case_insensitive);
+
+        for invalid in [
+            r#"
+git_config:
+  command: git
+  source: cli-c
+  keys: [core.editor]
+  except_value_class: shell-noop
+  unexpected: true
+"#,
+            r#"
+git_config:
+  command: git
+  source: persistent
+  keys: [core.editor]
+  except_value_class: shell-noop
+"#,
+            r#"
+git_config:
+  command: git
+  source: cli-c
+  keys: [core.editor]
+  except_value_class: executable
+"#,
+        ] {
+            assert!(
+                serde_norway::from_str::<Matcher>(invalid).is_err(),
+                "{invalid}"
+            );
+        }
+
+        assert!(serde_norway::from_str::<Matcher>(minimal)
+            .is_ok_and(|matcher| !matches!(matcher, Matcher::Command { .. })));
+
+        let malformed_git_config_with_command_fallback = r#"
+git_config:
+  command: git
+  source: persistent
+  keys: [core.editor]
+  except_value_class: shell-noop
+command: rm
+"#;
+        assert!(
+            serde_norway::from_str::<Matcher>(malformed_git_config_with_command_fallback).is_err(),
+            "a malformed git_config block must not fall through to Command"
+        );
     }
 }

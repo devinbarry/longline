@@ -14,9 +14,10 @@ pub use config::{
     find_project_root, load_embedded_rules, load_embedded_rules_with_info, load_global_config,
     load_project_config, load_rules, load_rules_with_info, merge_overlay_config,
     merge_project_config, AllowlistEntry, Allowlists, ArgsMatcher, EnvException, EnvMatcher,
-    EnvValueClass, FlagsMatcher, LoadedConfig, LoadedFileInfo, Matcher, PartialRulesConfig,
-    PipelineMatcher, ProjectAiJudgeConfig, ProjectConfig, RedirectMatcher, Rule, RuleSource,
-    RulesConfig, RulesManifestConfig, SafetyLevel, StageMatcher, StringOrList, TrustLevel,
+    EnvValueClass, FlagsMatcher, GitConfigMatcher, GitConfigSource, LoadedConfig, LoadedFileInfo,
+    Matcher, PartialRulesConfig, PipelineMatcher, ProjectAiJudgeConfig, ProjectConfig,
+    RedirectMatcher, Rule, RuleSource, RulesConfig, RulesManifestConfig, SafetyLevel, StageMatcher,
+    StringOrList, TrustLevel,
 };
 
 use crate::domain::{Decision, PolicyResult};
@@ -707,6 +708,70 @@ rules:
         let stmt = parse("git status").unwrap();
         let result = evaluate(&config, &stmt);
         assert_eq!(result.decision, Decision::Allow);
+    }
+
+    fn structural_git_config_test_config() -> RulesConfig {
+        serde_norway::from_str(
+            r#"
+version: 1
+default_decision: ask
+safety_level: high
+allowlists:
+  commands:
+    - { command: "git status", trust: standard }
+rules:
+  - id: git-editor-command-override
+    level: critical
+    match:
+      git_config:
+        command: git
+        source: cli-c
+        keys: [core.editor, sequence.editor]
+        key_case_insensitive: true
+        except_value_class: shell-noop
+    decision: deny
+    reason: "Git editor config can execute a program"
+"#,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn structural_git_config_policy_denies_known_unsafe_and_allows_safe_override() {
+        let config = structural_git_config_test_config();
+        for command in [
+            "git -c core.editor=vim status",
+            "git -c core.editor=\"$EDITOR\" status",
+            "git -c core.editor=true -c sequence.editor=vim status",
+        ] {
+            let result = evaluate(&config, &parse(command).unwrap());
+            assert_eq!(result.decision, Decision::Deny, "{command}");
+            assert_eq!(
+                result.rule_id.as_deref(),
+                Some("git-editor-command-override")
+            );
+        }
+
+        assert_eq!(
+            evaluate(&config, &parse("git -c core.editor=true status").unwrap()).decision,
+            Decision::Allow
+        );
+    }
+
+    #[test]
+    fn structural_git_config_policy_leaves_canonical_ambiguity_at_default_ask() {
+        let config = structural_git_config_test_config();
+        for command in [
+            "git -c \"core.$KEY=vim\" status",
+            "git -ccore.editor=vim status",
+        ] {
+            let result = evaluate(&config, &parse(command).unwrap());
+            assert_eq!(result.decision, Decision::Ask, "{command}");
+            assert_ne!(
+                result.rule_id.as_deref(),
+                Some("git-editor-command-override")
+            );
+        }
     }
 
     #[test]

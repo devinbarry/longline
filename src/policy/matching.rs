@@ -4,10 +4,10 @@ use crate::parser::{self, Arg, SimpleCommand, Statement};
 use std::borrow::Cow;
 
 use super::config::{
-    EnvMatcher, EnvValueClass, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher,
-    StringOrList,
+    EnvMatcher, EnvValueClass, FlagsMatcher, GitConfigMatcher, GitConfigSource, Matcher,
+    PipelineMatcher, RedirectMatcher, StringOrList,
 };
-use super::git_invocation::{GitInvocation, SubcommandResolution};
+use super::git_invocation::{GitConfigValue, GitInvocation, SubcommandResolution};
 use super::value_safety::{is_safe_program_value, SafeProgramClass};
 
 /// Extract basename from a command path for matching.
@@ -271,10 +271,54 @@ fn env_matches(env_matcher: &EnvMatcher, assignments: &[crate::parser::Assignmen
     })
 }
 
+fn git_config_matches(git_config: &GitConfigMatcher, cmd: &SimpleCommand) -> bool {
+    let Some(command_name) = cmd.name.as_deref() else {
+        return false;
+    };
+    if !git_config
+        .command
+        .matches(normalize_command_name(command_name))
+    {
+        return false;
+    }
+
+    match git_config.source {
+        GitConfigSource::CliC => GitInvocation::new(&cmd.argv).globals.iter().any(|global| {
+            let Some(config_override) = global.config_override() else {
+                return false;
+            };
+            let Some(key) = config_override.key.as_deref() else {
+                return false;
+            };
+            let key_matches = git_config.keys.iter().any(|candidate| {
+                if git_config.key_case_insensitive {
+                    candidate.eq_ignore_ascii_case(key)
+                } else {
+                    candidate == key
+                }
+            });
+            if !key_matches {
+                return false;
+            }
+
+            let is_exempt = match config_override.value {
+                GitConfigValue::Explicit(value) => is_safe_program_value(
+                    safe_program_class(git_config.except_value_class),
+                    value.as_ref(),
+                    config_override.value_meta,
+                ),
+                GitConfigValue::ImplicitEmpty | GitConfigValue::Unknown => false,
+            };
+            !is_exempt
+        }),
+    }
+}
+
 /// Check if a rule's matcher matches a given SimpleCommand.
 /// Pipeline matchers are handled separately in `evaluate` and are skipped here.
 pub fn matches_rule(matcher: &Matcher, cmd: &SimpleCommand) -> bool {
     match matcher {
+        Matcher::GitConfig { git_config } => git_config_matches(git_config, cmd),
         Matcher::Command {
             command,
             flags,
@@ -508,8 +552,8 @@ mod tests {
     use super::{matches_rule, resolve_subcommand, SubcommandResolution};
     use crate::parser::{Arg, ArgMeta, Assignment};
     use crate::policy::config::{
-        ArgsMatcher, EnvException, EnvMatcher, EnvValueClass, FlagsMatcher, Matcher,
-        PipelineMatcher, StageMatcher, StringOrList,
+        ArgsMatcher, EnvException, EnvMatcher, EnvValueClass, FlagsMatcher, GitConfigMatcher,
+        GitConfigSource, Matcher, PipelineMatcher, StageMatcher, StringOrList,
     };
 
     fn parse_cmd(s: &str) -> crate::parser::SimpleCommand {
@@ -569,6 +613,137 @@ mod tests {
                 value_class: EnvValueClass::ShellNoop,
             }],
         }
+    }
+
+    fn editor_git_config_matcher() -> Matcher {
+        Matcher::GitConfig {
+            git_config: GitConfigMatcher {
+                command: StringOrList::Single("git".to_string()),
+                source: GitConfigSource::CliC,
+                keys: vec!["core.editor".to_string(), "sequence.editor".to_string()],
+                key_case_insensitive: true,
+                except_value_class: EnvValueClass::ShellNoop,
+            },
+        }
+    }
+
+    fn cmd_with_config_operand(text: &str, meta: ArgMeta) -> crate::parser::SimpleCommand {
+        crate::parser::SimpleCommand {
+            name: Some("git".to_string()),
+            argv: vec![
+                Arg::plain("-c"),
+                Arg {
+                    text: text.to_string(),
+                    meta,
+                },
+                Arg::plain("status"),
+            ],
+            assignments: vec![],
+            redirects: vec![],
+            embedded_substitutions: vec![],
+        }
+    }
+
+    #[test]
+    fn git_config_matcher_exempts_only_exact_explicit_static_shell_noop() {
+        let matcher = editor_git_config_matcher();
+        for meta in [ArgMeta::PlainWord, ArgMeta::RawString, ArgMeta::SafeString] {
+            assert!(!matches_rule(
+                &matcher,
+                &cmd_with_config_operand("core.editor=true", meta)
+            ));
+        }
+
+        assert!(matches_rule(
+            &matcher,
+            &cmd_with_config_operand("core.editor=true", ArgMeta::UnsafeString)
+        ));
+        for operand in [
+            "core.editor",
+            "core.editor=vim",
+            "core.editor=/usr/bin/true",
+            "core.editor=TRUE",
+            "core.editor= true",
+            "core.editor=true ",
+        ] {
+            assert!(
+                matches_rule(
+                    &matcher,
+                    &cmd_with_config_operand(operand, ArgMeta::PlainWord)
+                ),
+                "{operand:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn git_config_matcher_keys_are_case_insensitive_but_values_are_not() {
+        let matcher = editor_git_config_matcher();
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -c CORE.EDITOR=true status")
+        ));
+        assert!(matches_rule(
+            &matcher,
+            &parse_cmd("git -c CORE.EDITOR=TRUE status")
+        ));
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -c unrelated.editor=vim status")
+        ));
+    }
+
+    #[test]
+    fn git_config_matcher_evaluates_repeated_targets_independently() {
+        let matcher = editor_git_config_matcher();
+        for command in [
+            "git -c core.editor=true -c core.editor=vim status",
+            "git -c core.editor=vim -c core.editor=true status",
+        ] {
+            assert!(matches_rule(&matcher, &parse_cmd(command)), "{command}");
+        }
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -c core.editor=true -c sequence.editor=true status")
+        ));
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("git -c core.editor=true -c alias.run=!evil status")
+        ));
+    }
+
+    #[test]
+    fn git_config_matcher_consumes_only_canonical_cli_config_globals() {
+        let matcher = editor_git_config_matcher();
+        assert!(!matches_rule(
+            &matcher,
+            &parse_cmd("notgit -c core.editor=vim status")
+        ));
+        assert!(matches_rule(
+            &matcher,
+            &parse_cmd("/usr/bin/git -c core.editor=vim status")
+        ));
+        for command in [
+            "git --config-env=core.editor=EDITOR status",
+            "git config core.editor true",
+            "git config core.editor vim",
+            "git status core.editor=vim",
+            "git grep core.editor=vim",
+            "git -- -c core.editor=vim status",
+            "git -ccore.editor=vim status",
+            "git -c \"core.$KEY=vim\" status",
+        ] {
+            assert!(!matches_rule(&matcher, &parse_cmd(command)), "{command}");
+        }
+    }
+
+    #[test]
+    fn git_config_matcher_keeps_static_key_from_unsafe_value_provenance() {
+        let matcher = editor_git_config_matcher();
+        assert!(matches_rule(
+            &matcher,
+            &parse_cmd("git -c core.editor=\"$EDITOR\" status")
+        ));
     }
 
     fn assignment(name: &str, value: &str, value_meta: ArgMeta) -> Assignment {

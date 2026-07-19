@@ -217,11 +217,12 @@ longline --config /path/to/rules.yaml
 
 ## Rules
 
-Rules are defined in YAML with three matcher types:
+Rules are defined in YAML with four matcher types:
 
 - **command**: Match command name and arguments
 - **pipeline**: Match command sequences (e.g., `curl | sh`)
 - **redirect**: Match output redirection targets
+- **git_config**: Structurally match Git command-line `-c` config overrides
 
 A `command` matcher can pin four sub-matchers — `command`, `flags`, `args`, `env`:
 
@@ -230,6 +231,29 @@ A `command` matcher can pin four sub-matchers — `command`, `flags`, `args`, `e
 | `flags` | `any_of` / `all_of` / `none_of` / `starts_with` against argv flag tokens. Supports combined short-flag forms (`-xvf` matches `-f`). |
 | `args` | `any_of` / `all_of` / `none_of` glob patterns against argv tokens. `argv_first_not` exact-matches only argv[0] (the subcommand position; useful to scope a rule away from a specific subcommand without suppressing it on positional args later in argv). `case_insensitive: bool` lowercases pattern + arg before matching. `min_args: usize` requires the argv length **from the effective subcommand onward** (leading global value-flags like `git -C <path>` / `--git-dir` stripped, so they don't inflate the count) to be `>= min_args` — distinguishes `git config <key>` reads from `git config <key> <value>` sets, including under `git -C <path> config <key>`. |
 | `env` | `any_of` glob patterns against env-var assignment NAMES on the command (e.g. `VAR=val cmd`). `case_insensitive: bool` controls parent name matching. Optional `except` entries can exempt narrowly classified values for selected names; each entry has `names`, its own `name_case_insensitive: bool`, and `value_class`. |
+
+The structural `git_config` matcher consumes only canonical Git command-line
+`-c <key[=value]>` override records:
+
+```yaml
+match:
+  git_config:
+    command: git
+    source: cli-c
+    keys: [core.editor, sequence.editor]
+    key_case_insensitive: true
+    except_value_class: shell-noop
+```
+
+Each matching override is evaluated independently, so a safe value cannot hide
+a dangerous sibling in either order. The `shell-noop` exception applies only
+to an explicit, statically identified value exactly equal to `true`; implicit
+empty values, dynamic or unsafe values, paths, and differently cased values do
+not qualify. A dynamic key is not claimed by this targeted matcher and remains
+an `ask` through Git's canonical ambiguity gate. Persistent `git config`
+operations, `--config-env`, and editor-looking tokens after the subcommand are
+outside this matcher's scope. This schema is available for custom rules; no
+embedded rule uses it yet.
 
 Glob semantics (from the `glob-match` crate): `*` matches non-`/` chars; `**` matches all chars **but does not cross `/` in mid-pattern positions** — only at end-of-pattern is the cross-`/` semantic active.
 
@@ -428,7 +452,7 @@ profiles:
     rules:                   # additional Rule entries; same schema as elsewhere
       - id: ...              # required; used for id-collision replacement
         level: ...           # critical | high | strict
-        match: { ... }       # command / pipeline / redirect matcher
+        match: { ... }       # command / pipeline / redirect / git_config matcher
         decision: ...        # allow | ask | deny
         reason: "..."        # required; shown in audit log and UI
     allowlists:
