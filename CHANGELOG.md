@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.20.5] - 2026-07-19
+
+### Fixed
+
+- **Ask reasons now show the full subcommand path, not just the first
+  positional.** `command_label` rendered only `<family> <first-positional>`,
+  so `ansible-galaxy collection install …` truncated to "ansible-galaxy
+  collection" — identical to the allowlisted `… collection list`, making a
+  correct ask (install is deliberately not allowlisted; it downloads code)
+  read as a bug. The reason now renders the full leading subcommand path (the
+  run of leading non-flag positionals), stopping at the first flag, the first
+  operand-looking token (carrying `/ . = @`), or a depth cap of 3. So
+  `ansible-galaxy collection install community.docker` →
+  "ansible-galaxy collection install", `prefect deployment delete flow/name` →
+  "prefect deployment delete", `yamllint config.yml` → "yamllint". Built
+  test-first; adds the first end-to-end reason-string assertions for this path
+  (the golden framework only checks decision/rule_id, never reason text).
+
 ## [0.20.4] - 2026-07-19
 
 Supersedes 0.20.3, whose tag pipeline failed at the clippy gate before any
