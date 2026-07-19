@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.20.3] - 2026-07-19
+## [0.20.4] - 2026-07-19
+
+Supersedes 0.20.3, whose tag pipeline failed at the clippy gate before any
+artifact was published (`clippy::question_mark`, enforced by CI's newer
+`rust:latest` toolchain). 0.20.4 is 0.20.3 plus that one-line fix.
 
 ### Fixed
 
@@ -28,6 +32,9 @@ All notable changes to this project will be documented in this file.
   wrappers (bounded depth, handles nesting like `timeout 90 uv run …`) and
   names the actual uncovered command: "ansible-galaxy collection isn't on
   longline's allowlist".
+- **`find_matching_entry` uses `?` instead of a `match` early-return**
+  (`clippy::question_mark`). Behaviour-identical; required to pass the clippy
+  gate on CI's `rust:latest`.
 
 ## [0.20.2] - 2026-07-07
 
