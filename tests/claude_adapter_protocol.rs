@@ -2,7 +2,7 @@ mod support;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use support::audit::last_audit_entry;
+use support::audit::{assert_audit_rule, last_audit_entry};
 use support::bin::longline_bin;
 use support::claude::{run_claude_hook, ClaudeRunResultExt, ClaudeTestEnvExt};
 use support::config::TestEnv;
@@ -341,13 +341,8 @@ fn git_editor_overrides_preserve_claude_wire_and_audit_contract() {
         let entry = last_audit_entry(env.home_path(), "claude");
         assert_eq!(entry["runtime"], "claude", "command: {command}");
         assert_eq!(entry["decision"], decision, "command: {command}");
+        assert_audit_rule(&entry, expected_rule, command);
         if let Some(rule) = expected_rule {
-            assert!(
-                entry["matched_rules"]
-                    .as_array()
-                    .is_some_and(|rules| rules.iter().any(|value| value == rule)),
-                "expected audit entry to name {rule} for {command}: {entry}"
-            );
             result.assert_claude_reason_contains(rule);
         }
     }

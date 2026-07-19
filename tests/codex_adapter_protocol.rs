@@ -379,7 +379,9 @@ fn git_editor_overrides_preserve_codex_pre_tool_use_contract_and_audit() {
             "command: {command}; stdout: {:?}",
             result.stdout
         );
-        if wire_decision == Some("deny") {
+        if wire_decision.is_none() {
+            result.assert_codex_no_decision();
+        } else if wire_decision == Some("deny") {
             let rule = expected_rule.expect("deny case must name its rule");
             assert!(
                 result
@@ -431,7 +433,9 @@ fn git_editor_overrides_preserve_codex_permission_request_contract_and_audit() {
             "command: {command}; stdout: {:?}",
             result.stdout
         );
-        if behavior == Some("deny") {
+        if behavior.is_none() {
+            result.assert_codex_no_decision();
+        } else if behavior == Some("deny") {
             let rule = expected_rule.expect("deny case must name its rule");
             assert!(
                 result

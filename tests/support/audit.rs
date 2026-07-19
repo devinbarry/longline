@@ -16,12 +16,17 @@ pub fn last_audit_entry(home: &Path, runtime: &str) -> serde_json::Value {
 }
 
 pub fn assert_audit_rule(entry: &serde_json::Value, expected_rule: Option<&str>, command: &str) {
-    if let Some(rule) = expected_rule {
-        assert!(
-            entry["matched_rules"]
-                .as_array()
-                .is_some_and(|rules| rules.iter().any(|value| value == rule)),
+    let matched_rules = entry["matched_rules"]
+        .as_array()
+        .unwrap_or_else(|| panic!("audit matched_rules must be an array for {command}: {entry}"));
+    match expected_rule {
+        Some(rule) => assert!(
+            matched_rules.iter().any(|value| value == rule),
             "expected audit entry to name {rule} for {command}: {entry}"
-        );
+        ),
+        None => assert!(
+            matched_rules.is_empty(),
+            "expected no audit rule attribution for {command}: {entry}"
+        ),
     }
 }
