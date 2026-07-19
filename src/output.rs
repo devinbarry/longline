@@ -107,7 +107,7 @@ fn format_matcher(matcher: &policy::Matcher) -> (String, String) {
             command,
             flags,
             args,
-            env: _,
+            env,
         } => {
             let mut parts = vec![format!("cmd={}", format_string_or_list(command))];
             if let Some(f) = flags {
@@ -125,6 +125,37 @@ fn format_matcher(matcher: &policy::Matcher) -> (String, String) {
             if let Some(a) = args {
                 if !a.any_of.is_empty() {
                     parts.push(format!("args={{{}}}", a.any_of.join(", ")));
+                }
+            }
+            if let Some(e) = env {
+                parts.push(format!("env={{{}}}", e.any_of.join(", ")));
+                parts.push(format!(
+                    "env_case={}",
+                    if e.case_insensitive {
+                        "insensitive"
+                    } else {
+                        "sensitive"
+                    }
+                ));
+                if !e.except.is_empty() {
+                    let exceptions = e
+                        .except
+                        .iter()
+                        .map(|exception| {
+                            format!(
+                                "{{names={{{}}} name_case={} value_class={}}}",
+                                exception.names.join(", "),
+                                if exception.name_case_insensitive {
+                                    "insensitive"
+                                } else {
+                                    "sensitive"
+                                },
+                                exception.value_class
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    parts.push(format!("env_except=[{exceptions}]"));
                 }
             }
             ("command".to_string(), parts.join(" "))
@@ -357,4 +388,37 @@ pub fn print_profiles_json(
         "defaults": defaults_json,
     });
     println!("{}", serde_json::to_string_pretty(&out).unwrap());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_matcher;
+    use longline::policy::{EnvException, EnvMatcher, EnvValueClass, Matcher, StringOrList};
+
+    #[test]
+    fn verbose_command_matcher_formats_environment_exceptions_deterministically() {
+        let matcher = Matcher::Command {
+            command: StringOrList::Single("git".to_string()),
+            flags: None,
+            args: None,
+            env: Some(EnvMatcher {
+                any_of: vec!["GIT_SSH_COMMAND".to_string(), "GIT_EDITOR".to_string()],
+                case_insensitive: true,
+                except: vec![EnvException {
+                    names: vec!["GIT_EDITOR".to_string(), "EDITOR".to_string()],
+                    name_case_insensitive: false,
+                    value_class: EnvValueClass::ShellNoop,
+                }],
+            }),
+        };
+
+        assert_eq!(
+            format_matcher(&matcher),
+            (
+                "command".to_string(),
+                "cmd=git env={GIT_SSH_COMMAND, GIT_EDITOR} env_case=insensitive env_except=[{names={GIT_EDITOR, EDITOR} name_case=sensitive value_class=shell-noop}]"
+                    .to_string(),
+            )
+        );
+    }
 }

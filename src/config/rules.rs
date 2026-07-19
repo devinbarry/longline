@@ -206,6 +206,39 @@ pub struct EnvMatcher {
     /// what you want.
     #[serde(default)]
     pub case_insensitive: bool,
+    /// Candidate assignments that are safe for a narrowly defined value
+    /// class. Exceptions are evaluated against the same assignment that
+    /// matched `any_of`; they cannot suppress a dangerous sibling.
+    #[serde(default)]
+    pub except: Vec<EnvException>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EnvException {
+    /// Env-var name patterns eligible for this exception.
+    pub names: Vec<String>,
+    /// Case sensitivity for `names`, independent of the parent matcher's
+    /// `case_insensitive` setting.
+    #[serde(default)]
+    pub name_case_insensitive: bool,
+    pub value_class: EnvValueClass,
+}
+
+/// Serde-facing safe-value classes supported by environment exceptions.
+/// Policy matching maps these exhaustively to its private predicates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EnvValueClass {
+    ShellNoop,
+}
+
+impl std::fmt::Display for EnvValueClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(match self {
+            EnvValueClass::ShellNoop => "shell-noop",
+        })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -951,5 +984,73 @@ rules:
 "#;
         let config: RulesConfig = serde_norway::from_str(yaml).unwrap();
         assert_eq!(config.rules.len(), 1);
+    }
+
+    #[test]
+    fn env_matcher_deserializes_value_aware_exceptions_and_defaults_empty() {
+        let with_exception: EnvMatcher = serde_norway::from_str(
+            r#"
+case_insensitive: true
+any_of: [GIT_SSH_COMMAND, GIT_EDITOR, GIT_SEQUENCE_EDITOR, EDITOR, VISUAL]
+except:
+  - names: [GIT_EDITOR, GIT_SEQUENCE_EDITOR, EDITOR, VISUAL]
+    name_case_insensitive: false
+    value_class: shell-noop
+"#,
+        )
+        .unwrap();
+
+        assert!(with_exception.case_insensitive);
+        assert_eq!(with_exception.except.len(), 1);
+        assert_eq!(
+            with_exception.except[0].names,
+            ["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL"]
+        );
+        assert!(!with_exception.except[0].name_case_insensitive);
+        assert_eq!(
+            with_exception.except[0].value_class,
+            EnvValueClass::ShellNoop
+        );
+
+        let without_exception: EnvMatcher =
+            serde_norway::from_str("any_of: [GIT_EDITOR]\n").unwrap();
+        assert!(without_exception.except.is_empty());
+
+        let default_exception_case: EnvMatcher = serde_norway::from_str(
+            r#"
+any_of: [GIT_EDITOR]
+except:
+  - names: [GIT_EDITOR]
+    value_class: shell-noop
+"#,
+        )
+        .unwrap();
+        assert!(!default_exception_case.except[0].name_case_insensitive);
+    }
+
+    #[test]
+    fn env_matcher_rejects_unknown_schema_fields_and_value_classes() {
+        let unknown_matcher_field = r#"
+any_of: [GIT_EDITOR]
+unexpected: true
+"#;
+        assert!(serde_norway::from_str::<EnvMatcher>(unknown_matcher_field).is_err());
+
+        let unknown_exception_field = r#"
+any_of: [GIT_EDITOR]
+except:
+  - names: [GIT_EDITOR]
+    value_class: shell-noop
+    unexpected: true
+"#;
+        assert!(serde_norway::from_str::<EnvMatcher>(unknown_exception_field).is_err());
+
+        let unknown_value_class = r#"
+any_of: [GIT_EDITOR]
+except:
+  - names: [GIT_EDITOR]
+    value_class: arbitrary-program
+"#;
+        assert!(serde_norway::from_str::<EnvMatcher>(unknown_value_class).is_err());
     }
 }

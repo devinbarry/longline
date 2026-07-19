@@ -4,9 +4,11 @@ use crate::parser::{self, Arg, SimpleCommand, Statement};
 use std::borrow::Cow;
 
 use super::config::{
-    EnvMatcher, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher, StringOrList,
+    EnvMatcher, EnvValueClass, FlagsMatcher, Matcher, PipelineMatcher, RedirectMatcher,
+    StringOrList,
 };
 use super::git_invocation::{GitInvocation, SubcommandResolution};
+use super::value_safety::{is_safe_program_value, SafeProgramClass};
 
 /// Extract basename from a command path for matching.
 /// "/usr/bin/rm" -> "rm", "./script.sh" -> "script.sh", "rm" -> "rm"
@@ -226,20 +228,46 @@ fn flags_match(flags_matcher: &FlagsMatcher, argv: &[Arg]) -> bool {
     true
 }
 
-/// Check if an EnvMatcher's any_of patterns match any env-var assignment
-/// on the command (i.e. `VAR=val cmd ...`). Returns true on match.
+fn env_name_matches(pattern: &str, name: &str, case_insensitive: bool) -> bool {
+    if case_insensitive {
+        glob_match::glob_match(&pattern.to_lowercase(), &name.to_lowercase())
+    } else {
+        glob_match::glob_match(pattern, name)
+    }
+}
+
+fn safe_program_class(value_class: EnvValueClass) -> SafeProgramClass {
+    match value_class {
+        EnvValueClass::ShellNoop => SafeProgramClass::ShellNoop,
+    }
+}
+
+/// Check whether at least one matched env-var assignment remains dangerous
+/// after evaluating exceptions against that same assignment.
 fn env_matches(env_matcher: &EnvMatcher, assignments: &[crate::parser::Assignment]) -> bool {
     if env_matcher.any_of.is_empty() {
         return true;
     }
-    env_matcher.any_of.iter().any(|pattern| {
-        assignments.iter().any(|a| {
-            if env_matcher.case_insensitive {
-                glob_match::glob_match(&pattern.to_lowercase(), &a.name.to_lowercase())
-            } else {
-                glob_match::glob_match(pattern, &a.name)
-            }
-        })
+
+    assignments.iter().any(|assignment| {
+        let is_candidate = env_matcher.any_of.iter().any(|pattern| {
+            env_name_matches(pattern, &assignment.name, env_matcher.case_insensitive)
+        });
+        if !is_candidate {
+            return false;
+        }
+
+        let is_exempt = env_matcher.except.iter().any(|exception| {
+            exception.names.iter().any(|pattern| {
+                env_name_matches(pattern, &assignment.name, exception.name_case_insensitive)
+            }) && is_safe_program_value(
+                safe_program_class(exception.value_class),
+                &assignment.value,
+                assignment.value_meta,
+            )
+        });
+
+        !is_exempt
     })
 }
 
@@ -475,11 +503,13 @@ pub fn matches_redirect(redirect_matcher: &RedirectMatcher, cmd: &SimpleCommand)
 #[cfg(test)]
 mod tests {
     use super::arg_matches_flag;
+    use super::env_matches;
     use super::matches_pipeline;
     use super::{matches_rule, resolve_subcommand, SubcommandResolution};
-    use crate::parser::Arg;
+    use crate::parser::{Arg, ArgMeta, Assignment};
     use crate::policy::config::{
-        ArgsMatcher, FlagsMatcher, Matcher, PipelineMatcher, StageMatcher, StringOrList,
+        ArgsMatcher, EnvException, EnvMatcher, EnvValueClass, FlagsMatcher, Matcher,
+        PipelineMatcher, StageMatcher, StringOrList,
     };
 
     fn parse_cmd(s: &str) -> crate::parser::SimpleCommand {
@@ -515,6 +545,154 @@ mod tests {
             case_insensitive: false,
             min_args: None,
         }
+    }
+
+    fn editor_env_matcher() -> EnvMatcher {
+        EnvMatcher {
+            any_of: [
+                "GIT_SSH_COMMAND",
+                "GIT_EDITOR",
+                "GIT_SEQUENCE_EDITOR",
+                "EDITOR",
+                "VISUAL",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+            case_insensitive: true,
+            except: vec![EnvException {
+                names: ["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+                name_case_insensitive: false,
+                value_class: EnvValueClass::ShellNoop,
+            }],
+        }
+    }
+
+    fn assignment(name: &str, value: &str, value_meta: ArgMeta) -> Assignment {
+        Assignment {
+            name: name.to_string(),
+            value: value.to_string(),
+            value_meta,
+        }
+    }
+
+    #[test]
+    fn env_exception_accepts_exact_static_shell_noop_provenance_only() {
+        let matcher = editor_env_matcher();
+        for meta in [ArgMeta::PlainWord, ArgMeta::RawString, ArgMeta::SafeString] {
+            assert!(
+                !env_matches(&matcher, &[assignment("GIT_EDITOR", "true", meta)]),
+                "static exact `true` should be exempt for {meta:?}"
+            );
+        }
+
+        for (value, meta) in [
+            ("true", ArgMeta::UnsafeString),
+            ("vim", ArgMeta::PlainWord),
+            ("TRUE", ArgMeta::PlainWord),
+            ("/bin/true", ArgMeta::PlainWord),
+        ] {
+            assert!(
+                env_matches(&matcher, &[assignment("GIT_EDITOR", value, meta)]),
+                "unsafe editor value {value:?} with {meta:?} must remain dangerous"
+            );
+        }
+    }
+
+    #[test]
+    fn env_exception_filters_only_its_same_candidate() {
+        let matcher = editor_env_matcher();
+        let safe_editor = assignment("GIT_EDITOR", "true", ArgMeta::PlainWord);
+        let unsafe_ssh = assignment("GIT_SSH_COMMAND", "evil", ArgMeta::PlainWord);
+        let unsafe_editor = assignment("GIT_EDITOR", "vim", ArgMeta::PlainWord);
+
+        assert!(!env_matches(&matcher, std::slice::from_ref(&safe_editor)));
+        assert!(env_matches(&matcher, std::slice::from_ref(&unsafe_editor)));
+
+        for assignments in [
+            vec![safe_editor.clone(), unsafe_ssh.clone()],
+            vec![unsafe_ssh.clone(), safe_editor.clone()],
+            vec![safe_editor.clone(), unsafe_editor.clone()],
+            vec![unsafe_editor.clone(), safe_editor.clone()],
+        ] {
+            assert!(
+                env_matches(&matcher, &assignments),
+                "a safe assignment must not hide a dangerous sibling or duplicate: {assignments:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn each_configured_editor_variable_can_be_exempt_independently() {
+        let matcher = editor_env_matcher();
+        for name in ["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL"] {
+            assert!(
+                !env_matches(&matcher, &[assignment(name, "true", ArgMeta::PlainWord)]),
+                "{name} should be independently exempt"
+            );
+        }
+
+        let all_safe = ["GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL"]
+            .into_iter()
+            .map(|name| assignment(name, "true", ArgMeta::SafeString))
+            .collect::<Vec<_>>();
+        assert!(
+            !env_matches(&matcher, &all_safe),
+            "a rule must not match when all matched candidates are exempt"
+        );
+    }
+
+    #[test]
+    fn parent_and_exception_name_case_controls_are_independent() {
+        let matcher = editor_env_matcher();
+        assert!(env_matches(
+            &matcher,
+            &[assignment("git_editor", "true", ArgMeta::PlainWord)]
+        ));
+
+        let mut parent_case_sensitive = editor_env_matcher();
+        parent_case_sensitive.case_insensitive = false;
+        assert!(!env_matches(
+            &parent_case_sensitive,
+            &[assignment("git_editor", "vim", ArgMeta::PlainWord)]
+        ));
+
+        let mut exception_case_insensitive = editor_env_matcher();
+        exception_case_insensitive.except[0].name_case_insensitive = true;
+        assert!(!env_matches(
+            &exception_case_insensitive,
+            &[assignment("git_editor", "true", ArgMeta::PlainWord)]
+        ));
+    }
+
+    #[test]
+    fn env_matcher_preserves_empty_and_legacy_semantics() {
+        let unrelated = assignment("PATH", "/bin", ArgMeta::PlainWord);
+        let empty = EnvMatcher {
+            any_of: vec![],
+            case_insensitive: false,
+            except: vec![],
+        };
+        assert!(env_matches(&empty, std::slice::from_ref(&unrelated)));
+        assert!(env_matches(&empty, &[]));
+
+        let legacy = EnvMatcher {
+            any_of: vec!["GIT_EDITOR".to_string()],
+            case_insensitive: false,
+            except: vec![],
+        };
+        assert!(!env_matches(&legacy, std::slice::from_ref(&unrelated)));
+        assert!(env_matches(
+            &legacy,
+            &[assignment("GIT_EDITOR", "true", ArgMeta::PlainWord)]
+        ));
+        assert!(env_matches(
+            &legacy,
+            &[assignment("GIT_EDITOR", "vim", ArgMeta::UnsafeString)]
+        ));
     }
 
     #[test]

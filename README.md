@@ -229,7 +229,7 @@ A `command` matcher can pin four sub-matchers — `command`, `flags`, `args`, `e
 | --- | --- |
 | `flags` | `any_of` / `all_of` / `none_of` / `starts_with` against argv flag tokens. Supports combined short-flag forms (`-xvf` matches `-f`). |
 | `args` | `any_of` / `all_of` / `none_of` glob patterns against argv tokens. `argv_first_not` exact-matches only argv[0] (the subcommand position; useful to scope a rule away from a specific subcommand without suppressing it on positional args later in argv). `case_insensitive: bool` lowercases pattern + arg before matching. `min_args: usize` requires the argv length **from the effective subcommand onward** (leading global value-flags like `git -C <path>` / `--git-dir` stripped, so they don't inflate the count) to be `>= min_args` — distinguishes `git config <key>` reads from `git config <key> <value>` sets, including under `git -C <path> config <key>`. |
-| `env` | `any_of` glob patterns against env-var assignment NAMES on the command (e.g. `VAR=val cmd`). `case_insensitive: bool` available. Used by `git-env-rce-vars` to deny `GIT_SSH_COMMAND` / `GIT_EDITOR` / `GIT_CONFIG_KEY_*` etc. |
+| `env` | `any_of` glob patterns against env-var assignment NAMES on the command (e.g. `VAR=val cmd`). `case_insensitive: bool` controls parent name matching. Optional `except` entries can exempt narrowly classified values for selected names; each entry has `names`, its own `name_case_insensitive: bool`, and `value_class`. |
 
 Glob semantics (from the `glob-match` crate): `*` matches non-`/` chars; `**` matches all chars **but does not cross `/` in mid-pattern positions** — only at end-of-pattern is the cross-`/` semantic active.
 
@@ -247,15 +247,20 @@ Example rules:
   decision: deny
   reason: "Recursive delete targeting root filesystem"
 
-# Env matcher: deny GIT_SSH_COMMAND / GIT_EDITOR / etc. as env vars
-- id: git-env-rce-vars
+# Illustrative custom env matcher with a safe-value exception
+- id: example-git-env-rce-vars
   level: critical
   match:
     command: git
     env:
       case_insensitive: true
-      any_of: ["GIT_SSH_COMMAND", "GIT_EDITOR", "GIT_CONFIG_KEY_*"]
+      any_of: [GIT_SSH_COMMAND, GIT_EDITOR, GIT_SEQUENCE_EDITOR, EDITOR, VISUAL]
+      except:
+        - names: [GIT_EDITOR, GIT_SEQUENCE_EDITOR, EDITOR, VISUAL]
+          name_case_insensitive: false
+          value_class: shell-noop
   decision: deny
+  reason: "Environment variable can execute a program"
 
 # Redirect matcher: operator + target glob
 - id: redirect-write-etc
@@ -269,6 +274,12 @@ Example rules:
   decision: ask
   reason: "Redirect write to system configuration file"
 ```
+
+Environment exceptions use same-candidate existential semantics. The parent `any_of` first selects each concrete assignment independently. An exception can filter only that same assignment when both its own name matcher and its value class match. The env matcher remains true if at least one selected assignment is dangerous; it is false when every selected assignment is exempt or when no assignment is selected. An empty parent `any_of` retains its unconditional-match behavior.
+
+Currently the only value class is `shell-noop`. It accepts exactly the value `true` with parser provenance `PlainWord`, `RawString`, or `SafeString`. It rejects different spellings or paths such as `TRUE` and `/bin/true`, other programs such as `vim`, and even the text `true` when its provenance is `UnsafeString` because it contains an expansion, substitution, escape, or another dynamic construct.
+
+Parent and exception name case settings are independent. For example, a case-insensitive parent may select `git_editor=true` while a case-sensitive exception listing `GIT_EDITOR` does not exempt it. Likewise, `GIT_EDITOR=true GIT_SSH_COMMAND=evil git status` still matches: the safe editor assignment cannot hide its dangerous sibling. Duplicate assignments behave the same way, so a safe `GIT_EDITOR=true` cannot hide a second unsafe `GIT_EDITOR=vim` in either order.
 
 ### Rules organization
 
