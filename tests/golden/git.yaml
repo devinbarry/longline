@@ -220,6 +220,9 @@ tests:
   - id: git-config-persistent-editor-set-deny
     command: "git config core.editor true"
     expected: { decision: deny, rule_id: git-config-rce-keys-spaceform }
+  - id: git-config-persistent-sequence-editor-set-deny
+    command: "git config sequence.editor true"
+    expected: { decision: deny, rule_id: git-config-rce-keys-spaceform }
   - id: git-c-safe-editor-config-edit-still-deny
     command: "git -c core.editor=true config --edit"
     expected: { decision: deny }
