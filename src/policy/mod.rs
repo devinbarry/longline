@@ -541,12 +541,12 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
             reason: OPAQUE_REASON.to_string(),
         },
         Statement::SimpleCommand(cmd) => {
-            // `env` with no executable operand is semantically the same
-            // environment dump as bare `printenv`. Match that shape against a
-            // synthetic bare printenv invocation inside the normal rule loop,
-            // preserving rule order, level, replacement, disable, decision,
-            // reason, and most-restrictive aggregation semantics.
-            let env_dump = descriptive_asks::is_env_dump(cmd);
+            // A verified `env` invocation with no executable operand is
+            // semantically the same environment dump as bare `printenv`.
+            // Opaque env shapes are merged as Ask below before any permissive
+            // rule can return.
+            let env_invocation = parser::wrappers::classify_env_invocation(cmd);
+            let env_dump = matches!(env_invocation, parser::wrappers::EnvInvocation::Dump);
             let printenv_cmd = env_dump.then(|| parser::SimpleCommand {
                 name: Some("printenv".to_string()),
                 argv: vec![],
@@ -576,6 +576,14 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                     if result.decision > worst.decision {
                         worst = result;
                     }
+                }
+            }
+
+            // Unknown/dangerous env option shapes and untrusted path-qualified
+            // env executables must not be overridden by a custom Allow rule.
+            if let Some(result) = descriptive_asks::classify_env(cmd) {
+                if result.decision > worst.decision {
+                    worst = result;
                 }
             }
 
@@ -629,12 +637,6 @@ fn evaluate_leaf(config: &RulesConfig, leaf: &Statement, is_extra: bool) -> Poli
                 if let Some(result) = set_forms::classify_set_forms(cmd) {
                     return result;
                 }
-            }
-
-            // Relative `./env` executable forms are project-local scripts,
-            // while system `env` wrappers inherit the extracted inner policy.
-            if let Some(result) = descriptive_asks::classify_env(cmd) {
-                return result;
             }
 
             // No rule matched -- check allowlist as fallback

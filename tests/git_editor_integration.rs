@@ -362,3 +362,71 @@ fn safe_sequence_editor_overrides_complete_interactive_rebase_without_sentinel()
     );
     config_override.assert_completed_without_sentinel();
 }
+
+fn is_gnu_env() -> bool {
+    Command::new("env")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| {
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout).contains("GNU coreutils")
+        })
+}
+
+#[test]
+fn gnu_env_split_string_executes_injected_argv_while_longline_asks() {
+    if !is_gnu_env() {
+        return;
+    }
+
+    let command = r#"env --split-string='printf SOL_SPLIT' echo SAFE"#;
+    let result = evaluate_policy(command);
+    assert_eq!(result.decision, Decision::Ask);
+    assert_eq!(result.rule_id.as_deref(), Some("env-opaque-invocation"));
+
+    let output = Command::new("env")
+        .arg("--split-string=printf SOL_SPLIT")
+        .args(["echo", "SAFE"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("run GNU env --split-string control");
+    assert!(
+        output.status.success(),
+        "GNU env --split-string control failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "SOL_SPLIT");
+}
+
+#[test]
+fn gnu_env_chdir_changes_working_directory_while_longline_asks() {
+    if !is_gnu_env() {
+        return;
+    }
+
+    let target = tempfile::tempdir().expect("create env --chdir target");
+    let command = format!("env --chdir={} pwd", target.path().display());
+    let result = evaluate_policy(&command);
+    assert_eq!(result.decision, Decision::Ask, "command: {command}");
+    assert_eq!(
+        result.rule_id.as_deref(),
+        Some("env-opaque-invocation"),
+        "command: {command}"
+    );
+
+    let output = Command::new("env")
+        .arg(format!("--chdir={}", target.path().display()))
+        .arg("pwd")
+        .stdin(Stdio::null())
+        .output()
+        .expect("run GNU env --chdir control");
+    assert!(
+        output.status.success(),
+        "GNU env --chdir control failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim_end(),
+        target.path().to_string_lossy()
+    );
+}

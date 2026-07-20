@@ -237,8 +237,10 @@ inherits the underlying command's decision. For example,
 The sequence-editor forms likewise ask for an interactive rebase.
 
 This is deliberately narrow. Values such as `vim`, `/bin/true`, `TRUE`,
-`true --help`, whitespace-padded values, and expansions such as `$EDITOR`
-remain deny on a Git editor channel. A no-`=` override such as
+`true --help`, whitespace-padded values, expansions such as `$EDITOR`, and
+escaped spellings such as `tr\ue` remain deny on a Git editor channel. A
+backslash makes the value's provenance unsafe even when Bash would resolve the
+text to `true`. A no-`=` override such as
 `git -c core.editor status` is also deny: Git exposes an empty string to the
 editor setting, not the executable `true`. The invalid joined spelling
 `git -ccore.editor=true status` remains fail-closed at ask. Persistent
@@ -246,13 +248,19 @@ editor setting, not the executable `true`. The invalid joined spelling
 and every `--config-env` editor form remain deny. A safe editor override cannot
 hide another unsafe assignment or config override in the same command.
 
-Executable `env` forms are transparent wrappers too:
+Reviewed executable `env` forms are transparent wrappers too:
 `env GIT_EDITOR=true git status` inherits the inner Git decision, with the
-assignment propagated to policy. An `env` invocation without an executable
-operand (`env`, `env -i`, or `env NAME=value`) is still an environment dump and
-uses the active `printenv` rule, which asks by default. Disabling or replacing
-that rule applies consistently to both `printenv` and environment-dump `env`
-forms.
+assignment propagated to policy. Transparency is limited to the bare `env`
+name and the canonical `/usr/bin/env` and `/bin/env` paths, using only reviewed,
+semantics-preserving flags. Options that can synthesize argv or alter execution
+context—`-S`/`--split-string`, `-C`/`--chdir`, and `-a`/`--argv0`—are not
+transparent. Abbreviated, unknown, or malformed options and arbitrary paths
+such as `/tmp/env` also ask instead of exposing an inferred inner command.
+
+An `env` invocation without an executable operand (`env`, `env -i`, or
+`env NAME=value`) is still an environment dump and uses the active `printenv`
+rule, which asks by default. Disabling or replacing that rule applies
+consistently to both `printenv` and environment-dump `env` forms.
 
 ## Rules
 
@@ -293,6 +301,11 @@ an `ask` through Git's canonical ambiguity gate. Persistent `git config`
 operations, `--config-env`, and editor-looking tokens after the subcommand are
 outside this matcher's scope. The embedded `git-c-editor-program` rule uses
 this matcher, and the schema is also available to custom rules.
+
+The shared Git global-option scanner recognizes a reviewed safety subset, not
+every option accepted by every Git version. Valid but unreviewed leading
+globals—including `--exec-path`, `--list-cmds`, and `--attr-source`—remain
+fail-closed at `ask`; they are not stripped merely because Git accepts them.
 
 Glob semantics (from the `glob-match` crate): `*` matches non-`/` chars; `**` matches all chars **but does not cross `/` in mid-pattern positions** — only at end-of-pattern is the cross-`/` semantic active.
 

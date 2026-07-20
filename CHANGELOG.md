@@ -29,12 +29,14 @@ All notable changes to this project will be documented in this file.
   allow, while rebase start/continue/skip/abort/quit remains confirmable under
   the existing `git-rebase` ask. Real-Git tests cover conflict continuation and
   interactive sequence editing with failing editor sentinels.
-- **`env` now distinguishes execution from inspection.** `env NAME=value cmd`
-  is evaluated as a transparent executable wrapper with assignments propagated
-  to the inner command. `env`, `env -i`, and assignment-only forms remain
-  environment dumps governed by the active `printenv` rule. Disabling or
-  replacing `printenv` applies to both dump spellings with the replacement
-  rule's configured level, decision, reason, and precedence.
+- **`env` now distinguishes reviewed execution from inspection.**
+  `env NAME=value cmd` is evaluated as a transparent executable wrapper with
+  assignments propagated to the inner command when it uses bare `env`,
+  `/usr/bin/env`, or `/bin/env` and reviewed semantics-preserving flags. `env`,
+  `env -i`, and assignment-only forms remain environment dumps governed by the
+  active `printenv` rule. Disabling or replacing `printenv` applies to both dump
+  spellings with the replacement rule's configured level, decision, reason,
+  and precedence.
 
 ### Hardened
 
@@ -42,17 +44,26 @@ All notable changes to this project will be documented in this file.
   argument-bearing editor values remain denied on identifiable Git editor
   channels. Generic non-Git `EDITOR` / `VISUAL` program assignments now ask via
   the sensitive-environment guard; exact static `true` stays transparent.
+  Backslash-escaped spellings such as `tr\ue` carry unsafe provenance and do
+  not qualify even though Bash resolves them to the same text.
+- Transparent `env` handling now fails closed on semantics-changing options.
+  `-S`/`--split-string`, `-C`/`--chdir`, `-a`/`--argv0`, abbreviations, unknown
+  or malformed options, and arbitrary executable paths such as `/tmp/env` ask
+  rather than exposing a guessed inner command.
 - `git -c core.editor` and `git -c sequence.editor` without `=` now deny under
   `git-c-editor-program`; the empty string Git exposes to these string-valued
   settings is not treated as the executable `true`. Invalid joined forms such
   as `git -ccore.editor=true` remain fail-closed at ask and are not supported
   syntax. Persistent `git config` setters and all `--config-env` editor forms
   remain denied.
-- Git's leading global-option scanner is now canonical across subcommand and
-  allowlist resolution. Unsafe joined globals such as
+- Git's leading global-option scanner now provides one structural view across
+  subcommand and allowlist resolution for a reviewed safety subset. Unsafe
+  joined globals such as
   `git --git-dir="$REPO" config user.email` now ask instead of being treated as
   a safe config read. Malformed `-c` / `--config-env` operands also stay out of
-  the allowlist.
+  the allowlist. Valid but unreviewed globals such as `--exec-path`,
+  `--list-cmds`, and `--attr-source` intentionally remain `ask` rather than
+  being stripped based only on Git accepting them.
 - Unquoted pathname-expansion syntax (`*`, `?`, `[`) now carries unsafe parser
   provenance. Pattern-bearing Git config keys fail closed: unidentified keys
   ask, while an existing restrictive matcher can still recognize and deny the
@@ -72,8 +83,10 @@ All notable changes to this project will be documented in this file.
   intentionally disables both protections must name both rule IDs.
 - This is a pre-1.0 minor-release change rather than a patch: adding `except`
   to the public Rust `EnvMatcher` breaks downstream struct-literal construction,
-  and adding the public `Matcher::GitConfig` variant affects exhaustive matches.
-  Existing YAML without the new fields continues to load unchanged.
+  adding public `Assignment::value_meta` breaks downstream `Assignment`
+  struct-literal construction, and adding the public `Matcher::GitConfig`
+  variant affects exhaustive matches. Existing YAML without the new fields
+  continues to load unchanged.
 
 ## [0.20.5] - 2026-07-19
 

@@ -8,7 +8,7 @@
 
 use std::collections::{HashSet, VecDeque};
 
-use super::{Arg, Assignment, SimpleCommand, Statement};
+use super::{Arg, ArgMeta, Assignment, SimpleCommand, Statement};
 
 /// Maximum recursion depth for chained wrappers.
 /// If exceeded, evaluation falls back to ask via an Opaque node.
@@ -179,11 +179,143 @@ fn is_env_assignment(token: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+/// Structural result for GNU `env` invocations.
+///
+/// `env` cannot use the generic wrapper flag skipper: options such as
+/// `--split-string` inject the command that is actually executed, while
+/// `--chdir` changes the meaning of relative paths. Unknown options must
+/// therefore remain opaque rather than being guessed to be boolean flags.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum EnvInvocation {
+    NotEnv,
+    Dump,
+    Executable(SimpleCommand),
+    Opaque,
+}
+
+fn is_canonical_env_executable(name: &str) -> bool {
+    matches!(name, "env" | "/usr/bin/env" | "/bin/env")
+}
+
+fn is_static_env_name(arg: &Arg) -> bool {
+    arg.meta != ArgMeta::UnsafeString
+        && !arg.text.is_empty()
+        && arg
+            .text
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
+}
+
+/// Parse only the semantics-preserving subset of GNU `env` that longline can
+/// safely treat as a transparent wrapper. Everything else is `Opaque` and is
+/// ask-gated by policy.
+pub(crate) fn classify_env_invocation(cmd: &SimpleCommand) -> EnvInvocation {
+    let Some(name) = cmd.name.as_deref() else {
+        return EnvInvocation::NotEnv;
+    };
+    if wrapper_basename(name) != "env" {
+        return EnvInvocation::NotEnv;
+    }
+    if !is_canonical_env_executable(name) {
+        return EnvInvocation::Opaque;
+    }
+
+    let argv = &cmd.argv;
+    let mut index = 0;
+    let mut null_output = false;
+
+    while index < argv.len() {
+        let arg = &argv[index];
+        let token = arg.text.as_str();
+        if token == "--" {
+            index += 1;
+            break;
+        }
+        if arg.meta == ArgMeta::UnsafeString && token.starts_with('-') {
+            return EnvInvocation::Opaque;
+        }
+        match token {
+            "-i" | "--ignore-environment" => {
+                index += 1;
+            }
+            "-0" | "--null" => {
+                null_output = true;
+                index += 1;
+            }
+            "-u" | "--unset" => {
+                let Some(value) = argv.get(index + 1) else {
+                    return EnvInvocation::Opaque;
+                };
+                if !is_static_env_name(value) {
+                    return EnvInvocation::Opaque;
+                }
+                index += 2;
+            }
+            _ if token.starts_with("--unset=") => {
+                let value = Arg {
+                    text: token["--unset=".len()..].to_string(),
+                    meta: arg.meta,
+                };
+                if !is_static_env_name(&value) {
+                    return EnvInvocation::Opaque;
+                }
+                index += 1;
+            }
+            _ if token.starts_with("-u") && token.len() > 2 && !token.starts_with("--") => {
+                let value = Arg {
+                    text: token[2..].to_string(),
+                    meta: arg.meta,
+                };
+                if !is_static_env_name(&value) {
+                    return EnvInvocation::Opaque;
+                }
+                index += 1;
+            }
+            _ if token.starts_with('-') => return EnvInvocation::Opaque,
+            _ => break,
+        }
+    }
+
+    let mut collected_assignments = Vec::new();
+    while index < argv.len() && is_env_assignment(&argv[index].text) {
+        if let Some(assignment) = parse_assignment_token(&argv[index]) {
+            collected_assignments.push(assignment);
+        }
+        index += 1;
+    }
+
+    if index >= argv.len() {
+        return EnvInvocation::Dump;
+    }
+    // GNU env rejects --null when a command is supplied. Keep the malformed
+    // shape opaque instead of claiming that the following command executes.
+    if null_output || argv[index].meta == ArgMeta::UnsafeString {
+        return EnvInvocation::Opaque;
+    }
+
+    let mut merged_assignments = cmd.assignments.clone();
+    merged_assignments.extend(collected_assignments);
+    EnvInvocation::Executable(SimpleCommand {
+        name: Some(argv[index].text.clone()),
+        argv: argv[index + 1..].to_vec(),
+        redirects: cmd.redirects.clone(),
+        assignments: merged_assignments,
+        embedded_substitutions: cmd.embedded_substitutions.clone(),
+    })
+}
+
 /// If cmd is a known wrapper, extract the inner command as a new SimpleCommand.
 /// Returns None if not a wrapper or no inner command found.
 pub fn unwrap_transparent(cmd: &SimpleCommand) -> Option<SimpleCommand> {
     let cmd_name = cmd.name.as_deref()?;
     let wrapper = find_wrapper(cmd_name)?;
+
+    if wrapper.name == "env" {
+        return match classify_env_invocation(cmd) {
+            EnvInvocation::Executable(inner) => Some(inner),
+            EnvInvocation::NotEnv | EnvInvocation::Dump | EnvInvocation::Opaque => None,
+        };
+    }
 
     let argv = &cmd.argv;
 
@@ -1031,8 +1163,91 @@ mod tests {
     #[test]
     fn test_env_relative_path() {
         let cmd = make_cmd("./env", &["FOO=bar", "ls"]);
-        let inner = unwrap_transparent(&cmd).unwrap();
-        assert_eq!(inner.name.as_deref(), Some("ls"));
+        assert_eq!(classify_env_invocation(&cmd), EnvInvocation::Opaque);
+        assert!(unwrap_transparent(&cmd).is_none());
+    }
+
+    #[test]
+    fn test_env_strict_parser_accepts_only_reviewed_transparent_forms() {
+        for argv in [
+            vec!["git", "status"],
+            vec!["FOO=bar", "git", "status"],
+            vec!["-i", "FOO=bar", "git", "status"],
+            vec!["--ignore-environment", "git", "status"],
+            vec!["-u", "HOME", "git", "status"],
+            vec!["-uHOME", "git", "status"],
+            vec!["--unset", "HOME", "git", "status"],
+            vec!["--unset=HOME", "git", "status"],
+            vec!["--", "git", "status"],
+        ] {
+            let cmd = make_cmd("env", &argv);
+            assert!(
+                matches!(classify_env_invocation(&cmd), EnvInvocation::Executable(_)),
+                "reviewed env form should unwrap: {argv:?}"
+            );
+        }
+
+        for name in ["env", "/usr/bin/env", "/bin/env"] {
+            let cmd = make_cmd(name, &["FOO=bar", "git", "status"]);
+            assert!(
+                matches!(classify_env_invocation(&cmd), EnvInvocation::Executable(_)),
+                "canonical env executable should unwrap: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_env_strict_parser_rejects_semantic_and_unknown_options() {
+        for argv in [
+            vec!["-S", "bash -c id", "echo", "safe"],
+            vec!["-Sbash -c id", "echo", "safe"],
+            vec!["--split-string", "bash -c id", "echo", "safe"],
+            vec!["--split-string=bash -c id", "echo", "safe"],
+            vec!["--split-s=bash -c id", "echo", "safe"],
+            vec!["--split-string"],
+            vec!["-C", "/etc", "cat", "shadow"],
+            vec!["-C/etc", "cat", "shadow"],
+            vec!["--chdir", "/etc", "cat", "shadow"],
+            vec!["--chdir=/etc", "cat", "shadow"],
+            vec!["--chd=/etc", "cat", "shadow"],
+            vec!["--chdir"],
+            vec!["-a", "alternate", "git", "status"],
+            vec!["-aalternate", "git", "status"],
+            vec!["--argv0", "alternate", "git", "status"],
+            vec!["--argv0=alternate", "git", "status"],
+            vec!["--arg=alternate", "git", "status"],
+            vec!["--future-option", "git", "status"],
+            vec!["-0", "git", "status"],
+            vec!["-u"],
+            vec!["--unset="],
+        ] {
+            let cmd = make_cmd("env", &argv);
+            assert_eq!(
+                classify_env_invocation(&cmd),
+                EnvInvocation::Opaque,
+                "unreviewed env form must remain opaque: {argv:?}"
+            );
+            assert!(unwrap_transparent(&cmd).is_none(), "{argv:?}");
+        }
+
+        for name in ["./env", "../env", "/tmp/env", "/usr/local/bin/env"] {
+            let cmd = make_cmd(name, &["FOO=bar", "git", "status"]);
+            assert_eq!(
+                classify_env_invocation(&cmd),
+                EnvInvocation::Opaque,
+                "untrusted env executable must remain opaque: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_env_option_terminator_preserves_following_token_as_command() {
+        let cmd = make_cmd("env", &["--", "-S", "bash -c id"]);
+        let EnvInvocation::Executable(inner) = classify_env_invocation(&cmd) else {
+            panic!("option terminator should produce an executable wrapper");
+        };
+        assert_eq!(inner.name.as_deref(), Some("-S"));
+        assert_eq!(inner.argv, vec![Arg::plain("bash -c id")]);
     }
 
     // ── nohup unwrap tests ──────────────────────────────────────

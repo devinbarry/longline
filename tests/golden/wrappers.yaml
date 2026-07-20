@@ -194,10 +194,9 @@ tests:
     command: "env -u HOME -u USER ls"
     expected:
       decision: allow
-  - id: env-null-flag-allow
+  - id: env-null-with-command-ask
     command: "env -0 FOO=bar echo hello"
-    expected:
-      decision: allow
+    expected: { decision: ask, rule_id: env-opaque-invocation }
   - id: env-combined-flags-ask
     command: "env -i -u HOME -u USER PATH=/usr/bin FOO=bar ls"
     expected:
@@ -260,6 +259,60 @@ tests:
       decision: ask
       rule_id: printenv
 
+  # GNU env options that can synthesize argv, change cwd/argv[0], or whose
+  # semantics are not reviewed must never be treated as transparent wrappers.
+  - id: env-split-string-short-ask
+    command: "env -S 'git status'"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-split-string-short-joined-ask
+    command: "env '-Sgit status'"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-split-string-long-ask
+    command: "env --split-string 'git status'"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-split-string-long-joined-ask
+    command: "env --split-string='git status'"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-split-string-abbreviated-ask
+    command: "env --split 'git status'"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-split-string-missing-ask
+    command: "env --split-string"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-short-ask
+    command: "env -C /tmp git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-short-joined-ask
+    command: "env -C/tmp git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-long-ask
+    command: "env --chdir /tmp git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-long-joined-ask
+    command: "env --chdir=/tmp git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-abbreviated-ask
+    command: "env --chd /tmp git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-chdir-missing-ask
+    command: "env --chdir"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-argv0-short-ask
+    command: "env -a alternate git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-argv0-short-joined-ask
+    command: "env -aalternate git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-argv0-long-ask
+    command: "env --argv0 alternate git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-argv0-long-joined-ask
+    command: "env --argv0=alternate git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+  - id: env-unknown-future-option-ask
+    command: "env --future-option git status"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
+
   # ── env tricky assignment detection ────────────────────────────
   - id: env-val-with-equals-allow
     command: "env FOO=bar=baz echo hello"
@@ -282,7 +335,7 @@ tests:
     command: "env --foo=bar"
     expected:
       decision: ask
-      rule_id: printenv
+      rule_id: env-opaque-invocation
   - id: env-command-with-equals-in-name
     command: "env FOO=bar baz=run echo hello"
     expected:
@@ -293,10 +346,16 @@ tests:
     command: "/usr/bin/env FOO=bar ls"
     expected:
       decision: allow
+  - id: env-bin-path-allow
+    command: "/bin/env FOO=bar ls"
+    expected:
+      decision: allow
+  - id: env-noncanonical-absolute-path-ask
+    command: "/tmp/env FOO=bar ls"
+    expected: { decision: ask, rule_id: env-opaque-invocation }
   - id: env-relative-path-ask
     command: "./env FOO=bar ls"
-    expected:
-      decision: ask
+    expected: { decision: ask, rule_id: env-opaque-invocation }
   - id: env-absolute-path-rm-deny
     command: "/usr/bin/env FOO=bar rm -rf /"
     expected:

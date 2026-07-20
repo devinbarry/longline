@@ -366,6 +366,18 @@ fn git_editor_overrides_preserve_codex_pre_tool_use_contract_and_audit() {
             "deny",
             Some("git-c-editor-program"),
         ),
+        (
+            r#"env --split-string='bash -c id' echo safe"#,
+            None,
+            "ask",
+            Some("env-opaque-invocation"),
+        ),
+        (
+            "env --chdir=/tmp pwd",
+            None,
+            "ask",
+            Some("env-opaque-invocation"),
+        ),
     ];
 
     for (command, wire_decision, audit_decision, expected_rule) in cases {
@@ -419,6 +431,18 @@ fn git_editor_overrides_preserve_codex_permission_request_contract_and_audit() {
             Some("deny"),
             "deny",
             Some("git-c-editor-program"),
+        ),
+        (
+            r#"env --split-string='bash -c id' echo safe"#,
+            None,
+            "ask",
+            Some("env-opaque-invocation"),
+        ),
+        (
+            "env --chdir=/tmp pwd",
+            None,
+            "ask",
+            Some("env-opaque-invocation"),
         ),
     ];
 

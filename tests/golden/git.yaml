@@ -150,6 +150,9 @@ tests:
   - id: git-editor-literal-concatenation-deny
     command: "GIT_EDITOR='tr''ue' git status"
     expected: { decision: deny, rule_id: git-env-rce-vars }
+  - id: git-editor-backslash-escape-deny
+    command: 'GIT_EDITOR=tr\ue git status'
+    expected: { decision: deny, rule_id: git-env-rce-vars }
 
   - id: git-c-editor-vim-deny-new-rule
     command: "git -c core.editor=vim status"
@@ -165,6 +168,9 @@ tests:
     expected: { decision: deny, rule_id: git-c-editor-program }
   - id: git-c-editor-literal-concatenation-deny
     command: "git -c core.editor='tr''ue' status"
+    expected: { decision: deny, rule_id: git-c-editor-program }
+  - id: git-c-editor-backslash-escape-deny
+    command: 'git -c core.editor=tr\ue status'
     expected: { decision: deny, rule_id: git-c-editor-program }
   - id: git-c-editor-uppercase-value-deny
     command: "git -c core.editor=TRUE status"
@@ -3028,6 +3034,17 @@ tests:
   - id: git-C-status-repo-allow
     command: "git -C /repo status"
     expected: { decision: allow }
+  # Valid Git globals outside longline's reviewed safety subset deliberately
+  # stay fail-closed until their operand semantics are modelled.
+  - id: git-unreviewed-exec-path-global-ask
+    command: "git --exec-path=/tmp status"
+    expected: { decision: ask }
+  - id: git-unreviewed-list-cmds-global-ask
+    command: "git --list-cmds=builtins status"
+    expected: { decision: ask }
+  - id: git-unreviewed-attr-source-global-ask
+    command: "git --attr-source=HEAD status"
+    expected: { decision: ask }
   # Genuine destructive flags AFTER the subcommand are still gated under -C:
   - id: git-C-branch-D-asks
     command: "git -C /repo branch -D feature"

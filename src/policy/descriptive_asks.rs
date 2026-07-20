@@ -186,27 +186,18 @@ fn redirected_shell_c(cmd: &SimpleCommand) -> Option<PolicyResult> {
     None
 }
 
-/// True when `env` has no executable operand and therefore dumps the
-/// environment. Policy maps this shape onto the active `printenv` rule so its
-/// configured level, decision, reason, replacement, and disable semantics are
-/// preserved.
-pub(super) fn is_env_dump(cmd: &SimpleCommand) -> bool {
-    cmd.name
-        .as_deref()
-        .is_some_and(|name| basename(name) == "env")
-        && crate::parser::wrappers::unwrap_transparent(cmd).is_none()
-}
-
-/// Preserve project-script protection for a successfully unwrapped relative
-/// `./env` invocation. Ordinary executable `env` forms are transparent and
-/// inherit their extracted inner command's policy.
+/// Ask on `env` shapes whose executable semantics cannot be represented by
+/// transparent unwrapping (unknown options, command-injecting options,
+/// cwd-changing options, or untrusted path-qualified executables).
 pub(super) fn classify_env(cmd: &SimpleCommand) -> Option<PolicyResult> {
-    let full_name = cmd.name.as_deref()?;
-    if basename(full_name) != "env" {
-        return None;
-    }
-    if !is_env_dump(cmd) && (full_name.starts_with("./") || full_name.starts_with("../")) {
-        return Some(ask("project-script-exec", "Runs a project-local script"));
+    if matches!(
+        crate::parser::wrappers::classify_env_invocation(cmd),
+        crate::parser::wrappers::EnvInvocation::Opaque
+    ) {
+        return Some(ask(
+            "env-opaque-invocation",
+            "env invocation uses an unreviewed option or executable path",
+        ));
     }
     None
 }
@@ -279,9 +270,14 @@ mod tests {
     }
 
     #[test]
-    fn identifies_env_dump_and_transparent_executable_shapes() {
+    fn identifies_env_dump_opaque_and_transparent_executable_shapes() {
+        use crate::parser::wrappers::{classify_env_invocation, EnvInvocation};
+
         for input in ["env", "env -i", "env FOO=bar"] {
-            assert!(is_env_dump(&sc(input)), "environment dump: {input}");
+            assert!(
+                matches!(classify_env_invocation(&sc(input)), EnvInvocation::Dump),
+                "environment dump: {input}"
+            );
         }
 
         for input in [
@@ -290,14 +286,28 @@ mod tests {
             "env -i FOO=bar git status",
         ] {
             assert!(
-                !is_env_dump(&sc(input)) && classify_env(&sc(input)).is_none(),
+                matches!(
+                    classify_env_invocation(&sc(input)),
+                    EnvInvocation::Executable(_)
+                ) && classify_env(&sc(input)).is_none(),
                 "executable env wrapper should inherit inner policy: {input}"
             );
         }
 
-        let relative = classify_env(&sc("./env FOO=bar git status"))
-            .expect("relative env executable should ask");
-        assert_eq!(relative.decision, Decision::Ask);
-        assert_eq!(relative.rule_id.as_deref(), Some("project-script-exec"));
+        for input in [
+            "./env FOO=bar git status",
+            "/tmp/env FOO=bar git status",
+            "env --split-string='printf pwned' echo safe",
+            "env --chdir=/etc cat shadow",
+            "env --future-option=value git status",
+        ] {
+            let result = classify_env(&sc(input)).expect("opaque env should ask");
+            assert_eq!(result.decision, Decision::Ask, "{input}");
+            assert_eq!(
+                result.rule_id.as_deref(),
+                Some("env-opaque-invocation"),
+                "{input}"
+            );
+        }
     }
 }

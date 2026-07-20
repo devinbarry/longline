@@ -1,4 +1,4 @@
-//! Canonical structural view of Git's leading global options.
+//! Structural view of the reviewed safety subset of Git's leading globals.
 
 use std::borrow::Cow;
 
@@ -14,9 +14,10 @@ const SEPARATE_VALUE_FLAGS: &[&str] = &[
 
 const JOINED_VALUE_FLAGS: &[&str] = &["--git-dir", "--work-tree", "--namespace", "--super-prefix"];
 
-// Exact no-operand globals accepted by Git 2.47. Keeping this list explicit is
-// important: treating every leading dash token as a boolean would make an
-// invalid joined `-c...` disappear from the policy view.
+// Reviewed no-operand globals that are safe for policy consumers to strip.
+// This is intentionally not every option accepted by Git: valid but unreviewed
+// globals remain ambiguous/ask. Treating every leading dash token as boolean
+// would make invalid or future value-bearing options disappear from policy.
 const BOOLEAN_FLAGS: &[&str] = &[
     "-v",
     "--version",
@@ -782,6 +783,11 @@ mod tests {
             "git --git-dirx=/tmp status",
             "git -C/tmp status",
             "git --unknown status",
+            // Valid Git globals outside longline's reviewed safety subset are
+            // deliberately ambiguous until their semantics are modelled.
+            "git --exec-path=/tmp status",
+            "git --list-cmds=builtins status",
+            "git --attr-source=HEAD status",
         ] {
             let invocation = scan(source);
             assert_eq!(

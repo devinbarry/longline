@@ -243,6 +243,33 @@ fn custom_allow_env_does_not_override_active_printenv_ask() {
 }
 
 #[test]
+fn custom_allow_env_cannot_override_opaque_executable_semantics() {
+    let env = TestEnv::new()
+        .with_project_config(
+            r#"disable_rules: [printenv]
+rules:
+  - id: custom-allow-all-env
+    level: high
+    match:
+      command: env
+    decision: allow
+    reason: "project permits env"
+"#,
+        )
+        .build();
+
+    for command in [
+        "env --split-string='bash -c id' echo safe",
+        "env --chdir=/etc cat shadow",
+        "/tmp/env FOO=bar git status",
+    ] {
+        let result = env.run_claude_hook(command);
+        result.assert_claude_decision("ask");
+        result.assert_claude_reason_contains("unreviewed option or executable path");
+    }
+}
+
+#[test]
 fn same_id_printenv_allow_replacement_applies_to_env_and_printenv() {
     let env = TestEnv::new()
         .with_project_config(

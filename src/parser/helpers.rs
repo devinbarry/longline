@@ -296,8 +296,8 @@ pub fn parse_redirect(node: Node, source: &str) -> (Redirect, Vec<super::Stateme
 /// Classify an argv-position tree-sitter node into an `ArgMeta`.
 ///
 /// Grammar reference: tree-sitter-bash 0.25.x. Rules:
-/// - `word` without unquoted pathname-expansion syntax, plus `number` → `PlainWord`
-/// - `word` containing `*`, `?`, or `[` → `UnsafeString`
+/// - `word` without escapes or unquoted pathname-expansion syntax, plus `number` → `PlainWord`
+/// - `word` containing `\\`, `*`, `?`, or `[` → `UnsafeString`
 /// - `raw_string` (single-quoted) → `RawString`
 /// - `string` (double-quoted) → delegated to `classify_string_node`
 /// - `ansi_c_string`, `translated_string` → `UnsafeString`
@@ -310,7 +310,7 @@ pub fn classify_arg_node(node: Node, source: &str) -> ArgMeta {
     match node.kind() {
         "word" => {
             let text = node_text(node, source);
-            if text.contains(['*', '?', '[']) {
+            if text.contains(['\\', '*', '?', '[']) {
                 ArgMeta::UnsafeString
             } else {
                 ArgMeta::PlainWord
@@ -445,6 +445,17 @@ mod classification_tests {
                 classify_first_arg(pattern).meta,
                 ArgMeta::UnsafeString,
                 "{pattern}"
+            );
+        }
+    }
+
+    #[test]
+    fn backslash_bearing_barewords_are_unsafe() {
+        for input in [r"GIT_EDITOR=tr\ue", r"core.editor=tr\ue", r"plain\word"] {
+            assert_eq!(
+                classify_first_arg(input).meta,
+                ArgMeta::UnsafeString,
+                "{input}"
             );
         }
     }

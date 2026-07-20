@@ -329,6 +329,12 @@ fn git_editor_overrides_preserve_claude_wire_and_audit_contract() {
             "deny",
             Some("git-c-editor-program"),
         ),
+        (
+            r#"env --split-string='bash -c id' echo safe"#,
+            "ask",
+            Some("env-opaque-invocation"),
+        ),
+        ("env --chdir=/tmp pwd", "ask", Some("env-opaque-invocation")),
     ];
 
     for (command, decision, expected_rule) in cases {
