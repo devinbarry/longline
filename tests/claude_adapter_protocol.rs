@@ -54,6 +54,32 @@ fn run_raw_claude_hook_allow_early_exit(args: &[&str], home: &Path, stdin: &str)
     }
 }
 
+fn run_raw_hook_in_progress_mode(args: &[&str], home: &Path, stdin: &str) -> RunResult {
+    let mut child = Command::new(longline_bin())
+        .args(args)
+        .env("HOME", home)
+        .env("LONGLINE_MODE", "progress")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn longline");
+
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+
+    let output = child.wait_with_output().unwrap();
+    RunResult {
+        exit_code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    }
+}
+
 fn temp_home() -> tempfile::TempDir {
     tempfile::TempDir::new().unwrap()
 }
@@ -75,6 +101,66 @@ fn test_e2e_unsupported_tool_passthrough_exact_json() {
     assert_eq!(result.exit_code, 0);
     assert_eq!(result.stdout, "{}\n");
     assert_eq!(result.stderr, "");
+}
+
+#[test]
+fn test_e2e_progress_mode_bare_claude_defers_dangerous_bash_to_native_permissions() {
+    let home = temp_home();
+    let config = rules_path();
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf /"},
+        "session_id": "progress-mode",
+        "cwd": "/tmp"
+    })
+    .to_string();
+
+    let result = run_raw_hook_in_progress_mode(&["--config", &config], home.path(), &input);
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "{}\n");
+    assert_eq!(result.stderr, "");
+}
+
+#[test]
+fn test_e2e_progress_mode_explicit_claude_bypasses_input_and_config_errors() {
+    let home = temp_home();
+    let result = run_raw_hook_in_progress_mode(
+        &[
+            "--config",
+            "/definitely/not/a/real/rules.yaml",
+            "hook",
+            "claude",
+        ],
+        home.path(),
+        "{not json",
+    );
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "{}\n");
+    assert_eq!(result.stderr, "");
+}
+
+#[test]
+fn test_e2e_progress_mode_does_not_bypass_codex_hook() {
+    let home = temp_home();
+    let config = rules_path();
+    let input = serde_json::json!({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "rm -rf /"},
+        "session_id": "progress-mode-codex",
+        "cwd": "/tmp"
+    })
+    .to_string();
+
+    let result =
+        run_raw_hook_in_progress_mode(&["--config", &config, "hook", "codex"], home.path(), &input);
+
+    assert_eq!(result.exit_code, 0);
+    let output: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+    assert_eq!(output["hookSpecificOutput"]["permissionDecision"], "deny");
 }
 
 #[test]

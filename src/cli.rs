@@ -8,6 +8,9 @@ use longline::domain::Decision;
 use longline::parser;
 use longline::policy;
 
+const LONGLINE_MODE_ENV: &str = "LONGLINE_MODE";
+const PROGRESS_MODE: &str = "progress";
+
 #[derive(ClapParser)]
 #[command(
     name = "longline",
@@ -354,6 +357,20 @@ pub fn run() -> i32 {
 
     let cli = Cli::parse();
 
+    // Per-session escape hatch for interactive Claude use. Returning an empty
+    // hook result delegates the decision to Claude's own permission mode;
+    // returning `allow` here would instead override that native decision.
+    //
+    // Keep this before every config load/finalization path. Progress mode is
+    // specifically for cases where longline must not delay or block Claude,
+    // including when longline's own configuration is temporarily broken.
+    if is_claude_progress_mode(&cli) {
+        let mut input = String::new();
+        let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+        println!("{{}}");
+        return 0;
+    }
+
     // Handle Files command early (needs path before loading)
     if let Some(Commands::Files { profile }) = &cli.command {
         return run_files(
@@ -535,6 +552,18 @@ pub fn run() -> i32 {
             },
         ),
     }
+}
+
+fn is_claude_progress_mode(cli: &Cli) -> bool {
+    let is_claude_hook = matches!(
+        cli.command.as_ref(),
+        None | Some(Commands::Hook {
+            adapter: HookAdapter::Claude,
+            ..
+        })
+    );
+
+    is_claude_hook && std::env::var(LONGLINE_MODE_ENV).is_ok_and(|value| value == PROGRESS_MODE)
 }
 
 fn run_check(

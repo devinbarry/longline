@@ -112,6 +112,22 @@ No `--config` flag is needed. longline loads rules in this order:
 2. `~/.config/longline/rules.yaml` (user customization, if it exists)
 3. Embedded defaults (compiled in)
 
+#### Temporarily defer to Claude's auto mode
+
+Start Claude with progress mode when you want Claude's native permission mode
+to make decisions without longline participating:
+
+```bash
+LONGLINE_MODE=progress claude
+```
+
+Every longline Claude hook launched by that session returns an empty hook
+result (`{}`). longline does not load policy configuration, evaluate commands,
+run the AI judge, or write decision audit entries in this mode. Other Claude
+hooks remain enabled, and Codex hooks and longline CLI subcommands are
+unaffected. Quit that Claude session and start Claude normally to restore
+longline enforcement.
+
 ### Codex CLI
 
 Add to `~/.codex/hooks.json`:
