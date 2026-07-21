@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.1] - 2026-07-21
+
+### Added
+
+- **Claude progress passthrough mode.** Launching Claude with
+  `LONGLINE_MODE=progress claude` makes both the bare and explicit Claude hook
+  adapters return an empty hook result before loading configuration or parsing
+  hook input. Claude's native permission mode makes the decision, while
+  longline skips policy evaluation, AI judging, and audit logging. The mode is
+  scoped to Claude hooks; Codex hooks and longline CLI subcommands are
+  unaffected.
+
 ## [0.21.0] - 2026-07-20
 
 ### Added
